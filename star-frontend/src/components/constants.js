@@ -92,14 +92,32 @@ export const TITHI_LIST = [
 ];
 
 // =============================================================================
-// NAKSHATRAS (27 Birth Stars) - For future use
+// NAKSHATRAS (27 Birth Stars)
 // =============================================================================
 export const NAKSHATRAS = [
     "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
     "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
     "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
     "Moola", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha",
-    "Purva Bhadrapada", "Uttara Bhadrapada", "Revati",
+    "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+];
+
+// =============================================================================
+// RASHIS (12 Zodiac Signs)
+// =============================================================================
+export const RASHIS = [
+    "Mesha",
+    "Vrishabha",
+    "Mithuna",
+    "Karka",
+    "Simha",
+    "Kanya",
+    "Tula",
+    "Vrishchika",
+    "Dhanu",
+    "Makara",
+    "Kumbha",
+    "Meena"
 ];
 
 // =============================================================================

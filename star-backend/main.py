@@ -8,23 +8,25 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy import text, func
+from typing import List, Optional
 from pydantic import BaseModel
 from decimal import Decimal
-from datetime import date, timedelta
-from typing import Optional
-from fastapi.responses import StreamingResponse
+from datetime import date, datetime, timedelta
 import io
 import csv
+import traceback
+
 from database import get_db
-from models import SevaCatalog
+from models import SevaCatalog, Devotee, ShaswataSubscription
 from schemas import (
     TransactionCreate, TransactionResponse, SevaResponse,
     ShaswataCreate, ShaswataSubscriptionResponse
 )
 from crud import (
     create_transaction, get_daily_transactions,
-    create_shaswata_subscription, get_shaswata_subscriptions
+    create_shaswata_subscription, get_shaswata_subscriptions,
+    get_devotee_by_phone
 )
 
 
@@ -72,9 +74,6 @@ def root():
 def get_all_sevas(db: Session = Depends(get_db)):
     """
     Fetch all sevas from the seva_catalog table.
-    
-    Returns:
-        List of all seva items with their details (id, name, price, flags, etc.)
     """
     sevas = db.query(SevaCatalog).filter(SevaCatalog.is_active == True).all()
     return sevas
@@ -84,15 +83,6 @@ def get_all_sevas(db: Session = Depends(get_db)):
 def get_seva_by_id(seva_id: int, db: Session = Depends(get_db)):
     """
     Fetch a specific seva by its ID.
-    
-    Args:
-        seva_id: The unique identifier of the seva
-        
-    Returns:
-        Seva details if found
-        
-    Raises:
-        404: If seva not found
     """
     seva = db.query(SevaCatalog).filter(SevaCatalog.id == seva_id).first()
     if seva is None:
@@ -108,20 +98,6 @@ def get_seva_by_id(seva_id: int, db: Session = Depends(get_db)):
 def book_seva(transaction: TransactionCreate, db: Session = Depends(get_db)):
     """
     Book a seva for a devotee.
-    
-    This endpoint:
-    1. Finds or creates a devotee profile based on phone number
-    2. Creates a new transaction record
-    3. Generates a unique receipt number
-    
-    Args:
-        transaction: Booking details including devotee info, seva_id, amount, payment mode
-        
-    Returns:
-        TransactionResponse with transaction_id, receipt_no, and success message
-        
-    Raises:
-        400: If booking fails (invalid seva_id, etc.)
     """
     try:
         result = create_transaction(db=db, transaction=transaction)
@@ -136,11 +112,23 @@ def book_seva(transaction: TransactionCreate, db: Session = Depends(get_db)):
 def get_today_transactions(db: Session = Depends(get_db)):
     """
     Get all transactions for today.
-    
-    Returns:
-        List of today's transactions with receipt numbers and amounts
     """
     return get_daily_transactions(db)
+
+
+# =============================================================================
+# API Routes - Devotees
+# =============================================================================
+
+@app.get("/devotees/{phone_number}", tags=["Devotees"])
+def get_devotee_details(phone_number: str, db: Session = Depends(get_db)):
+    """
+    Fetch devotee details by phone number for auto-fill.
+    """
+    devotee = get_devotee_by_phone(db, phone_number)
+    if not devotee:
+        raise HTTPException(status_code=404, detail="Devotee not found")
+    return devotee
 
 
 # =============================================================================
@@ -151,22 +139,6 @@ def get_today_transactions(db: Session = Depends(get_db)):
 def subscribe_shaswata(subscription: ShaswataCreate, db: Session = Depends(get_db)):
     """
     Create a new Shaswata (Perpetual) Puja subscription.
-    
-    This endpoint:
-    1. Finds or creates a devotee profile based on phone number
-    2. Creates a new subscription record with either LUNAR or GREGORIAN date
-    3. Creates a corresponding transaction record for payment tracking
-    
-    For LUNAR subscriptions (Hindu calendar):
-    - Provide: maasa (month), paksha (fortnight), tithi (lunar day)
-    - Example: Chaitra Shukla Panchami
-    
-    For GREGORIAN subscriptions (birthday/anniversary):
-    - Provide: event_day (1-31), event_month (1-12)
-    - Example: December 25
-    
-    Returns:
-        ShaswataSubscriptionResponse with subscription_id and formatted date
     """
     try:
         result = create_shaswata_subscription(db=db, subscription=subscription)
@@ -184,12 +156,6 @@ def list_shaswata_subscriptions(
 ):
     """
     Get all Shaswata subscriptions.
-    
-    Args:
-        active_only: If True, only return active subscriptions (default: True)
-        
-    Returns:
-        List of subscriptions with devotee details and formatted dates
     """
     return get_shaswata_subscriptions(db, active_only=active_only)
 
@@ -207,18 +173,10 @@ def get_mock_panchangam() -> dict:
         "nakshatra": "Krittika",
     }
 
-from datetime import datetime
-from sqlalchemy import text
-
 @app.get("/daily-sankalpa", tags=["Priest Dashboard"])
 def get_daily_sankalpa(db: Session = Depends(get_db)):
     """
     Get today's scheduled pujas for the Priest Dashboard.
-    
-    Returns JSON with:
-    - Today's date and Panchangam
-    - List of pujas (both LUNAR and GREGORIAN matches)
-    - Each puja includes devotee name, phone, gothra for WhatsApp integration
     """
     today = datetime.now()
     panchangam = get_mock_panchangam()
@@ -321,7 +279,6 @@ def get_daily_sankalpa(db: Session = Depends(get_db)):
     }
 
 
-
 # =============================================================================
 # API Routes - Financial Reports (Day Book)
 # =============================================================================
@@ -344,22 +301,19 @@ def get_collection_report(
     - Summary stats
     - List of all transactions
     """
-    from datetime import date
-    import traceback
-    
     # Parse dates
     try:
         if start_date:
-            start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start = datetime.strptime(start_date, "%d-%m-%Y").date()
         else:
             start = date.today()
             
         if end_date:
-            end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end = datetime.strptime(end_date, "%d-%m-%Y").date()
         else:
             end = start
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        raise HTTPException(status_code=400, detail="Invalid date format. Use DD-MM-YYYY")
     
     try:
         # Query transactions within date range
@@ -428,8 +382,8 @@ def get_collection_report(
             date_display = f"{start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
         
         return {
-            "start_date": start.strftime("%Y-%m-%d"),
-            "end_date": end.strftime("%Y-%m-%d"),
+            "start_date": start.strftime("%d-%m-%Y"),
+            "end_date": end.strftime("%d-%m-%Y"),
             "date_display": date_display,
             "summary": {
                 "cash": total_cash,
@@ -442,7 +396,7 @@ def get_collection_report(
     except Exception as e:
         error_trace = traceback.format_exc()
         print(f"Error in collection report: {error_trace}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}\n\nTraceback: {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @app.get("/reports/export", tags=["Financial Reports"])
@@ -454,20 +408,15 @@ def export_report(
     """
     Export collection report as CSV for a date range.
     """
-    import csv
-    import io
-    from datetime import date
-    import traceback
-    
     # Parse dates
     try:
         if start_date:
-            start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start = datetime.strptime(start_date, "%d-%m-%Y").date()
         else:
             start = date.today()
             
         if end_date:
-            end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end = datetime.strptime(end_date, "%d-%m-%Y").date()
         else:
             end = start
     except ValueError:
@@ -517,7 +466,7 @@ def export_report(
             
         output.seek(0)
         
-        filename = f"report_{start.strftime('%Y-%m-%d')}_to_{end.strftime('%Y-%m-%d')}.csv"
+        filename = f"report_{start.strftime('%d-%m-%Y')}_to_{end.strftime('%d-%m-%Y')}.csv"
         
         return StreamingResponse(
             io.StringIO(output.getvalue()),
@@ -543,80 +492,3 @@ async def startup_event():
     print("Subramanya Temple App & Registry")
     print("API Docs: http://localhost:8000/docs")
     print("=" * 60)
-
-
-# --- ADVANCED REPORTING ENGINE ---
-
-@app.get("/reports/collection")
-def get_collection_report(
-    db: Session = Depends(get_db), 
-    start_date: Optional[date] = None, 
-    end_date: Optional[date] = None
-):
-    # Default to "Today" if no dates provided
-    if not start_date:
-        start_date = date.today()
-    if not end_date:
-        end_date = date.today()
-
-    # Query Transactions within range
-    query = db.query(models.Transaction).filter(
-        func.date(models.Transaction.created_at) >= start_date,
-        func.date(models.Transaction.created_at) <= end_date
-    )
-    
-    transactions = query.all()
-
-    # Calculate Totals
-    total_cash = sum(t.amount for t in transactions if t.payment_mode == "CASH")
-    total_upi = sum(t.amount for t in transactions if t.payment_mode == "UPI")
-    grand_total = total_cash + total_upi
-
-    return {
-        "range": {"start": start_date, "end": end_date},
-        "summary": {"cash": total_cash, "upi": total_upi, "total": grand_total},
-        "transactions": transactions
-    }
-
-@app.get("/reports/export")
-def export_report(
-    db: Session = Depends(get_db), 
-    start_date: Optional[date] = None, 
-    end_date: Optional[date] = None
-):
-    # Same filtering logic
-    if not start_date: start_date = date.today()
-    if not end_date: end_date = date.today()
-
-    transactions = db.query(models.Transaction).filter(
-        func.date(models.Transaction.created_at) >= start_date,
-        func.date(models.Transaction.created_at) <= end_date
-    ).all()
-
-    # Create CSV in Memory
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Header
-    writer.writerow(["Receipt No", "Date", "Devotee Name", "Seva", "Amount", "Mode"])
-    
-    # Rows
-    for t in transactions:
-        writer.writerow([
-            t.id, 
-            t.created_at.strftime("%Y-%m-%d %H:%M"), 
-            t.devotee_name, 
-            t.seva_id, # You might want to fetch Seva Name if possible, or join tables
-            t.amount, 
-            t.payment_mode
-        ])
-    
-    output.seek(0)
-    
-    # Return as File Download
-    filename = f"report_{start_date}_{end_date}.csv"
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode()), 
-        media_type="text/csv", 
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )

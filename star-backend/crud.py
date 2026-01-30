@@ -199,6 +199,32 @@ def get_daily_transactions(db: Session, date: str = None) -> list:
     ]
 
 
+def get_devotee_by_phone(db: Session, phone: str) -> dict:
+    """
+    Get devotee details by phone number.
+    
+    Args:
+        db: Database session
+        phone: Phone number to search
+        
+    Returns:
+        Dict with devotee details or None if not found
+    """
+    result = db.execute(
+        text("SELECT full_name, gothra, nakshatra, rashi FROM devotees WHERE phone_number = :phone"),
+        {"phone": phone}
+    ).fetchone()
+
+    if result:
+        return {
+            "full_name": result[0],
+            "gothra": result[1],
+            "nakshatra": result[2],
+            "rashi": result[3]
+        }
+    return None
+
+
 # =============================================================================
 # SHASWATA (PERPETUAL PUJA) OPERATIONS
 # =============================================================================

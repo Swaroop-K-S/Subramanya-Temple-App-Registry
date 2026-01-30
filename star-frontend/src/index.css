@@ -1,14 +1,21 @@
 @import "tailwindcss";
 
-/* Custom styles for S.T.A.R. application */
-:root {
-  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+/* ==========================================================================
+   S.T.A.R. Application Theme - Modern Mesh
+   ========================================================================== */
 
-  color-scheme: light dark;
+/* 1. Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+/* 2. Base Styles & Variables */
+:root {
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Playfair Display', serif;
+
+  font-family: var(--font-sans);
+  line-height: 1.5;
   color: #1a1a1a;
-  background-color: #fff7ed; /* Orange-50 for temple warmth */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,4 +26,73 @@
 body {
   margin: 0;
   min-height: 100vh;
+
+  /* Modern Mesh Background */
+  background-color: #f8fafc;
+  /* Slate-50 */
+  background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+  /* Slate-300 dots */
+  background-size: 20px 20px;
+  background-attachment: fixed;
+}
+
+/* 3. Utility Classes */
+
+/* Heading Font Utility */
+.font-heading,
+.font-sacred {
+  /* Alias font-sacred for compatibility */
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+/* Card Hover Effect */
+.card-hover {
+  transition: all 0.3s ease;
+  transform: translateY(0);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+/* 4. Animations */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scrollbar Polish */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  /* Slate-300 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  /* Slate-400 */
 }

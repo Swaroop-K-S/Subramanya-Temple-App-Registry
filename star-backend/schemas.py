@@ -223,6 +223,8 @@ class TransactionResponse(BaseModel):
     amount_paid: float
     payment_mode: str
     message: str
+    nakshatra: Optional[str] = None
+    rashi: Optional[str] = None
 
     class Config:
         from_attributes = True
