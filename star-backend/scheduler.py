@@ -86,9 +86,9 @@ def get_lunar_subscriptions(db, maasa: str, paksha: str, tithi: str) -> list:
     query = text("""
         SELECT 
             ss.id,
-            d.full_name,
+            d.full_name_en,
             d.phone_number,
-            d.gothra,
+            d.gothra_en,
             sc.name_eng as seva_name,
             ss.maasa,
             ss.paksha,
@@ -103,7 +103,7 @@ def get_lunar_subscriptions(db, maasa: str, paksha: str, tithi: str) -> list:
           AND ss.maasa = :maasa
           AND ss.paksha = :paksha
           AND ss.tithi = :tithi
-        ORDER BY d.full_name
+        ORDER BY d.full_name_en
     """)
     
     result = db.execute(query, {"maasa": maasa, "paksha": paksha, "tithi": tithi}).fetchall()
@@ -139,9 +139,9 @@ def get_gregorian_subscriptions(db, day: int, month: int) -> list:
     query = text("""
         SELECT 
             ss.id,
-            d.full_name,
+            d.full_name_en,
             d.phone_number,
-            d.gothra,
+            d.gothra_en,
             sc.name_eng as seva_name,
             ss.event_day,
             ss.event_month,
@@ -154,7 +154,7 @@ def get_gregorian_subscriptions(db, day: int, month: int) -> list:
           AND ss.subscription_type = 'GREGORIAN'
           AND ss.event_day = :day
           AND ss.event_month = :month
-        ORDER BY d.full_name
+        ORDER BY d.full_name_en
     """)
     
     result = db.execute(query, {"day": day, "month": month}).fetchall()

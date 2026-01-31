@@ -1,328 +1,319 @@
-/**
- * BookingModal Component
- * ======================
- * Modal dialog for booking a seva with devotee information.
- */
-
-import { useState, useEffect } from 'react';
-import { X, User, Phone, Sparkles, IndianRupee, CreditCard, Banknote, Loader2, Star, CheckCircle2 } from 'lucide-react';
-import api, { bookSeva } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, User, Phone, Sparkles, Star, Moon, Loader2, Calendar, Printer } from 'lucide-react';
+import { ReactTransliterate } from 'react-transliterate';
+import 'react-transliterate/dist/index.css';
+import { bookSeva } from '../services/api';
+import api from '../services/api';
 import { NAKSHATRAS, RASHIS } from './constants';
+import Receipt from './Receipt';
+import { useReactToPrint } from 'react-to-print';
+import { TRANSLATIONS } from './translations';
 
-function BookingModal({ isOpen, onClose, seva }) {
+function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
+    const todayStr = new Date().toISOString().split('T')[0];
     const [formData, setFormData] = useState({
         devotee_name: '',
         phone_number: '',
         gothra: '',
         nakshatra: '',
         rashi: '',
+        seva_date: todayStr,
         payment_mode: 'CASH',
     });
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [autoFillStatus, setAutoFillStatus] = useState('idle'); // idle, loading, found, not-found
+    const [searching, setSearching] = useState(false);
+    const [successMsg, setSuccessMsg] = useState('');
+    const [transaction, setTransaction] = useState(null);
+    const t = TRANSLATIONS[lang];
 
-    // --- AUTO-FILL LOGIC (Moved above conditional return to fix Hook rule) ---
+    // Common input CSS classes
+    const inputClasses = "w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500 text-sm";
+
+    // Ref for printing
+    const receiptRef = useRef();
+    const handlePrint = useReactToPrint({
+        content: () => receiptRef.current,
+        documentTitle: `Receipt-${transaction?.receipt_no || 'New'}`,
+        onAfterPrint: () => onClose(),
+    });
+
+    // --- AUTO-FILL LOGIC ---
     useEffect(() => {
-        const phone = formData.phone_number;
-
-        // Reset status if user is modifying the number
-        if (phone.length !== 10) {
-            setAutoFillStatus('idle');
-            return;
-        }
-
-        // Trigger Auto-Fill if exactly 10 digits
-        const fetchDevotee = async () => {
-            setAutoFillStatus('loading');
-            try {
-                const response = await api.get(`/devotees/${phone}`);
-                const data = response.data;
-
-                // Devotee Found! Auto-populate
-                setFormData(prev => ({
-                    ...prev,
-                    devotee_name: data.full_name || '',
-                    gothra: data.gothra || '',
-                    nakshatra: data.nakshatra || '',
-                    rashi: data.rashi || ''
-                }));
-                setAutoFillStatus('found');
-            } catch (err) {
-                // Not found - that's okay, just let them type
-                if (err.response && err.response.status === 404) {
-                    setAutoFillStatus('not-found');
-                } else {
-                    console.error("Auto-fill error:", err);
-                    setAutoFillStatus('idle');
-                }
-            }
-        };
-
-        const timer = setTimeout(() => {
-            fetchDevotee();
-        }, 500); // 500ms debounce to avoid spamming while typing fast
-
-        return () => clearTimeout(timer);
-
-    }, [formData.phone_number]);
-
-    // Don't render if not open or no seva selected (Must be AFTER all hooks)
-    if (!isOpen || !seva) return null;
-
-    // --- HANDLERS ---
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
-
-        try {
-            const bookingData = {
-                ...formData,
-                seva_id: seva.id,
-                amount: parseFloat(seva.price) || 0,
-            };
-
-            const response = await bookSeva(bookingData);
-
-            // Show success alert
-            alert(`🙏 ${response.message}\n\nSeva: ${response.seva_name}\nAmount: ₹${response.amount_paid}\nReceipt: ${response.receipt_no}`);
-
-            // Reset form and close modal
+        if (!isOpen) {
+            setTransaction(null);
             setFormData({
                 devotee_name: '',
                 phone_number: '',
                 gothra: '',
-                nakshatra: '',
-                rashi: '',
-                payment_mode: 'CASH',
+                nakshatra: '', rashi: '',
+                seva_date: todayStr, payment_mode: 'CASH'
             });
-            setAutoFillStatus('idle');
-            onClose();
+        }
+
+        const checkPhone = async () => {
+            if (formData.phone_number.length === 10) {
+                setSearching(true);
+                try {
+                    const response = await api.get(`/devotees/${formData.phone_number}`);
+                    if (response.data) {
+                        // Use Kannada name if in KN mode, otherwise English
+                        const name = lang === 'KN'
+                            ? (response.data.full_name_kn || response.data.full_name_en || response.data.full_name || '')
+                            : (response.data.full_name_en || response.data.full_name || '');
+                        const gothra = lang === 'KN'
+                            ? (response.data.gothra_kn || response.data.gothra_en || response.data.gothra || '')
+                            : (response.data.gothra_en || response.data.gothra || '');
+
+                        setFormData(prev => ({
+                            ...prev,
+                            devotee_name: name,
+                            gothra: gothra,
+                            nakshatra: response.data.nakshatra || '',
+                            rashi: response.data.rashi || '',
+                        }));
+                        setSuccessMsg("✨ Devotee details found!");
+                        setTimeout(() => setSuccessMsg(''), 3000);
+                    }
+                } catch (err) { } finally { setSearching(false); }
+            }
+        };
+        const timer = setTimeout(checkPhone, 500);
+        return () => clearTimeout(timer);
+    }, [formData.phone_number, isOpen, lang]);
+
+    if (!isOpen || !seva) return null;
+
+    const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const bookingData = {
+                ...formData,
+                // For backward compatibility with backend
+                devotee_name: formData.devotee_name,
+                devotee_name_en: lang === 'EN' ? formData.devotee_name : '',
+                devotee_name_kn: lang === 'KN' ? formData.devotee_name : '',
+                gothra: formData.gothra,
+                gothra_en: lang === 'EN' ? formData.gothra : '',
+                gothra_kn: lang === 'KN' ? formData.gothra : '',
+                seva_id: seva.id,
+                amount: parseFloat(seva.price) || 0
+            };
+            const response = await bookSeva(bookingData);
+            setTransaction(response);
         } catch (err) {
-            console.error('Booking failed:', err);
-            setError(err.response?.data?.detail || 'Booking failed. Please try again.');
+            console.error(err);
+            alert('Booking failed. Please check the console.');
         } finally {
             setLoading(false);
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                onClick={onClose}
-            />
+    // --- RECEIPT VIEW ---
+    if (transaction) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" />
+                <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
 
-            {/* Modal Content */}
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden h-auto max-h-[90vh] overflow-y-auto">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-4 sticky top-0 z-10">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-xl font-bold text-white">Book Seva</h2>
-                            <p className="text-orange-100 text-sm">{seva.name_eng}</p>
+                    {/* Actions Bar */}
+                    <div className="bg-gray-100 px-6 py-3 flex justify-between items-center border-b">
+                        <h2 className="font-bold text-gray-700 flex items-center gap-2">
+                            <Sparkles className="text-orange-500" size={18} />
+                            {t?.bookingSuccessful || "Booking Successful"}
+                        </h2>
+                        <div className="flex gap-2">
+                            <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm">
+                                <Printer size={18} /> Print
+                            </button>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                                <X size={20} className="text-gray-500" />
+                            </button>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 rounded-full hover:bg-white/20 transition-colors"
-                        >
-                            <X className="w-6 h-6 text-white" />
-                        </button>
                     </div>
+
+                    {/* Printable Area */}
+                    <div className="p-8 bg-gray-50 overflow-y-auto max-h-[80vh]">
+                        <div ref={receiptRef}>
+                            <Receipt transaction={transaction} seva={seva} lang={lang} />
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        );
+    }
+
+    // --- BOOKING FORM VIEW ---
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-orange-500 to-amber-600 px-6 py-4 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-white">{t?.bookNow || "Book Seva"}</h2>
+                        <p className="text-orange-100 text-sm">{lang === 'KN' && seva.name_kan ? seva.name_kan : seva.name_eng}</p>
+                    </div>
+                    <button onClick={onClose}><X className="text-white" size={24} /></button>
                 </div>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {/* Price Display */}
-                    <div className="flex items-center justify-center gap-2 py-3 bg-green-50 rounded-lg">
-                        <IndianRupee className="w-6 h-6 text-green-600" />
-                        <span className="text-2xl font-bold text-green-700">
-                            {parseFloat(seva.price) > 0 ? `₹${parseFloat(seva.price).toFixed(0)}` : 'Variable'}
-                        </span>
-                    </div>
-
-                    {/* Phone Number with Auto-Fill Indicator */}
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                <Phone className="w-4 h-4" />
-                                Phone Number *
-                            </label>
-                            {/* Auto-Fill Status Indicators */}
-                            {autoFillStatus === 'loading' && (
-                                <span className="text-xs text-orange-500 flex items-center gap-1 animate-pulse">
-                                    <Loader2 className="w-3 h-3 animate-spin" /> Checking...
-                                </span>
-                            )}
-                            {autoFillStatus === 'found' && (
-                                <span className="text-xs text-green-600 flex items-center gap-1 font-bold animate-fade-in">
-                                    <CheckCircle2 className="w-3 h-3" /> Devotee Found!
-                                </span>
-                            )}
-                        </div>
-                        <input
-                            type="tel"
-                            name="phone_number"
-                            value={formData.phone_number}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="10-digit mobile number"
-                            pattern="[0-9]{10}"
-                            className={`w-full px-4 py-2 border rounded-lg outline-none transition-all ${autoFillStatus === 'found'
-                                    ? 'border-green-400 ring-2 ring-green-100 bg-green-50'
-                                    : 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-                                }`}
-                        />
-                    </div>
-
-                    {/* Devotee Name */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                            <User className="w-4 h-4" />
-                            Devotee Name *
-                        </label>
-                        <input
-                            type="text"
-                            name="devotee_name"
-                            value={formData.devotee_name}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="Enter full name"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
-                        />
-                    </div>
-
-                    {/* Gothra (Optional) */}
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                            <Sparkles className="w-4 h-4" />
-                            Gothra (Optional)
-                        </label>
-                        <input
-                            type="text"
-                            name="gothra"
-                            value={formData.gothra}
-                            onChange={handleInputChange}
-                            placeholder="e.g., Kashyapa, Bharadwaja"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
-                        />
-                    </div>
-
-                    {/* Nakshatra & Rashi Row */}
+                <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                    {/* Phone & Date Row */}
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Nakshatra Dropdown */}
                         <div>
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                                <Star className="w-4 h-4" />
-                                Nakshatra
-                            </label>
-                            <select
-                                name="nakshatra"
-                                value={formData.nakshatra}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white"
-                            >
-                                <option value="">Select Star</option>
-                                {NAKSHATRAS.map((star) => (
-                                    <option key={star} value={star}>
-                                        {star}
-                                    </option>
-                                ))}
-                            </select>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.phone || "Phone Number"}</label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
+                                <input
+                                    type="tel"
+                                    name="phone_number"
+                                    value={formData.phone_number}
+                                    onChange={handleInputChange}
+                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
+                                    placeholder="9876543210"
+                                    maxLength={10}
+                                    required
+                                />
+                                {searching && <Loader2 className="absolute right-3 top-3 animate-spin text-orange-500" size={18} />}
+                                {!searching && successMsg && <Sparkles className="absolute right-3 top-3 text-green-500" size={18} />}
+                            </div>
                         </div>
-
-                        {/* Rashi Dropdown */}
                         <div>
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                                <Sparkles className="w-4 h-4" />
-                                Rashi
-                            </label>
-                            <select
-                                name="rashi"
-                                value={formData.rashi}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white"
-                            >
-                                <option value="">Select Rashi</option>
-                                {RASHIS.map((rashi) => (
-                                    <option key={rashi} value={rashi}>
-                                        {rashi}
-                                    </option>
-                                ))}
-                            </select>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.date || "Seva Date"}</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-3 text-gray-400" size={18} />
+                                <input
+                                    type="date"
+                                    name="seva_date"
+                                    value={formData.seva_date}
+                                    onChange={handleInputChange}
+                                    min={todayStr}
+                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Smart Devotee Name Input */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">
+                            {t?.name || "Devotee Name"}
+                            <span className="ml-2 text-orange-400 text-[10px]">
+                                {lang === 'KN' ? '(ಟೈಪ್ ಮಾಡಿ → ಕನ್ನಡ)' : '(English)'}
+                            </span>
+                        </label>
+                        <div className="relative">
+                            <User className="absolute left-3 top-3 text-gray-400 z-10" size={18} />
+                            {lang === 'KN' ? (
+                                <ReactTransliterate
+                                    renderComponent={(props) => (
+                                        <input {...props} className={inputClasses} required />
+                                    )}
+                                    value={formData.devotee_name}
+                                    onChangeText={(text) => setFormData(prev => ({ ...prev, devotee_name: text }))}
+                                    lang="kn"
+                                    placeholder="Type in English → ಕನ್ನಡ"
+                                    enabled={true}
+                                    containerStyles={{ position: 'relative' }}
+                                    activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
+                                />
+                            ) : (
+                                <input
+                                    type="text"
+                                    name="devotee_name"
+                                    value={formData.devotee_name}
+                                    onChange={handleInputChange}
+                                    className={inputClasses}
+                                    placeholder="Enter devotee name"
+                                    required
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Smart Gothra Input */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">
+                            {t?.gothra || "Gothra"}
+                            <span className="ml-2 text-orange-400 text-[10px]">
+                                {lang === 'KN' ? '(ಟೈಪ್ ಮಾಡಿ → ಕನ್ನಡ)' : '(English)'}
+                            </span>
+                        </label>
+                        <div className="relative">
+                            <Sparkles className="absolute left-3 top-3 text-gray-400 z-10" size={18} />
+                            {lang === 'KN' ? (
+                                <ReactTransliterate
+                                    renderComponent={(props) => (
+                                        <input {...props} className={inputClasses} />
+                                    )}
+                                    value={formData.gothra}
+                                    onChangeText={(text) => setFormData(prev => ({ ...prev, gothra: text }))}
+                                    lang="kn"
+                                    placeholder="Type in English → ಕನ್ನಡ"
+                                    enabled={true}
+                                    containerStyles={{ position: 'relative' }}
+                                    activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
+                                />
+                            ) : (
+                                <input
+                                    type="text"
+                                    name="gothra"
+                                    value={formData.gothra}
+                                    onChange={handleInputChange}
+                                    className={inputClasses}
+                                    placeholder="Enter gothra"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Nakshatra & Rashi */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.nakshatra || "Nakshatra"}</label>
+                            <div className="relative">
+                                <Star className="absolute left-3 top-3 text-gray-400" size={18} />
+                                <select name="nakshatra" value={formData.nakshatra} onChange={handleInputChange} className="w-full pl-10 py-2.5 border border-gray-300 rounded-lg outline-none bg-white">
+                                    <option value="">{lang === 'KN' ? 'ನಕ್ಷತ್ರ ಆಯ್ಕೆಮಾಡಿ' : 'Select Star'}</option>
+                                    {NAKSHATRAS && NAKSHATRAS.map(n => (
+                                        <option key={n.en} value={n.en}>
+                                            {lang === 'KN' ? n.kn : n.en}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.rashi || "Rashi"}</label>
+                            <div className="relative">
+                                <Moon className="absolute left-3 top-3 text-gray-400" size={18} />
+                                <select name="rashi" value={formData.rashi} onChange={handleInputChange} className="w-full pl-10 py-2.5 border border-gray-300 rounded-lg outline-none bg-white">
+                                    <option value="">{lang === 'KN' ? 'ರಾಶಿ ಆಯ್ಕೆಮಾಡಿ' : 'Select Zodiac'}</option>
+                                    {RASHIS && RASHIS.map(r => (
+                                        <option key={r.en} value={r.en}>
+                                            {lang === 'KN' ? r.kn : r.en}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
                     {/* Payment Mode */}
-                    <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">
-                            Payment Mode *
-                        </label>
-                        <div className="flex gap-4">
-                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${formData.payment_mode === 'CASH'
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-200 hover:border-gray-300'
-                                }`}>
-                                <input
-                                    type="radio"
-                                    name="payment_mode"
-                                    value="CASH"
-                                    checked={formData.payment_mode === 'CASH'}
-                                    onChange={handleInputChange}
-                                    className="hidden"
-                                />
-                                <Banknote className="w-5 h-5" />
-                                <span className="font-medium">Cash</span>
-                            </label>
-
-                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${formData.payment_mode === 'UPI'
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-gray-200 hover:border-gray-300'
-                                }`}>
-                                <input
-                                    type="radio"
-                                    name="payment_mode"
-                                    value="UPI"
-                                    checked={formData.payment_mode === 'UPI'}
-                                    onChange={handleInputChange}
-                                    className="hidden"
-                                />
-                                <CreditCard className="w-5 h-5" />
-                                <span className="font-medium">UPI</span>
-                            </label>
-                        </div>
+                    <div className="flex gap-3 pt-2">
+                        {['CASH', 'UPI'].map(mode => (
+                            <button key={mode} type="button" onClick={() => setFormData(p => ({ ...p, payment_mode: mode }))} className={`flex-1 py-2 rounded-lg font-bold border-2 transition-all ${formData.payment_mode === mode ? (mode === 'CASH' ? 'border-green-500 bg-green-50 text-green-700' : 'border-blue-500 bg-blue-50 text-blue-700') : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                                {t && t[mode.toLowerCase()] ? t[mode.toLowerCase()] : mode}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Error Message */}
-                    {error && (
-                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                Processing...
-                            </>
-                        ) : (
-                            <>
-                                🙏 Confirm Booking
-                            </>
-                        )}
+                    <button type="submit" disabled={loading} className="w-full py-3 mt-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:shadow-orange-200 transition-all flex justify-center items-center gap-2">
+                        {loading ? <Loader2 className="animate-spin" /> : (t?.bookNow || 'Confirm Booking')}
                     </button>
                 </form>
             </div>

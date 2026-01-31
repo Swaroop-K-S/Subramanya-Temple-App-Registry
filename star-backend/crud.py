@@ -24,18 +24,22 @@ def generate_receipt_number() -> str:
     return f"STR-{year}-{random_num}"
 
 
-def get_or_create_devotee(db: Session, name: str, phone: str, gothra: str = None, 
+def get_or_create_devotee(db: Session, name_en: str, phone: str, 
+                          name_kn: str = None, gothra_en: str = None, gothra_kn: str = None,
                           nakshatra: str = None, rashi: str = None) -> int:
     """
     Find an existing devotee by phone number, or create a new one.
+    Supports bilingual names (English + Kannada).
     
     Args:
         db: Database session
-        name: Devotee's full name
+        name_en: Devotee's full name in English
+        name_kn: Devotee's full name in Kannada (optional)
         phone: Phone number (used as unique identifier)
-        gothra: Optional gotra
-        nakshatra: Optional birth star
-        rashi: Optional zodiac sign
+        gothra_en: Gotra in English
+        gothra_kn: Gotra in Kannada
+        nakshatra: Birth star (stored in English)
+        rashi: Zodiac sign (stored in English)
         
     Returns:
         devotee_id: The ID of the existing or newly created devotee
@@ -52,13 +56,17 @@ def get_or_create_devotee(db: Session, name: str, phone: str, gothra: str = None
         db.execute(
             text("""
                 UPDATE devotees 
-                SET full_name = :name, gothra = COALESCE(:gothra, gothra), 
+                SET full_name_en = :name_en, 
+                    full_name_kn = COALESCE(:name_kn, full_name_kn),
+                    gothra_en = COALESCE(:gothra_en, gothra_en),
+                    gothra_kn = COALESCE(:gothra_kn, gothra_kn),
                     nakshatra = COALESCE(:nakshatra, nakshatra),
                     rashi = COALESCE(:rashi, rashi),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
-            {"name": name, "gothra": gothra, "nakshatra": nakshatra, "rashi": rashi, "id": devotee_id}
+            {"name_en": name_en, "name_kn": name_kn, "gothra_en": gothra_en, 
+             "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi, "id": devotee_id}
         )
         db.commit()
         return devotee_id
@@ -66,11 +74,12 @@ def get_or_create_devotee(db: Session, name: str, phone: str, gothra: str = None
         # Create new devotee
         result = db.execute(
             text("""
-                INSERT INTO devotees (full_name, phone_number, gothra, nakshatra, rashi)
-                VALUES (:name, :phone, :gothra, :nakshatra, :rashi)
+                INSERT INTO devotees (full_name_en, full_name_kn, phone_number, gothra_en, gothra_kn, nakshatra, rashi)
+                VALUES (:name_en, :name_kn, :phone, :gothra_en, :gothra_kn, :nakshatra, :rashi)
                 RETURNING id
             """),
-            {"name": name, "phone": phone, "gothra": gothra, "nakshatra": nakshatra, "rashi": rashi}
+            {"name_en": name_en, "name_kn": name_kn, "phone": phone, 
+             "gothra_en": gothra_en, "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi}
         )
         db.commit()
         new_id = result.fetchone()[0]
@@ -95,12 +104,20 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
         dict with transaction_id, receipt_no, and booking details
     """
     try:
-        # Step 1: Get or create devotee
+        # Step 1: Get or create devotee (bilingual support)
+        # Extract bilingual fields from transaction, with fallbacks
+        name_en = getattr(transaction, 'devotee_name_en', None) or transaction.devotee_name
+        name_kn = getattr(transaction, 'devotee_name_kn', None)
+        gothra_en = getattr(transaction, 'gothra_en', None) or transaction.gothra
+        gothra_kn = getattr(transaction, 'gothra_kn', None)
+        
         devotee_id = get_or_create_devotee(
             db=db,
-            name=transaction.devotee_name,
+            name_en=name_en,
             phone=transaction.phone_number,
-            gothra=transaction.gothra,
+            name_kn=name_kn,
+            gothra_en=gothra_en,
+            gothra_kn=gothra_kn,
             nakshatra=transaction.nakshatra,
             rashi=transaction.rashi
         )
@@ -124,10 +141,10 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
             text("""
                 INSERT INTO transactions 
                 (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
-                 devotee_name, created_by_user_id, transaction_date)
+                 devotee_name, created_by_user_id, transaction_date, seva_date)
                 VALUES 
                 (:receipt_no, :devotee_id, :seva_id, :amount, CAST(:payment_mode AS payment_mode),
-                 :devotee_name, :user_id, CURRENT_TIMESTAMP)
+                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date)
                 RETURNING id
             """),
             {
@@ -137,7 +154,8 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
                 "amount": transaction.amount,
                 "payment_mode": transaction.payment_mode.value,
                 "devotee_name": transaction.devotee_name,
-                "user_id": user_id
+                "user_id": user_id,
+                "seva_date": transaction.seva_date or datetime.now().date()
             }
         )
         db.commit()
@@ -201,26 +219,33 @@ def get_daily_transactions(db: Session, date: str = None) -> list:
 
 def get_devotee_by_phone(db: Session, phone: str) -> dict:
     """
-    Get devotee details by phone number.
+    Get devotee details by phone number (bilingual).
     
     Args:
         db: Database session
         phone: Phone number to search
         
     Returns:
-        Dict with devotee details or None if not found
+        Dict with devotee details (EN + KN) or None if not found
     """
     result = db.execute(
-        text("SELECT full_name, gothra, nakshatra, rashi FROM devotees WHERE phone_number = :phone"),
+        text("""
+            SELECT full_name_en, full_name_kn, gothra_en, gothra_kn, nakshatra, rashi 
+            FROM devotees WHERE phone_number = :phone
+        """),
         {"phone": phone}
     ).fetchone()
 
     if result:
         return {
-            "full_name": result[0],
-            "gothra": result[1],
-            "nakshatra": result[2],
-            "rashi": result[3]
+            "full_name": result[0],      # Backward compat alias
+            "full_name_en": result[0],
+            "full_name_kn": result[1],
+            "gothra": result[2],          # Backward compat alias
+            "gothra_en": result[2],
+            "gothra_kn": result[3],
+            "nakshatra": result[4],
+            "rashi": result[5]
         }
     return None
 
@@ -233,10 +258,10 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
     """
     Create a new Shaswata (Perpetual) Puja subscription.
     
-    This function:
-    1. Finds or creates the devotee based on phone number
-    2. Creates the subscription record with lunar or Gregorian date info
-    3. Also creates a transaction record for the payment
+    Supports three subscription types:
+    - GREGORIAN: Fixed English calendar date (birthday/anniversary)
+    - LUNAR: Hindu Panchanga date (Maasa + Paksha + Tithi)
+    - RATHOTSAVA: Fixed annual festival (no date selection needed)
     
     Args:
         db: Database session
@@ -250,33 +275,52 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
         # Step 1: Get or create devotee
         devotee_id = get_or_create_devotee(
             db=db,
-            name=subscription.devotee_name,
+            name_en=subscription.devotee_name,
             phone=subscription.phone_number,
-            gothra=subscription.gothra,
+            gothra_en=subscription.gothra,
             nakshatra=subscription.nakshatra
         )
         
-        # Step 2: Get seva name for the response
-        seva_result = db.execute(
-            text("SELECT name_eng FROM seva_catalog WHERE id = :seva_id"),
-            {"seva_id": subscription.seva_id}
-        ).fetchone()
+        # Step 2: Get seva name (optional - may be null for quick subscriptions)
+        seva_name = None
+        if subscription.seva_id:
+            seva_result = db.execute(
+                text("SELECT name_eng FROM seva_catalog WHERE id = :seva_id"),
+                {"seva_id": subscription.seva_id}
+            ).fetchone()
+            if seva_result:
+                seva_name = seva_result[0]
         
-        if not seva_result:
-            raise ValueError(f"Seva with ID {subscription.seva_id} not found")
+        # Step 3: Prepare date fields based on subscription type
+        event_day = None
+        event_month = None
+        maasa = None
+        paksha = None
+        tithi = None
         
-        seva_name = seva_result[0]
+        sub_type = subscription.subscription_type.value if hasattr(subscription.subscription_type, 'value') else str(subscription.subscription_type)
         
-        # Step 3: Insert shaswata subscription
+        if sub_type == 'GREGORIAN':
+            event_day = subscription.event_day
+            event_month = subscription.event_month
+        elif sub_type == 'LUNAR':
+            maasa = subscription.maasa.value if hasattr(subscription.maasa, 'value') else subscription.maasa
+            paksha = subscription.paksha.value if hasattr(subscription.paksha, 'value') else subscription.paksha
+            tithi = subscription.tithi.value if hasattr(subscription.tithi, 'value') else subscription.tithi
+        # RATHOTSAVA type: no date fields needed
+        
+        # Step 4: Insert shaswata subscription
+        seva_type = getattr(subscription, 'seva_type', 'GENERAL') or 'GENERAL'
+        
         result = db.execute(
             text("""
                 INSERT INTO shaswata_subscriptions 
-                (devotee_id, seva_id, subscription_type, 
+                (devotee_id, seva_id, subscription_type, seva_type,
                  event_day, event_month, 
                  maasa, paksha, tithi, 
                  notes, is_active)
                 VALUES 
-                (:devotee_id, :seva_id, :sub_type,
+                (:devotee_id, :seva_id, :sub_type, :seva_type,
                  :event_day, :event_month,
                  :maasa, :paksha, :tithi,
                  :notes, TRUE)
@@ -285,63 +329,67 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
             {
                 "devotee_id": devotee_id,
                 "seva_id": subscription.seva_id,
-                "sub_type": subscription.subscription_type.value,
-                "event_day": subscription.event_day,
-                "event_month": subscription.event_month,
-                "maasa": subscription.maasa.value if subscription.maasa else None,
-                "paksha": subscription.paksha.value if subscription.paksha else None,
-                "tithi": subscription.tithi.value if subscription.tithi else None,
+                "sub_type": sub_type,
+                "seva_type": seva_type,
+                "event_day": event_day,
+                "event_month": event_month,
+                "maasa": maasa,
+                "paksha": paksha,
+                "tithi": tithi,
                 "notes": subscription.notes
             }
         )
         
         subscription_id = result.fetchone()[0]
         
-        # Step 4: Also create a transaction for the payment
-        receipt_no = generate_receipt_number()
-        db.execute(
-            text("""
-                INSERT INTO transactions 
-                (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
-                 devotee_name, created_by_user_id, transaction_date, notes)
-                VALUES 
-                (:receipt_no, :devotee_id, :seva_id, :amount, CAST(:payment_mode AS payment_mode),
-                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :notes)
-            """),
-            {
-                "receipt_no": receipt_no,
-                "devotee_id": devotee_id,
-                "seva_id": subscription.seva_id,
-                "amount": subscription.amount,
-                "payment_mode": subscription.payment_mode.value,
-                "devotee_name": subscription.devotee_name,
-                "user_id": user_id,
-                "notes": f"Shaswata Subscription #{subscription_id}"
-            }
-        )
+        # Step 5: Create transaction for payment (if amount provided)
+        if subscription.amount and subscription.payment_mode:
+            receipt_no = generate_receipt_number()
+            db.execute(
+                text("""
+                    INSERT INTO transactions 
+                    (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
+                     devotee_name, created_by_user_id, transaction_date, notes)
+                    VALUES 
+                    (:receipt_no, :devotee_id, :seva_id, :amount, CAST(:payment_mode AS payment_mode),
+                     :devotee_name, :user_id, CURRENT_TIMESTAMP, :notes)
+                """),
+                {
+                    "receipt_no": receipt_no,
+                    "devotee_id": devotee_id,
+                    "seva_id": subscription.seva_id,
+                    "amount": subscription.amount,
+                    "payment_mode": subscription.payment_mode.value if hasattr(subscription.payment_mode, 'value') else subscription.payment_mode,
+                    "devotee_name": subscription.devotee_name,
+                    "user_id": user_id,
+                    "notes": f"Shaswata Subscription #{subscription_id} ({seva_type})"
+                }
+            )
         
         db.commit()
         
-        # Step 5: Format response
+        # Step 6: Format response
         lunar_date = None
         gregorian_date = None
         
-        if subscription.subscription_type == SubscriptionType.LUNAR:
-            lunar_date = f"{subscription.maasa.value} {subscription.paksha.value} {subscription.tithi.value}"
-        else:
+        if sub_type == 'LUNAR' and maasa:
+            lunar_date = f"{maasa} {paksha} {tithi}"
+        elif sub_type == 'GREGORIAN' and event_month:
             month_names = ["", "January", "February", "March", "April", "May", "June",
                           "July", "August", "September", "October", "November", "December"]
-            gregorian_date = f"{month_names[subscription.event_month]} {subscription.event_day}"
+            gregorian_date = f"{month_names[event_month]} {event_day}"
+        elif sub_type == 'RATHOTSAVA':
+            gregorian_date = "Rathotsava (Annual Festival)"
         
         return {
             "subscription_id": subscription_id,
             "devotee_name": subscription.devotee_name,
-            "seva_name": seva_name,
-            "subscription_type": subscription.subscription_type.value,
+            "seva_name": seva_name or "Shaswata Seva",
+            "subscription_type": sub_type,
+            "seva_type": seva_type,
             "lunar_date": lunar_date,
             "gregorian_date": gregorian_date,
-            "amount_paid": subscription.amount,
-            "receipt_no": receipt_no,
+            "is_active": True,
             "message": f"Shaswata Subscription Created! ID #{subscription_id}"
         }
         
@@ -363,14 +411,14 @@ def get_shaswata_subscriptions(db: Session, active_only: bool = True) -> list:
     """
     query = """
         SELECT 
-            ss.id, d.full_name, d.phone_number, d.gothra,
-            sc.name_eng as seva_name,
-            ss.subscription_type, ss.maasa, ss.paksha, ss.tithi,
+            ss.id, d.full_name_en, d.phone_number, d.gothra_en,
+            COALESCE(sc.name_eng, 'Shaswata Seva') as seva_name,
+            ss.subscription_type, ss.seva_type, ss.maasa, ss.paksha, ss.tithi,
             ss.event_day, ss.event_month,
             ss.last_performed_year, ss.notes, ss.is_active
         FROM shaswata_subscriptions ss
         JOIN devotees d ON ss.devotee_id = d.id
-        JOIN seva_catalog sc ON ss.seva_id = sc.id
+        LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
     """
     
     if active_only:
@@ -382,26 +430,92 @@ def get_shaswata_subscriptions(db: Session, active_only: bool = True) -> list:
     
     subscriptions = []
     for row in result:
+        sub_type = row[5]
+        
         sub = {
             "id": row[0],
             "devotee_name": row[1],
             "phone_number": row[2],
             "gothra": row[3],
             "seva_name": row[4],
-            "subscription_type": row[5],
-            "is_active": row[13]
+            "subscription_type": sub_type,
+            "seva_type": row[6] or "GENERAL",
+            "is_active": row[14]
         }
         
-        if row[5] == "LUNAR":
-            sub["lunar_date"] = f"{row[6]} {row[7]} {row[8]}" if row[6] else None
-        else:
+        if sub_type == "LUNAR":
+            sub["lunar_date"] = f"{row[7]} {row[8]} {row[9]}" if row[7] else None
+            sub["gregorian_date"] = None
+        elif sub_type == "GREGORIAN":
             month_names = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            sub["gregorian_date"] = f"{month_names[row[10]]} {row[9]}" if row[9] else None
+            sub["gregorian_date"] = f"{month_names[row[11]]} {row[10]}" if row[10] else None
+            sub["lunar_date"] = None
+        elif sub_type == "RATHOTSAVA":
+            sub["gregorian_date"] = "Rathotsava (Annual)"
+            sub["lunar_date"] = None
         
-        sub["last_performed_year"] = row[11]
-        sub["notes"] = row[12]
+        sub["last_performed_year"] = row[12]
+        sub["notes"] = row[13]
         subscriptions.append(sub)
     
     return subscriptions
+
+def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
+    """
+    Aggregate financial data for reports within a date range.
+    """
+    # Get Financial Totals (Cash vs UPI)
+    financials_query = text("""
+        SELECT 
+            COALESCE(SUM(amount_paid), 0) as total,
+            COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0) as cash,
+            COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0) as upi
+        FROM transactions
+        WHERE CAST(transaction_date AS DATE) >= CAST(:start_date AS DATE) 
+          AND CAST(transaction_date AS DATE) <= CAST(:end_date AS DATE)
+    """)
+    
+    # Get Seva-wise Performance
+    seva_query = text("""
+        SELECT 
+            s.name_eng as seva_name,
+            COUNT(t.id) as count,
+            COALESCE(SUM(t.amount_paid), 0) as revenue
+        FROM transactions t
+        JOIN seva_catalog s ON t.seva_id = s.id
+        WHERE CAST(t.transaction_date AS DATE) >= CAST(:start_date AS DATE) 
+          AND CAST(t.transaction_date AS DATE) <= CAST(:end_date AS DATE)
+        GROUP BY s.name_eng
+        ORDER BY revenue DESC
+    """)
+    
+    try:
+        financials_result = db.execute(financials_query, {"start_date": start_date, "end_date": end_date}).fetchone()
+        # Fallback for empty results
+        total = float(financials_result[0] or 0)
+        cash = float(financials_result[1] or 0)
+        upi = float(financials_result[2] or 0)
+
+        seva_results = db.execute(seva_query, {"start_date": start_date, "end_date": end_date}).fetchall()
+        
+        return {
+            "financials": {
+                "total": total,
+                "cash": cash,
+                "upi": upi
+            },
+            "seva_stats": [
+                {"name": row[0], "count": row[1], "revenue": float(row[2] or 0)}
+                for row in seva_results
+            ]
+        }
+    except Exception as e:
+        print(f"Aggregation Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "financials": {"total": 0, "cash": 0, "upi": 0},
+            "seva_stats": []
+        }
 

@@ -4,7 +4,7 @@ S.T.A.R. Backend - SQLAlchemy ORM Models
 Defines the database models matching the PostgreSQL schema.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, Numeric, DateTime, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Boolean, Numeric, DateTime, Date, ForeignKey, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -129,9 +129,11 @@ class Devotee(Base):
     __tablename__ = "devotees"
 
     id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String(150), nullable=False)
+    full_name_en = Column(String(150), nullable=False)  # English Name
+    full_name_kn = Column(Text, nullable=True)          # Kannada Name (ಕನ್ನಡ)
     phone_number = Column(String(15), unique=True, nullable=True)
-    gothra = Column(String(50), nullable=True)
+    gothra_en = Column(String(50), nullable=True)       # English Gothra
+    gothra_kn = Column(Text, nullable=True)             # Kannada Gothra
     nakshatra = Column(String(30), nullable=True)
     rashi = Column(String(30), nullable=True)
     address = Column(Text, nullable=True)
@@ -144,7 +146,7 @@ class Devotee(Base):
     subscriptions = relationship("ShaswataSubscription", back_populates="devotee")
 
     def __repr__(self):
-        return f"<Devotee(id={self.id}, name='{self.full_name}', phone='{self.phone_number}')>"
+        return f"<Devotee(id={self.id}, name='{self.full_name_en}', phone='{self.phone_number}')>"
 
 
 class ShaswataSubscription(Base):
@@ -164,8 +166,11 @@ class ShaswataSubscription(Base):
     devotee_id = Column(Integer, ForeignKey("devotees.id", ondelete="CASCADE"), nullable=False)
     seva_id = Column(Integer, ForeignKey("seva_catalog.id", ondelete="RESTRICT"), nullable=False)
     
-    # Subscription Type
-    subscription_type = Column(String(20), nullable=False, default="LUNAR")  # LUNAR or GREGORIAN
+    # Subscription Type: LUNAR, GREGORIAN, or RATHOTSAVA
+    subscription_type = Column(String(20), nullable=False, default="LUNAR")
+    
+    # Seva Type: GENERAL or BRAHMACHARI
+    seva_type = Column(String(20), nullable=True, default="GENERAL")
     
     # =========================================================================
     # GREGORIAN DATE FIELDS (For fixed birthdays/anniversaries)
@@ -198,3 +203,56 @@ class ShaswataSubscription(Base):
 
     def __repr__(self):
         return f"<ShaswataSubscription(id={self.id}, devotee_id={self.devotee_id}, type='{self.subscription_type}')>"
+
+
+class Transaction(Base):
+    """
+    ORM Model for transactions table.
+    Records every single booking/payment.
+    """
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    receipt_no = Column(String(50), unique=True, nullable=False)
+    
+    # Foreign Keys
+    devotee_id = Column(Integer, ForeignKey("devotees.id"), nullable=False)
+    seva_id = Column(Integer, ForeignKey("seva_catalog.id"), nullable=False)
+    
+    # Payment Details
+    amount_paid = Column(Numeric(10, 2), nullable=False)
+    payment_mode = Column(String(20), nullable=False) # CASH / UPI
+    
+    # Snapshot of data at time of booking
+    devotee_name = Column(String(150), nullable=False) 
+    
+    # Dates
+    transaction_date = Column(DateTime(timezone=True), server_default=func.now())
+    seva_date = Column(Date, default=func.current_date(), nullable=True) # Date when seva is performed
+    
+    # Meta
+    notes = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, default=1)
+
+    # Relationships
+    devotee = relationship("Devotee")
+    seva = relationship("SevaCatalog")
+
+    def __repr__(self):
+        return f"<Transaction(id={self.id}, receipt='{self.receipt_no}', amount={self.amount_paid})>"
+
+
+class User(Base):
+    """
+    ORM Model for users (admins/clerks).
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(200), nullable=False)
+    role = Column(String(20), default="admin", nullable=False)
+    is_active = Column(Boolean, default=True)
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"

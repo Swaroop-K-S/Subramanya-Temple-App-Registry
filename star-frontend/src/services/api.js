@@ -14,6 +14,20 @@ const api = axios.create({
     },
 });
 
+// Add a request interceptor to include the JWT token
+api.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
 /**
  * Fetch all sevas from the seva_catalog table
  * @returns {Promise<Array>} Array of seva objects
@@ -56,6 +70,43 @@ export const bookSeva = async (bookingData) => {
  */
 export const getTodayTransactions = async () => {
     const response = await api.get('/transactions/today');
+    return response.data;
+};
+
+// =============================================================================
+// SHASWATA (PERPETUAL PUJA) API FUNCTIONS
+// =============================================================================
+
+/**
+ * Create a new Shaswata (perpetual puja) subscription
+ * @param {Object} data - Subscription details
+ * @param {string} data.devotee_name - Full name of devotee
+ * @param {string} data.phone_number - Phone number
+ * @param {string} data.gothra - Optional gothra
+ * @param {string} data.address - Optional address
+ * @param {string} data.seva_type - 'GENERAL' or 'BRAHMACHARI'
+ * @param {string} data.subscription_type - 'GREGORIAN', 'LUNAR', or 'RATHOTSAVA'
+ * @param {number} data.event_day - Day (1-31) for Gregorian
+ * @param {number} data.event_month - Month (1-12) for Gregorian
+ * @param {string} data.maasa - Hindu month for Lunar
+ * @param {string} data.paksha - Shukla/Krishna for Lunar
+ * @param {string} data.tithi - Tithi for Lunar
+ * @returns {Promise<Object>} Subscription response with ID
+ */
+export const createShaswataSubscription = async (data) => {
+    const response = await api.post('/shaswata/subscribe', data);
+    return response.data;
+};
+
+/**
+ * Get all Shaswata subscriptions
+ * @param {boolean} activeOnly - If true, only return active subscriptions
+ * @returns {Promise<Array>} Array of subscription objects
+ */
+export const getShaswataSubscriptions = async (activeOnly = true) => {
+    const response = await api.get('/shaswata/list', {
+        params: { active_only: activeOnly }
+    });
     return response.data;
 };
 

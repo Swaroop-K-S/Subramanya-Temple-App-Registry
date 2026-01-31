@@ -95,29 +95,51 @@ export const TITHI_LIST = [
 // NAKSHATRAS (27 Birth Stars)
 // =============================================================================
 export const NAKSHATRAS = [
-    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
-    "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
-    "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
-    "Moola", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha",
-    "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+    { en: "Ashwini", kn: "ಅಶ್ವಿನಿ" },
+    { en: "Bharani", kn: "ಭರಣಿ" },
+    { en: "Krittika", kn: "ಕೃತಿಕ" },
+    { en: "Rohini", kn: "ರೋಹಿಣಿ" },
+    { en: "Mrigashira", kn: "ಮೃಗಶಿರ" },
+    { en: "Ardra", kn: "ಆರ್ದ್ರ" },
+    { en: "Punarvasu", kn: "ಪುನರ್ವಸು" },
+    { en: "Pushya", kn: "ಪುಷ್ಯ" },
+    { en: "Ashlesha", kn: "ಆಶ್ಲೇಷ" },
+    { en: "Magha", kn: "ಮಘ" },
+    { en: "Purva Phalguni", kn: "ಪುಬ್ಬ (ಪೂರ್ವ ಫಲ್ಗುಣಿ)" },
+    { en: "Uttara Phalguni", kn: "ಉತ್ತರೆ (ಉತ್ತರ ಫಲ್ಗುಣಿ)" },
+    { en: "Hasta", kn: "ಹಸ್ತ" },
+    { en: "Chitra", kn: "ಚಿತ್ರಾ" },
+    { en: "Swati", kn: "ಸ್ವಾತಿ" },
+    { en: "Vishakha", kn: "ವಿಶಾಖ" },
+    { en: "Anuradha", kn: "ಅನುರಾಧ" },
+    { en: "Jyeshtha", kn: "ಜ್ಯೇಷ್ಠ" },
+    { en: "Moola", kn: "ಮೂಲ" },
+    { en: "Purva Ashadha", kn: "ಪೂರ್ವಾಷಾಢ" },
+    { en: "Uttara Ashadha", kn: "ಉತ್ತರಾಷಾಢ" },
+    { en: "Shravana", kn: "ಶ್ರವಣ" },
+    { en: "Dhanishta", kn: "ಧನಿಷ್ಠ" },
+    { en: "Shatabhisha", kn: "ಶತಭಿಷ" },
+    { en: "Purva Bhadrapada", kn: "ಪೂರ್ವಾ ಭಾದ್ರಪದ" },
+    { en: "Uttara Bhadrapada", kn: "ಉತ್ತರಾ ಭಾದ್ರಪದ" },
+    { en: "Revati", kn: "ರೇವತಿ" }
 ];
 
 // =============================================================================
 // RASHIS (12 Zodiac Signs)
 // =============================================================================
 export const RASHIS = [
-    "Mesha",
-    "Vrishabha",
-    "Mithuna",
-    "Karka",
-    "Simha",
-    "Kanya",
-    "Tula",
-    "Vrishchika",
-    "Dhanu",
-    "Makara",
-    "Kumbha",
-    "Meena"
+    { en: "Mesha", kn: "ಮೇಷ (Aries)" },
+    { en: "Vrishabha", kn: "ವೃಷಭ (Taurus)" },
+    { en: "Mithuna", kn: "ಮಿಥುನ (Gemini)" },
+    { en: "Karka", kn: "ಕರ್ಕಾಟಕ (Cancer)" },
+    { en: "Simha", kn: "ಸಿಂಹ (Leo)" },
+    { en: "Kanya", kn: "ಕನ್ಯಾ (Virgo)" },
+    { en: "Tula", kn: "ತುಲಾ (Libra)" },
+    { en: "Vrishchika", kn: "ವೃಶ್ಚಿಕ (Scorpio)" },
+    { en: "Dhanu", kn: "ಧನು (Sagittarius)" },
+    { en: "Makara", kn: "ಮಕರ (Capricorn)" },
+    { en: "Kumbha", kn: "ಕುಂಭ (Aquarius)" },
+    { en: "Meena", kn: "ಮೀನ (Pisces)" }
 ];
 
 // =============================================================================
@@ -136,4 +158,50 @@ export const ENGLISH_MONTHS = [
     { value: 10, label: "October" },
     { value: 11, label: "November" },
     { value: 12, label: "December" },
+];
+
+// =============================================================================
+// BILINGUAL ARRAYS FOR SHASWATA DROPDOWNS
+// =============================================================================
+
+// Masas (Bilingual - for language-aware dropdowns)
+export const MASAS = [
+    { en: "Chaitra", kn: "ಚೈತ್ರ" },
+    { en: "Vaishakha", kn: "ವೈಶಾಖ" },
+    { en: "Jyeshtha", kn: "ಜ್ಯೇಷ್ಠ" },
+    { en: "Ashadha", kn: "ಆಷಾಢ" },
+    { en: "Shravana", kn: "ಶ್ರಾವಣ" },
+    { en: "Bhadrapada", kn: "ಭಾದ್ರಪದ" },
+    { en: "Ashwina", kn: "ಆಶ್ವಿನ" },
+    { en: "Kartika", kn: "ಕಾರ್ತಿಕ" },
+    { en: "Margashirsha", kn: "ಮಾರ್ಗಶಿರ" },
+    { en: "Pausha", kn: "ಪುಷ್ಯ" },
+    { en: "Magha", kn: "ಮಾಘ" },
+    { en: "Phalguna", kn: "ಫಾಲ್ಗುಣ" },
+];
+
+// Pakshas (Bilingual)
+export const PAKSHAS_BILINGUAL = [
+    { en: "Shukla", kn: "ಶುಕ್ಲ" },
+    { en: "Krishna", kn: "ಕೃಷ್ಣ" },
+];
+
+// Tithis (Bilingual)
+export const TITHIS_BILINGUAL = [
+    { en: "Pratipada", kn: "ಪ್ರತಿಪದ" },
+    { en: "Dwitiya", kn: "ದ್ವಿತೀಯಾ" },
+    { en: "Tritiya", kn: "ತೃತೀಯಾ" },
+    { en: "Chaturthi", kn: "ಚತುರ್ಥಿ" },
+    { en: "Panchami", kn: "ಪಂಚಮಿ" },
+    { en: "Shashthi", kn: "ಷಷ್ಠಿ" },
+    { en: "Saptami", kn: "ಸಪ್ತಮಿ" },
+    { en: "Ashtami", kn: "ಅಷ್ಟಮಿ" },
+    { en: "Navami", kn: "ನವಮಿ" },
+    { en: "Dashami", kn: "ದಶಮಿ" },
+    { en: "Ekadashi", kn: "ಏಕಾದಶಿ" },
+    { en: "Dwadashi", kn: "ದ್ವಾದಶಿ" },
+    { en: "Trayodashi", kn: "ತ್ರಯೋದಶಿ" },
+    { en: "Chaturdashi", kn: "ಚತುರ್ದಶಿ" },
+    { en: "Purnima", kn: "ಹುಣ್ಣಿಮೆ" },
+    { en: "Amavasya", kn: "ಅಮಾವಾಸ್ಯೆ" },
 ];

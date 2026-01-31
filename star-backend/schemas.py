@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from decimal import Decimal
 from enum import Enum
+from datetime import date
 
 
 # =============================================================================
@@ -24,6 +25,13 @@ class SubscriptionType(str, Enum):
     """Type of date tracking for Shaswata subscription"""
     LUNAR = "LUNAR"           # Based on Hindu Panchanga
     GREGORIAN = "GREGORIAN"   # Based on fixed calendar date
+    RATHOTSAVA = "RATHOTSAVA" # Fixed annual temple festival (no date needed)
+
+
+class SevaType(str, Enum):
+    """Type of Shaswata Puja"""
+    GENERAL = "GENERAL"           # General Shaswata Pooja
+    BRAHMACHARI = "BRAHMACHARI"   # Brahmachari Pooja (Rathotsava)
 
 
 class Maasa(str, Enum):
@@ -73,22 +81,36 @@ class Tithi(str, Enum):
 # =============================================================================
 
 class TransactionCreate(BaseModel):
-    """Schema for creating a new seva booking/transaction"""
-    devotee_name: str = Field(..., min_length=2, max_length=150, description="Full name of the devotee")
+    """Schema for creating a new seva booking/transaction (bilingual support)"""
+    # Bilingual Name Fields
+    devotee_name: str = Field(..., min_length=2, max_length=150, description="Primary display name (backward compat)")
+    devotee_name_en: Optional[str] = Field(None, max_length=150, description="English name")
+    devotee_name_kn: Optional[str] = Field(None, description="Kannada name (ಕನ್ನಡ)")
+    
     phone_number: str = Field(..., min_length=10, max_length=15, description="Contact phone number")
-    gothra: Optional[str] = Field(None, max_length=50, description="Gotra (ancestral lineage)")
+    
+    # Bilingual Gothra Fields
+    gothra: Optional[str] = Field(None, max_length=50, description="Gotra (backward compat)")
+    gothra_en: Optional[str] = Field(None, max_length=50, description="English Gothra")
+    gothra_kn: Optional[str] = Field(None, description="Kannada Gothra")
+    
     nakshatra: Optional[str] = Field(None, max_length=30, description="Birth star")
     rashi: Optional[str] = Field(None, max_length=30, description="Zodiac sign")
     seva_id: int = Field(..., gt=0, description="ID of the seva being booked")
     amount: float = Field(..., gt=0, description="Amount paid for the seva")
     payment_mode: PaymentMode = Field(..., description="Payment method: CASH or UPI")
+    seva_date: Optional[date] = Field(None, description="Date when seva should be performed. Defaults to today.")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "devotee_name": "Ramesh Kumar",
+                "devotee_name_en": "Ramesh Kumar",
+                "devotee_name_kn": "ರಮೇಶ್ ಕುಮಾರ್",
                 "phone_number": "9876543210",
                 "gothra": "Kashyapa",
+                "gothra_en": "Kashyapa",
+                "gothra_kn": "ಕಶ್ಯಪ",
                 "nakshatra": "Ashwini",
                 "seva_id": 1,
                 "amount": 20.00,
@@ -99,9 +121,11 @@ class TransactionCreate(BaseModel):
 
 class DevoteeCreate(BaseModel):
     """Schema for creating a new devotee profile"""
-    full_name: str = Field(..., min_length=2, max_length=150)
+    full_name_en: str = Field(..., min_length=2, max_length=150, description="English Name")
+    full_name_kn: Optional[str] = Field(None, description="Kannada Name (ಕನ್ನಡ)")
     phone_number: str = Field(..., min_length=10, max_length=15)
-    gothra: Optional[str] = None
+    gothra_en: Optional[str] = Field(None, description="English Gothra")
+    gothra_kn: Optional[str] = Field(None, description="Kannada Gothra")
     nakshatra: Optional[str] = None
     rashi: Optional[str] = None
     address: Optional[str] = None
@@ -122,12 +146,13 @@ class ShaswataCreate(BaseModel):
     nakshatra: Optional[str] = Field(None, max_length=30, description="Birth star")
     
     # Seva Information
-    seva_id: int = Field(..., gt=0, description="ID of the Shaswata seva (usually 7 or 8)")
-    amount: float = Field(..., gt=0, description="Subscription amount paid")
-    payment_mode: PaymentMode = Field(..., description="Payment method")
+    seva_id: Optional[int] = Field(None, description="ID of the Shaswata seva")
+    amount: Optional[float] = Field(None, description="Subscription amount paid")
+    payment_mode: Optional[PaymentMode] = Field(None, description="Payment method")
     
-    # Subscription Type
-    subscription_type: SubscriptionType = Field(..., description="LUNAR or GREGORIAN")
+    # Subscription & Seva Type
+    subscription_type: SubscriptionType = Field(..., description="LUNAR, GREGORIAN, or RATHOTSAVA")
+    seva_type: Optional[str] = Field("GENERAL", description="GENERAL or BRAHMACHARI")
     
     # Gregorian Fields (for birthdays/fixed dates)
     event_day: Optional[int] = Field(None, ge=1, le=31, description="Day of month (1-31)")
@@ -147,15 +172,14 @@ class ShaswataCreate(BaseModel):
         if self.subscription_type == SubscriptionType.LUNAR:
             if not all([self.maasa, self.paksha, self.tithi]):
                 raise ValueError(
-                    "For LUNAR subscription, maasa, paksha, and tithi are required. "
-                    "Example: maasa='Chaitra', paksha='Shukla', tithi='Panchami'"
+                    "For LUNAR subscription, maasa, paksha, and tithi are required."
                 )
         elif self.subscription_type == SubscriptionType.GREGORIAN:
             if not all([self.event_day, self.event_month]):
                 raise ValueError(
-                    "For GREGORIAN subscription, event_day and event_month are required. "
-                    "Example: event_day=15, event_month=8 (for August 15th)"
+                    "For GREGORIAN subscription, event_day and event_month are required."
                 )
+        # RATHOTSAVA type does not require any date fields
         return self
 
     class Config:
@@ -223,6 +247,7 @@ class TransactionResponse(BaseModel):
     amount_paid: float
     payment_mode: str
     message: str
+    seva_date: Optional[date] = None
     nakshatra: Optional[str] = None
     rashi: Optional[str] = None
 
@@ -231,12 +256,15 @@ class TransactionResponse(BaseModel):
 
 
 class DevoteeResponse(BaseModel):
-    """Response schema for devotee information"""
+    """Response schema for devotee information (bilingual)"""
     id: int
-    full_name: str
+    full_name_en: str = Field(..., alias="full_name")  # Alias for backward compat
+    full_name_kn: Optional[str] = None
     phone_number: Optional[str] = None
-    gothra: Optional[str] = None
+    gothra_en: Optional[str] = Field(None, alias="gothra")
+    gothra_kn: Optional[str] = None
     nakshatra: Optional[str] = None
+    rashi: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -246,13 +274,36 @@ class ShaswataSubscriptionResponse(BaseModel):
     """Response schema after successful Shaswata subscription"""
     subscription_id: int
     devotee_name: str
-    seva_name: str
+    seva_name: Optional[str] = None
     subscription_type: str
+    seva_type: Optional[str] = None
     lunar_date: Optional[str] = None      # e.g., "Chaitra Shukla Panchami"
     gregorian_date: Optional[str] = None  # e.g., "December 25"
-    amount_paid: float
+    is_active: bool = True
     message: str
 
     class Config:
         from_attributes = True
 
+
+# =============================================================================
+# Auth Schemas
+# =============================================================================
+
+class UserBase(BaseModel):
+    username: str
+
+class UserCreate(UserBase):
+    password: str
+    role: str = "admin"
+
+class UserLogin(UserBase):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None

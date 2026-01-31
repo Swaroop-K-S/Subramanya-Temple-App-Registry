@@ -27,13 +27,22 @@ body {
   margin: 0;
   min-height: 100vh;
 
-  /* Modern Mesh Background */
-  background-color: #f8fafc;
-  /* Slate-50 */
-  background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-  /* Slate-300 dots */
-  background-size: 20px 20px;
+  /* Parallax Background Image */
+  background-image: url('/temple-bg.jpeg');
   background-attachment: fixed;
+  background-size: cover;
+  background-position: center top;
+  position: relative;
+}
+
+/* Glassmorphism Overlay for Readability */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.8));
+  pointer-events: none;
 }
 
 /* 3. Utility Classes */

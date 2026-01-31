@@ -1,433 +1,494 @@
 /**
- * ShaswataForm Component
- * ======================
- * Form for creating Shaswata (Perpetual Puja) subscriptions.
- * Supports both Fixed Date (Gregorian) and Lunar Date (Hindu Calendar) modes.
+ * ShaswataForm Component - Enhanced Dual Calendar Version
+ * =========================================================
+ * Perpetual Puja Subscription Form with:
+ * 1. GENERAL: User selects custom date (Gregorian OR Lunar)
+ * 2. BRAHMACHARI: Fixed Rathotsava date (no selection needed)
+ * 
+ * Features:
+ * - Dual Calendar Toggle (English Date vs Hindu Tithi)
+ * - Smart Input with ReactTransliterate for bilingual Name/Gothra
+ * - Beautiful glassmorphism UI with animated transitions
  */
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    Calendar, Moon, User, Phone, FileText,
-    Loader2, CheckCircle2, ChevronDown, Sparkles
+    X, User, Phone, Sparkles, MapPin, Calendar, Moon, Sun,
+    Loader2, CheckCircle2, Info, Star, Crown
 } from 'lucide-react';
-import { MAASA_LIST, PAKSHA_LIST, TITHI_LIST, ENGLISH_MONTHS } from './constants';
+import { ReactTransliterate } from 'react-transliterate';
+import 'react-transliterate/dist/index.css';
+import api from '../services/api';
+import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS } from './constants';
+import { TRANSLATIONS } from './translations';
 
-// API base URL
-const API_BASE = 'http://127.0.0.1:8000';
+function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
+    const t = TRANSLATIONS[lang];
 
-function ShaswataForm({ onSuccess }) {
-    // Form mode: 'GREGORIAN' or 'LUNAR'
-    const [mode, setMode] = useState('GREGORIAN');
+    // =========================================================================
+    // CSS CLASSES - Premium UI Styling
+    // =========================================================================
+    const inputBase = "w-full pl-10 pr-4 py-3 border-2 rounded-xl outline-none transition-all duration-200 text-sm font-medium";
+    const inputNormal = `${inputBase} border-gray-200 bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-100`;
+    const selectBase = "w-full py-3 px-4 border-2 rounded-xl outline-none bg-white text-sm font-medium transition-all duration-200";
+    const selectNormal = `${selectBase} border-gray-200 focus:border-violet-500 focus:ring-4 focus:ring-violet-100`;
+    const labelClass = "text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block";
 
-    // Common fields
+    // =========================================================================
+    // STATE MANAGEMENT
+    // =========================================================================
+    const [sevaType, setSevaType] = useState('GENERAL');       // GENERAL | BRAHMACHARI
+    const [calendarType, setCalendarType] = useState('GREGORIAN'); // GREGORIAN | LUNAR
+
+    const [dateDetails, setDateDetails] = useState({
+        day: 1,
+        month: 1,
+        masa: '',
+        paksha: '',
+        tithi: ''
+    });
+
     const [formData, setFormData] = useState({
         devotee_name: '',
-        phone_number: '',
-        notes: '',
-        seva_id: 7, // Default to Shaswata Puje seva
-        amount: 5000, // Default amount
-        payment_mode: 'CASH',
+        gothra: '',
+        phone: '',
+        address: ''
     });
 
-    // Gregorian date fields
-    const [gregorianDate, setGregorianDate] = useState({
-        event_day: '',
-        event_month: '',
-    });
-
-    // Lunar date fields
-    const [lunarDate, setLunarDate] = useState({
-        maasa: '',
-        paksha: '',
-        tithi: '',
-    });
-
-    // UI state
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(null);
+    const [success, setSuccess] = useState(false);
 
-    // Handle common field changes
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    // Handle Gregorian date changes
-    const handleDateChange = (e) => {
-        const dateValue = e.target.value; // Format: YYYY-MM-DD
-        if (dateValue) {
-            const [year, month, day] = dateValue.split('-');
-            setGregorianDate({
-                event_day: parseInt(day, 10),
-                event_month: parseInt(month, 10),
-            });
+    // Reset form when modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            setSevaType('GENERAL');
+            setCalendarType('GREGORIAN');
+            setDateDetails({ day: 1, month: 1, masa: '', paksha: '', tithi: '' });
+            setFormData({ devotee_name: '', gothra: '', phone: '', address: '' });
+            setSuccess(false);
         }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    // =========================================================================
+    // HANDLERS
+    // =========================================================================
+    const handleFormChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    // Handle lunar date dropdown changes
-    const handleLunarChange = (e) => {
-        const { name, value } = e.target;
-        setLunarDate(prev => ({ ...prev, [name]: value }));
+    const handleDateChange = (field, value) => {
+        setDateDetails(prev => ({ ...prev, [field]: value }));
     };
 
-    // Submit handler
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setError(null);
-        setSuccess(null);
 
         try {
-            // Build request body based on mode
-            const requestBody = {
+            // Determine subscription_type based on selections
+            let subscriptionType = 'RATHOTSAVA';
+            if (sevaType === 'GENERAL') {
+                subscriptionType = calendarType; // 'GREGORIAN' or 'LUNAR'
+            }
+
+            const payload = {
                 devotee_name: formData.devotee_name,
-                phone_number: formData.phone_number,
-                seva_id: formData.seva_id,
-                amount: formData.amount,
-                payment_mode: formData.payment_mode,
-                notes: formData.notes || null,
-                subscription_type: mode,
+                phone_number: formData.phone,
+                gothra: formData.gothra,
+                address: formData.address,
+                seva_type: sevaType,
+                subscription_type: subscriptionType,
+                // Include date fields based on type
+                ...(sevaType === 'GENERAL' && calendarType === 'GREGORIAN' && {
+                    event_day: parseInt(dateDetails.day),
+                    event_month: parseInt(dateDetails.month),
+                }),
+                ...(sevaType === 'GENERAL' && calendarType === 'LUNAR' && {
+                    maasa: dateDetails.masa,
+                    paksha: dateDetails.paksha,
+                    tithi: dateDetails.tithi,
+                }),
             };
 
-            if (mode === 'GREGORIAN') {
-                if (!gregorianDate.event_day || !gregorianDate.event_month) {
-                    throw new Error('Please select a date');
-                }
-                requestBody.event_day = gregorianDate.event_day;
-                requestBody.event_month = gregorianDate.event_month;
-            } else {
-                if (!lunarDate.maasa || !lunarDate.paksha || !lunarDate.tithi) {
-                    throw new Error('Please select Maasa, Paksha, and Tithi');
-                }
-                requestBody.maasa = lunarDate.maasa;
-                requestBody.paksha = lunarDate.paksha;
-                requestBody.tithi = lunarDate.tithi;
-            }
-
-            // Make API call
-            const response = await fetch(`${API_BASE}/shaswata/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Subscription failed');
-            }
-
-            const result = await response.json();
-
-            // Show success
-            setSuccess({
-                subscriptionId: result.subscription_id,
-                devotee: result.devotee_name,
-                seva: result.seva_name,
-                date: mode === 'LUNAR' ? result.lunar_date : result.gregorian_date,
-                receiptNo: result.receipt_no,
-            });
-
-            // Reset form
-            setFormData({
-                devotee_name: '',
-                phone_number: '',
-                notes: '',
-                seva_id: 7,
-                amount: 5000,
-                payment_mode: 'CASH',
-            });
-            setGregorianDate({ event_day: '', event_month: '' });
-            setLunarDate({ maasa: '', paksha: '', tithi: '' });
-
-            // Callback
-            if (onSuccess) onSuccess(result);
-
+            await api.post('/shaswata/subscribe', payload);
+            setSuccess(true);
         } catch (err) {
-            setError(err.message);
+            console.error('Subscription failed:', err);
+            alert(lang === 'KN' ? 'ಚಂದಾದಾರಿಕೆ ವಿಫಲವಾಗಿದೆ.' : 'Subscription failed. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    // Get formatted date string for display in date input
-    const getDateInputValue = () => {
-        if (gregorianDate.event_day && gregorianDate.event_month) {
-            const day = String(gregorianDate.event_day).padStart(2, '0');
-            const month = String(gregorianDate.event_month).padStart(2, '0');
-            return `2026-${month}-${day}`;
-        }
-        return '';
-    };
+    // =========================================================================
+    // SUCCESS VIEW
+    // =========================================================================
+    if (success) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={onClose} />
+                <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 text-center">
+                    <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-green-200">
+                        <CheckCircle2 className="text-white" size={40} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {lang === 'KN' ? '🙏 ಚಂದಾದಾರಿಕೆ ಯಶಸ್ವಿ!' : '🙏 Subscription Successful!'}
+                    </h2>
+                    <p className="text-gray-500 mb-6">
+                        {lang === 'KN'
+                            ? 'ನಿಮ್ಮ ಶಾಶ್ವತ ಪೂಜೆ ನೋಂದಣಿಯಾಗಿದೆ.'
+                            : 'Your perpetual puja has been registered.'}
+                    </p>
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 bg-gradient-to-r from-violet-600 to-purple-700 text-white font-bold rounded-xl shadow-lg"
+                    >
+                        {lang === 'KN' ? 'ಮುಚ್ಚಿ' : 'Close'}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
+    // =========================================================================
+    // MAIN FORM VIEW
+    // =========================================================================
     return (
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden max-w-2xl mx-auto">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-indigo-500 px-6 py-5">
-                <div className="flex items-center gap-3">
-                    <Sparkles className="w-8 h-8 text-yellow-300" />
-                    <div>
-                        <h2 className="text-2xl font-bold text-white">Shaswata Puje</h2>
-                        <p className="text-purple-200 text-sm">Perpetual Annual Subscription</p>
-                    </div>
-                </div>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
 
-            {/* Mode Toggle Tabs */}
-            <div className="flex border-b border-gray-200">
-                <button
-                    type="button"
-                    onClick={() => setMode('GREGORIAN')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-all ${mode === 'GREGORIAN'
-                            ? 'bg-orange-50 text-orange-700 border-b-3 border-orange-500'
-                            : 'text-gray-500 hover:bg-gray-50'
-                        }`}
-                >
-                    <Calendar className="w-5 h-5" />
-                    📅 Fixed Date (Birthday)
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setMode('LUNAR')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-all ${mode === 'LUNAR'
-                            ? 'bg-indigo-50 text-indigo-700 border-b-3 border-indigo-500'
-                            : 'text-gray-500 hover:bg-gray-50'
-                        }`}
-                >
-                    <Moon className="w-5 h-5" />
-                    🌙 Lunar Date (Tithi)
-                </button>
-            </div>
+            {/* Modal Container */}
+            <div className="relative bg-gradient-to-b from-white to-gray-50 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-white/50">
 
-            {/* Success Message */}
-            {success && (
-                <div className="mx-6 mt-6 bg-green-50 border border-green-200 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                        <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                {/* ============ HEADER ============ */}
+                <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-5 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur">
+                            <Sparkles className="text-white" size={24} />
+                        </div>
                         <div>
-                            <h3 className="font-semibold text-green-800">
-                                🙏 Shaswata Subscription Created!
-                            </h3>
-                            <div className="mt-2 text-sm text-green-700 space-y-1">
-                                <p><strong>Subscription ID:</strong> #{success.subscriptionId}</p>
-                                <p><strong>Devotee:</strong> {success.devotee}</p>
-                                <p><strong>Seva:</strong> {success.seva}</p>
-                                <p><strong>Annual Date:</strong> {success.date}</p>
-                                <p><strong>Receipt:</strong> {success.receiptNo}</p>
-                            </div>
+                            <h2 className="text-xl font-bold text-white">{t?.shaswataTitle || "Perpetual Puja"}</h2>
+                            <p className="text-violet-200 text-sm">{lang === 'KN' ? 'ಶಾಶ್ವತ ಸೇವೆ ನೋಂದಣಿ' : 'Annual subscription'}</p>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-
-                {/* Devotee Name */}
-                <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-                        <User className="w-4 h-4 text-gray-500" />
-                        Devotee Name *
-                    </label>
-                    <input
-                        type="text"
-                        name="devotee_name"
-                        value={formData.devotee_name}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="Enter full name"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
-                    />
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+                        <X className="text-white" size={24} />
+                    </button>
                 </div>
 
-                {/* Phone Number */}
-                <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-                        <Phone className="w-4 h-4 text-gray-500" />
-                        Phone Number *
-                    </label>
-                    <input
-                        type="tel"
-                        name="phone_number"
-                        value={formData.phone_number}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="10-digit mobile number"
-                        pattern="[0-9]{10}"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
-                    />
-                </div>
+                {/* ============ FORM BODY ============ */}
+                <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
 
-                {/* Conditional Date Section */}
-                <div className={`p-4 rounded-xl ${mode === 'GREGORIAN' ? 'bg-orange-50' : 'bg-indigo-50'}`}>
-                    <h3 className={`font-semibold mb-3 ${mode === 'GREGORIAN' ? 'text-orange-800' : 'text-indigo-800'}`}>
-                        {mode === 'GREGORIAN' ? '📅 Select Annual Date' : '🌙 Select Lunar Date'}
-                    </h3>
-
-                    {mode === 'GREGORIAN' ? (
-                        /* Fixed Date Picker */
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                Date (Day &amp; Month) *
-                            </label>
-                            <input
-                                type="date"
-                                onChange={handleDateChange}
-                                value={getDateInputValue()}
-                                className="w-full px-4 py-2.5 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none bg-white"
-                            />
-                            <p className="text-xs text-orange-600 mt-1">
-                                Only day and month will be used (year is ignored)
-                            </p>
-                        </div>
-                    ) : (
-                        /* Lunar Date Dropdowns */
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {/* Maasa */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Maasa (Month) *
-                                </label>
-                                <div className="relative">
-                                    <select
-                                        name="maasa"
-                                        value={lunarDate.maasa}
-                                        onChange={handleLunarChange}
-                                        required={mode === 'LUNAR'}
-                                        className="w-full px-4 py-2.5 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Select Maasa</option>
-                                        {MAASA_LIST.map((m) => (
-                                            <option key={m} value={m}>{m}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                </div>
-                            </div>
-
-                            {/* Paksha */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Paksha *
-                                </label>
-                                <div className="relative">
-                                    <select
-                                        name="paksha"
-                                        value={lunarDate.paksha}
-                                        onChange={handleLunarChange}
-                                        required={mode === 'LUNAR'}
-                                        className="w-full px-4 py-2.5 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Select Paksha</option>
-                                        {PAKSHA_LIST.map((p) => (
-                                            <option key={p} value={p}>{p}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                </div>
-                            </div>
-
-                            {/* Tithi */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Tithi *
-                                </label>
-                                <div className="relative">
-                                    <select
-                                        name="tithi"
-                                        value={lunarDate.tithi}
-                                        onChange={handleLunarChange}
-                                        required={mode === 'LUNAR'}
-                                        className="w-full px-4 py-2.5 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Select Tithi</option>
-                                        {TITHI_LIST.map((t) => (
-                                            <option key={t} value={t}>{t}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Amount and Payment Mode */}
-                <div className="grid grid-cols-2 gap-4">
+                    {/* ============ SECTION 1: SEVA TYPE SELECTION ============ */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                            Amount (₹) *
-                        </label>
-                        <input
-                            type="number"
-                            name="amount"
-                            value={formData.amount}
-                            onChange={handleInputChange}
-                            required
-                            min="1"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                            Payment Mode *
-                        </label>
-                        <div className="relative">
-                            <select
-                                name="payment_mode"
-                                value={formData.payment_mode}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none bg-white appearance-none cursor-pointer"
+                        <label className={labelClass}>{t?.selectType || "Select Seva Type"}</label>
+                        <div className="grid grid-cols-2 gap-4">
+
+                            {/* GENERAL Card */}
+                            <div
+                                onClick={() => setSevaType('GENERAL')}
+                                className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 ${sevaType === 'GENERAL'
+                                        ? 'border-violet-500 bg-gradient-to-br from-violet-50 to-purple-50 shadow-lg shadow-violet-100 scale-[1.02]'
+                                        : 'border-gray-200 bg-white hover:border-violet-300 hover:shadow-md'
+                                    }`}
                             >
-                                <option value="CASH">💵 Cash</option>
-                                <option value="UPI">📱 UPI</option>
-                            </select>
-                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className={`p-2 rounded-xl ${sevaType === 'GENERAL' ? 'bg-violet-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                        <Star size={20} />
+                                    </div>
+                                    <span className={`font-bold ${sevaType === 'GENERAL' ? 'text-violet-700' : 'text-gray-700'}`}>
+                                        {t?.generalPooja || "General Pooja"}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-500 mb-3">
+                                    {lang === 'KN' ? 'ನಿಮ್ಮ ಆಯ್ಕೆಯ ದಿನಾಂಕದಂದು ಸೇವೆ' : 'Puja on your selected date'}
+                                </p>
+                                <div className="text-xl font-bold text-violet-600">₹5,000</div>
+                            </div>
+
+                            {/* BRAHMACHARI Card */}
+                            <div
+                                onClick={() => setSevaType('BRAHMACHARI')}
+                                className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 ${sevaType === 'BRAHMACHARI'
+                                        ? 'border-amber-500 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-lg shadow-amber-100 scale-[1.02]'
+                                        : 'border-gray-200 bg-white hover:border-amber-300 hover:shadow-md'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className={`p-2 rounded-xl ${sevaType === 'BRAHMACHARI' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                        <Crown size={20} />
+                                    </div>
+                                    <span className={`font-bold ${sevaType === 'BRAHMACHARI' ? 'text-amber-700' : 'text-gray-700'}`}>
+                                        {t?.brahmachariPooja || "Brahmachari Pooja"}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-500 mb-3">
+                                    {lang === 'KN' ? 'ರಥೋತ್ಸವದ ದಿನ ಸೇವೆ' : 'Puja on Rathotsava day'}
+                                </p>
+                                <div className="text-xl font-bold text-amber-600">₹2,500</div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Notes */}
-                <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-                        <FileText className="w-4 h-4 text-gray-500" />
-                        Notes (Optional)
-                    </label>
-                    <textarea
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleInputChange}
-                        placeholder="e.g., Father's Shraddha, Daughter's Birthday Puja..."
-                        rows={3}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none resize-none"
-                    />
-                </div>
+                    {/* ============ SECTION 2: DATE SELECTION (CONDITIONAL) ============ */}
+                    {sevaType === 'GENERAL' ? (
+                        <div className="space-y-4">
+                            <label className={labelClass}>{t?.dateSelection || "Select Occasion Date"}</label>
 
-                {/* Error Message */}
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                        ❌ {error}
-                    </div>
-                )}
+                            {/* ===== DUAL CALENDAR TOGGLE ===== */}
+                            <div className="flex rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50">
+                                <button
+                                    type="button"
+                                    onClick={() => setCalendarType('GREGORIAN')}
+                                    className={`flex-1 py-3 px-4 font-semibold transition-all flex items-center justify-center gap-2 ${calendarType === 'GREGORIAN'
+                                            ? 'bg-blue-500 text-white shadow-lg'
+                                            : 'bg-transparent text-gray-500 hover:bg-gray-100'
+                                        }`}
+                                >
+                                    <Calendar size={18} />
+                                    📅 {lang === 'KN' ? 'ಇಂಗ್ಲಿಷ್ ದಿನಾಂಕ' : 'English Date'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCalendarType('LUNAR')}
+                                    className={`flex-1 py-3 px-4 font-semibold transition-all flex items-center justify-center gap-2 ${calendarType === 'LUNAR'
+                                            ? 'bg-amber-500 text-white shadow-lg'
+                                            : 'bg-transparent text-gray-500 hover:bg-gray-100'
+                                        }`}
+                                >
+                                    <Moon size={18} />
+                                    🌙 {lang === 'KN' ? 'ಹಿಂದೂ ತಿಥಿ' : 'Hindu Tithi'}
+                                </button>
+                            </div>
 
-                {/* Submit Button */}
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
-                >
-                    {loading ? (
-                        <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Creating Subscription...
-                        </>
+                            {/* ===== DATE DROPDOWNS ===== */}
+                            <div className="bg-white rounded-2xl border-2 border-gray-100 p-5 shadow-sm">
+                                {calendarType === 'GREGORIAN' ? (
+                                    // GREGORIAN: Day & Month
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className={labelClass}>{t?.eventDay || "Day"}</label>
+                                            <select
+                                                value={dateDetails.day}
+                                                onChange={(e) => handleDateChange('day', e.target.value)}
+                                                className={selectNormal}
+                                            >
+                                                {[...Array(31)].map((_, i) => (
+                                                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>{t?.eventMonth || "Month"}</label>
+                                            <select
+                                                value={dateDetails.month}
+                                                onChange={(e) => handleDateChange('month', e.target.value)}
+                                                className={selectNormal}
+                                            >
+                                                {ENGLISH_MONTHS.map(m => (
+                                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // LUNAR: Masa, Paksha, Tithi
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className={labelClass}>{t?.masa || "Masa"}</label>
+                                            <select
+                                                value={dateDetails.masa}
+                                                onChange={(e) => handleDateChange('masa', e.target.value)}
+                                                className={selectNormal}
+                                                required
+                                            >
+                                                <option value="">{lang === 'KN' ? '-- ಆಯ್ಕೆ --' : '-- Select --'}</option>
+                                                {MASAS.map(m => (
+                                                    <option key={m.en} value={m.en}>
+                                                        {lang === 'KN' ? m.kn : m.en}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>{t?.paksha || "Paksha"}</label>
+                                            <select
+                                                value={dateDetails.paksha}
+                                                onChange={(e) => handleDateChange('paksha', e.target.value)}
+                                                className={selectNormal}
+                                                required
+                                            >
+                                                <option value="">{lang === 'KN' ? '-- ಆಯ್ಕೆ --' : '-- Select --'}</option>
+                                                {PAKSHAS_BILINGUAL.map(p => (
+                                                    <option key={p.en} value={p.en}>
+                                                        {lang === 'KN' ? p.kn : p.en}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>{t?.tithi || "Tithi"}</label>
+                                            <select
+                                                value={dateDetails.tithi}
+                                                onChange={(e) => handleDateChange('tithi', e.target.value)}
+                                                className={selectNormal}
+                                                required
+                                            >
+                                                <option value="">{lang === 'KN' ? '-- ಆಯ್ಕೆ --' : '-- Select --'}</option>
+                                                {TITHIS_BILINGUAL.map(ti => (
+                                                    <option key={ti.en} value={ti.en}>
+                                                        {lang === 'KN' ? ti.kn : ti.en}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     ) : (
-                        <>
-                            ✨ Create Shaswata Subscription
-                        </>
+                        // ===== BRAHMACHARI: RATHOTSAVA INFO BOX =====
+                        <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-6 shadow-sm">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl text-white shadow-lg">
+                                    <Info size={28} />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-amber-800 text-lg mb-2 flex items-center gap-2">
+                                        🎉 {lang === 'KN' ? 'ರಥೋತ್ಸವ ಪೂಜೆ' : 'Rathotsava Puja'}
+                                    </h4>
+                                    <p className="text-amber-700">
+                                        {t?.rathotsavaMsg || "This Seva is performed annually on the auspicious day of Rathotsava. No date selection required."}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     )}
-                </button>
-            </form>
+
+                    {/* ============ SECTION 3: DEVOTEE DETAILS ============ */}
+                    <div className="space-y-4">
+                        <h3 className={labelClass}>
+                            {lang === 'KN' ? '👤 ಭಕ್ತರ ವಿವರಗಳು' : '👤 Devotee Details'}
+                        </h3>
+
+                        {/* Phone */}
+                        <div>
+                            <label className={labelClass}>{t?.phone || "Phone Number"}</label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input
+                                    type="tel"
+                                    value={formData.phone}
+                                    onChange={(e) => handleFormChange('phone', e.target.value)}
+                                    className={inputNormal}
+                                    placeholder="9876543210"
+                                    maxLength={10}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Name - Smart Input */}
+                        <div>
+                            <label className={labelClass}>
+                                {t?.name || "Name"}
+                                {lang === 'KN' && <span className="ml-2 text-violet-400 text-[10px]">(ಟೈಪ್ → ಕನ್ನಡ)</span>}
+                            </label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
+                                {lang === 'KN' ? (
+                                    <ReactTransliterate
+                                        renderComponent={(props) => (
+                                            <input {...props} className={inputNormal} required />
+                                        )}
+                                        value={formData.devotee_name}
+                                        onChangeText={(text) => handleFormChange('devotee_name', text)}
+                                        lang="kn"
+                                        placeholder="Type in English → ಕನ್ನಡ"
+                                        enabled={true}
+                                    />
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={formData.devotee_name}
+                                        onChange={(e) => handleFormChange('devotee_name', e.target.value)}
+                                        className={inputNormal}
+                                        placeholder="Enter devotee name"
+                                        required
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Gothra - Smart Input */}
+                        <div>
+                            <label className={labelClass}>
+                                {t?.gothra || "Gothra"}
+                                {lang === 'KN' && <span className="ml-2 text-violet-400 text-[10px]">(ಟೈಪ್ → ಕನ್ನಡ)</span>}
+                            </label>
+                            <div className="relative">
+                                <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
+                                {lang === 'KN' ? (
+                                    <ReactTransliterate
+                                        renderComponent={(props) => (
+                                            <input {...props} className={inputNormal} />
+                                        )}
+                                        value={formData.gothra}
+                                        onChangeText={(text) => handleFormChange('gothra', text)}
+                                        lang="kn"
+                                        placeholder="Type in English → ಕನ್ನಡ"
+                                        enabled={true}
+                                    />
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={formData.gothra}
+                                        onChange={(e) => handleFormChange('gothra', e.target.value)}
+                                        className={inputNormal}
+                                        placeholder="Enter gothra"
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Address */}
+                        <div>
+                            <label className={labelClass}>{t?.address || "Address"}</label>
+                            <div className="relative">
+                                <MapPin className="absolute left-3 top-4 text-gray-400" size={18} />
+                                <textarea
+                                    value={formData.address}
+                                    onChange={(e) => handleFormChange('address', e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 text-sm min-h-[100px] resize-none"
+                                    placeholder={lang === 'KN' ? 'ವಿಳಾಸ ನಮೂದಿಸಿ...' : 'Enter address...'}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ============ SUBMIT BUTTON ============ */}
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className={`w-full py-4 font-bold text-lg rounded-2xl shadow-xl transition-all flex justify-center items-center gap-3 ${sevaType === 'BRAHMACHARI'
+                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-amber-200 hover:scale-[1.02]'
+                                : 'bg-gradient-to-r from-violet-600 to-purple-700 text-white hover:shadow-purple-200 hover:scale-[1.02]'
+                            }`}
+                    >
+                        {loading ? (
+                            <Loader2 className="animate-spin" size={24} />
+                        ) : (
+                            <>
+                                <Sparkles size={20} />
+                                {t?.subscribeBtn || 'Subscribe Forever'}
+                            </>
+                        )}
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }

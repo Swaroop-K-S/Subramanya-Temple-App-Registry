@@ -1,139 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Download, Search, Calendar } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+    PieChart, Pie, Cell
+} from 'recharts';
+import { Calendar, Download, RefreshCcw, ArrowLeft, IndianRupee, CreditCard, Banknote } from 'lucide-react';
 import api from '../services/api';
 
-const ReportsDashboard = () => {
-    // Helper: Get today's LOCAL date string (YYYY-MM-DD)
-    // FIX: .toISOString() uses UTC, which shows yesterday's date if late at night in US/early in India
-    const getToday = () => {
-        const today = new Date();
-        const year = today.getFullYear();
-        // Month is 0-indexed
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
+const COLORS = ['#F97316', '#8B5CF6', '#10B981', '#F43F5E'];
 
-    // Helper: Convert YYYY-MM-DD (Input) to DD-MM-YYYY (API)
-    const formatDateForApi = (isoDate) => {
-        if (!isoDate) return null;
-        const [year, month, day] = isoDate.split('-');
-        return `${day}-${month}-${year}`;
-    };
-
-    // Helper: Format Date for Display (DD-MM-YYYY)
-    const formatDateDisplay = (isoDateString) => {
-        if (!isoDateString) return "";
-        const date = new Date(isoDateString);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}-${month}-${year}`;
-    };
-
-    // --- STATE MANAGEMENT ---
-
-    // 1. INPUT STATE: Strictly controls the input fields
-    const [startDate, setStartDate] = useState(getToday());
-    const [endDate, setEndDate] = useState(getToday());
-
-    // 2. ACTIVE REPORT STATE: Trigger for API
-    const [activeRange, setActiveRange] = useState({
-        start: getToday(),
-        end: getToday()
+const ReportsDashboard = ({ onBack }) => {
+    // State
+    const [dateRange, setDateRange] = useState({
+        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], // 1st of current month
+        end: new Date().toISOString().split('T')[0] // Today
     });
-
-    const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [reportData, setReportData] = useState(null);
+    const [error, setError] = useState(null);
 
-    // Refs for picking (Optional UX)
-    const startInputRef = useRef(null);
-    const endInputRef = useRef(null);
-
-    // --- HANDLERS ---
-
-    const handleSearch = () => {
-        if (!startDate || !endDate) {
-            alert("Please select both dates.");
-            return;
-        }
-        // Commit inputs to active state
-        setActiveRange({ start: startDate, end: endDate });
-    };
-
-    const applyQuickFilter = (type) => {
-        const today = new Date();
-        // Logic for Quick Filters (Using Local Time)
-        const getIso = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        const end = getIso(today);
-        let start = end;
-
-        if (type === 'week') {
-            const d = new Date();
-            d.setDate(d.getDate() - 7);
-            start = getIso(d);
-        } else if (type === 'month') {
-            const d = new Date();
-            d.setDate(1); // 1st of this month
-            start = getIso(d);
-        }
-
-        // Update UI
-        setStartDate(start);
-        setEndDate(end);
-        // Trigger Search
-        setActiveRange({ start, end });
-    };
-
-    // --- API EFFECTS ---
-
-    useEffect(() => {
-        fetchReport();
-    }, [activeRange]);
-
+    // Fetch Report
     const fetchReport = async () => {
         setLoading(true);
+        setError(null);
         try {
-            // Transform YYYY-MM-DD -> DD-MM-YYYY for Backend
-            const apiStart = formatDateForApi(activeRange.start);
-            const apiEnd = formatDateForApi(activeRange.end);
-
-            console.log(`Fetching: ${apiStart} -> ${apiEnd}`);
-            const response = await api.get(`/reports/collection?start_date=${apiStart}&end_date=${apiEnd}`);
+            const response = await api.get(`/reports?start_date=${dateRange.start}&end_date=${dateRange.end}`);
             setReportData(response.data);
-        } catch (error) {
-            console.error("Error fetching report:", error);
+        } catch (err) {
+            console.error("Failed to fetch report:", err);
+            setError("Failed to connect to server. Please ensure the backend is running.");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDownload = async () => {
-        try {
-            const apiStart = formatDateForApi(activeRange.start);
-            const apiEnd = formatDateForApi(activeRange.end);
-
-            const response = await api.get(`/reports/export?start_date=${apiStart}&end_date=${apiEnd}`, {
-                responseType: 'blob',
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `STAR_Report_${apiStart}_to_${apiEnd}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        } catch (error) {
-            alert("Download failed!");
-        }
+    // Export CSV
+    const handleExport = () => {
+        const url = `http://127.0.0.1:8000/reports/export?start_date=${dateRange.start}&end_date=${dateRange.end}`;
+        window.open(url, '_blank');
     };
 
+
+
+    // Initial Fetch
+    useEffect(() => {
+        fetchReport();
+    }, []);
+
+    // Helper to format currency
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', {
             style: 'currency',
@@ -142,151 +56,195 @@ const ReportsDashboard = () => {
         }).format(amount);
     };
 
+    // Prepare Pie Data
+    const pieData = reportData ? [
+        { name: 'Cash', value: reportData.financials.cash, color: '#F59E0B' }, // Amber for Cash
+        { name: 'UPI', value: reportData.financials.upi, color: '#10B981' }   // Emerald for UPI
+    ].filter(d => d.value > 0) : [];
+
     return (
-        <div className="p-6 max-w-6xl mx-auto min-h-screen bg-gray-50">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="bg-slate-50 min-h-screen p-6 animate-in fade-in zoom-in duration-300">
+            {/* Header with Date Picker */}
+            <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Financial Reports</h1>
-                    <p className="text-gray-500 mt-1">Daily collection track & analytics</p>
+                    <button onClick={onBack} className="text-sm font-semibold text-gray-500 hover:text-orange-600 mb-2 flex items-center gap-1 transition-colors">
+                        <ArrowLeft size={16} /> Back to Dashboard
+                    </button>
+                    <h1 className="text-3xl font-bold font-heading text-slate-800">Financial Reports</h1>
+                    <p className="text-slate-500 text-sm mt-1">Track temple revenue and seva statistics</p>
                 </div>
-                <button
-                    onClick={handleDownload}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-md transition-all active:scale-95"
-                >
-                    <Download size={18} /> Download Excel
-                </button>
-            </div>
 
-            {/* CONTROLS */}
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-8">
-                <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
-
-                    {/* Quick Filters */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-500 mr-2">Quick:</span>
-                        <div className="flex bg-gray-100 p-1 rounded-lg">
-                            <button onClick={() => applyQuickFilter('today')} className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-700 hover:bg-white hover:shadow-sm">Today</button>
-                            <button onClick={() => applyQuickFilter('week')} className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-700 hover:bg-white hover:shadow-sm">This Week</button>
-                            <button onClick={() => applyQuickFilter('month')} className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-700 hover:bg-white hover:shadow-sm">This Month</button>
+                <div className="flex flex-col md:flex-row gap-3 items-end">
+                    <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex items-center gap-3">
+                        <div className="flex flex-col">
+                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Start Date</label>
+                            <input
+                                type="date"
+                                value={dateRange.start}
+                                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                                className="font-semibold text-slate-700 outline-none text-sm bg-transparent"
+                            />
+                        </div>
+                        <div className="h-8 w-[1px] bg-gray-200"></div>
+                        <div className="flex flex-col">
+                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">End Date</label>
+                            <input
+                                type="date"
+                                value={dateRange.end}
+                                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                                className="font-semibold text-slate-700 outline-none text-sm bg-transparent"
+                            />
                         </div>
                     </div>
 
-                    {/* Date Inputs */}
-                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                        <span className="text-sm font-bold text-gray-500">Range:</span>
-
-                        <div className="relative flex items-center">
-                            <input
-                                ref={startInputRef}
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className="border border-gray-300 rounded-l-md px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none w-36 cursor-pointer"
-                            />
-                            <button onClick={() => startInputRef.current?.showPicker()} className="bg-gray-200 hover:bg-gray-300 border border-l-0 border-gray-300 p-2 rounded-r-md text-gray-600">
-                                <Calendar size={16} />
-                            </button>
-                        </div>
-
-                        <span className="text-gray-400 font-medium">to</span>
-
-                        <div className="relative flex items-center">
-                            <input
-                                ref={endInputRef}
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                className="border border-gray-300 rounded-l-md px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none w-36 cursor-pointer"
-                            />
-                            <button onClick={() => endInputRef.current?.showPicker()} className="bg-gray-200 hover:bg-gray-300 border border-l-0 border-gray-300 p-2 rounded-r-md text-gray-600">
-                                <Calendar size={16} />
-                            </button>
-                        </div>
-
-                        <button
-                            onClick={handleSearch}
-                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2 font-bold"
-                        >
-                            <Search size={18} /> Go
-                        </button>
-                    </div>
+                    <button
+                        onClick={fetchReport}
+                        disabled={loading}
+                        className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-orange-200 active:scale-95 transition-all flex items-center gap-2"
+                    >
+                        {loading ? <RefreshCcw size={20} className="animate-spin" /> : <RefreshCcw size={20} />}
+                        Generate
+                    </button>
                 </div>
             </div>
 
-            {/* DASHBOARD DATA */}
-            {loading ? (
-                <div className="text-center py-20">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-500">Loading Report...</p>
-                </div>
-            ) : reportData ? (
-                <div className="animate-fade-in">
-                    {/* Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div className="bg-white border-l-4 border-green-500 p-6 rounded-xl shadow-md">
-                            <p className="text-gray-500 text-sm font-semibold uppercase">Total Cash</p>
-                            <h3 className="text-3xl font-bold text-gray-800 mt-2">{formatCurrency(reportData.summary.cash)}</h3>
-                        </div>
-                        <div className="bg-white border-l-4 border-blue-500 p-6 rounded-xl shadow-md">
-                            <p className="text-gray-500 text-sm font-semibold uppercase">Total UPI</p>
-                            <h3 className="text-3xl font-bold text-gray-800 mt-2">{formatCurrency(reportData.summary.upi)}</h3>
-                        </div>
-                        <div className="bg-gradient-to-br from-orange-500 to-red-600 text-white p-6 rounded-xl shadow-lg">
-                            <p className="text-orange-100 text-sm font-bold uppercase tracking-wider">Grand Total</p>
-                            <h3 className="text-4xl font-extrabold mt-2">{formatCurrency(reportData.summary.total)}</h3>
-                            <p className="text-sm mt-2 opacity-80">{reportData.summary.transaction_count} receipts</p>
-                        </div>
+            <div className="max-w-7xl mx-auto">
+                {loading && (
+                    <div className="py-20 flex flex-col items-center justify-center gap-4">
+                        <RefreshCcw size={40} className="animate-spin text-orange-200" />
+                        <p className="text-slate-400 font-medium italic">Gathering records...</p>
                     </div>
+                )}
 
-                    {/* Transactions */}
-                    <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                        <div className="bg-gray-900 text-white px-6 py-4 flex justify-between items-center">
-                            <h3 className="font-bold text-lg">Transactions</h3>
-                            <span className="text-xs bg-gray-700 px-3 py-1 rounded-full text-gray-300">
-                                {formatDateForApi(activeRange.start)} - {formatDateForApi(activeRange.end)}
-                            </span>
+                {error && !loading && (
+                    <div className="bg-red-50 border border-red-100 p-8 rounded-2xl text-center">
+                        <p className="text-red-500 font-bold mb-4">{error}</p>
+                        <button onClick={fetchReport} className="text-orange-600 font-bold hover:underline">Try Again</button>
+                    </div>
+                )}
+
+                {reportData && !loading && !error && (
+                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                        {/* Stats Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* Total */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                    <IndianRupee size={80} className="text-orange-500" />
+                                </div>
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Total Collection</p>
+                                <h3 className="text-4xl font-black text-slate-800">{formatCurrency(reportData.financials.total)}</h3>
+                                <p className="text-xs text-slate-400 mt-2 font-medium">
+                                    For {dateRange.start} to {dateRange.end}
+                                </p>
+                            </div>
+
+                            {/* Cash */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-yellow-100">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="p-2 bg-yellow-50 rounded-lg text-yellow-600">
+                                        <Banknote size={20} />
+                                    </div>
+                                    <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Cash</p>
+                                </div>
+                                <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(reportData.financials.cash)}</h3>
+                            </div>
+
+                            {/* UPI */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                                        <CreditCard size={20} />
+                                    </div>
+                                    <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">UPI Online</p>
+                                </div>
+                                <h3 className="text-2xl font-bold text-slate-800">{formatCurrency(reportData.financials.upi)}</h3>
+                            </div>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 text-gray-600 font-bold uppercase text-xs">
-                                    <tr>
-                                        <th className="px-6 py-4">Date & Time</th>
-                                        <th className="px-6 py-4">Receipt</th>
-                                        <th className="px-6 py-4">Devotee</th>
-                                        <th className="px-6 py-4">Amount</th>
-                                        <th className="px-6 py-4 text-center">Mode</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {reportData.transactions.length > 0 ? (
-                                        reportData.transactions.map((t) => (
-                                            <tr key={t.id} className="hover:bg-slate-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                                    {formatDateDisplay(t.created_at || t.transaction_date)}
-                                                    <span className="text-xs ml-2 text-gray-400">
-                                                        {new Date(t.created_at || t.transaction_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 font-mono text-gray-600">{t.id}</td>
-                                                <td className="px-6 py-4 font-medium text-gray-800">{t.devotee_name}</td>
-                                                <td className="px-6 py-4 font-bold text-gray-800">{formatCurrency(t.amount)}</td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${t.payment_mode === 'UPI' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                                        {t.payment_mode}
-                                                    </span>
-                                                </td>
+
+                        {/* Charts Row */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Bar Chart - Seva Popularity */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <h3 className="text-lg font-bold text-slate-800 mb-6">Seva Popularity</h3>
+                                <div className="flex-1 min-h-[300px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={reportData.seva_stats.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                            <XAxis type="number" hide />
+                                            <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} interval={0} />
+                                            <RechartsTooltip
+                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                                itemStyle={{ color: '#f97316', fontWeight: 'bold' }}
+                                            />
+                                            <Bar dataKey="count" fill="#4f46e5" radius={[0, 4, 4, 0]} barSize={20} name="Count" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Pie Chart - Payment Split */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <h3 className="text-lg font-bold text-slate-800 mb-6">Payment Method Split</h3>
+                                <div className="flex-1 min-h-[300px] flex items-center justify-center">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={pieData}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={80}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {pieData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                ))}
+                                            </Pie>
+                                            <RechartsTooltip />
+                                            <Legend verticalAlign="bottom" height={36} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Data Table */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Detailed Breakdown</h3>
+                                <button
+                                    onClick={handleExport}
+                                    className="text-orange-600 hover:text-orange-700 text-xs font-bold flex items-center gap-1"
+                                >
+                                    <Download size={14} /> Export CSV
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-white text-slate-500 border-b border-gray-200">
+                                        <tr>
+                                            <th className="px-6 py-4 font-semibold">Seva Name</th>
+                                            <th className="px-6 py-4 font-semibold text-center">Count</th>
+                                            <th className="px-6 py-4 font-semibold text-right">Revenue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {reportData.seva_stats.map((seva, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-50">
+                                                <td className="px-6 py-4 font-medium text-slate-800">{seva.name}</td>
+                                                <td className="px-6 py-4 text-center text-slate-600">{seva.count}</td>
+                                                <td className="px-6 py-4 text-right font-bold text-slate-700">{formatCurrency(seva.revenue)}</td>
                                             </tr>
-                                        ))
-                                    ) : (
-                                        <tr><td colSpan="5" className="text-center py-10 text-gray-500">No data found.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-            ) : null}
+                )}
+            </div>
         </div>
     );
 };

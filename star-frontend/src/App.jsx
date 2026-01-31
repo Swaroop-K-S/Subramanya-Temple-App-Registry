@@ -6,15 +6,39 @@
 
 import { useState, useEffect } from 'react';
 import { getAllSevas } from './services/api';
+import { TRANSLATIONS } from './components/translations'; // [1] Import Translations
 import {
   IndianRupee, CalendarCheck, Clock, Loader2, Sparkles,
-  Home, Users, BarChart3,
+  Home, Users, BarChart3, Languages, // Added Languages Icon
   Flame, Droplets, Flower, Crown, Utensils, Calendar
 } from 'lucide-react';
 import BookingModal from './components/BookingModal';
 import ShaswataForm from './components/ShaswataForm';
-import PriestDashboard from './components/PriestDashboard';
+import Dashboard from './components/Dashboard';
 import ReportsDashboard from './components/ReportsDashboard';
+import Login from './components/Login';         // [AUTH] Import Login
+import { LogOut } from 'lucide-react';          // [AUTH] Import Logout Icon
+
+// Image Mappings for Seva Cards
+const SEVA_IMAGES = {
+  "archane": "https://imgs.search.brave.com/S8D6jnYDZvtClZshgOrGtrjGfdG_bXy4NcjyU4lTLro/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9pbi5z/d2FoYXByb2R1Y3Rz/LmNvbS9jZG4vc2hv/cC9wcm9kdWN0cy9V/bnRpdGxlZGRlc2ln/bl8xXzE5Zjk4MWNm/LWUxZmYtNDgxYy1h/YTMxLWIxNjMwN2Iz/OTlhMC5qcGc_dj0x/NzM2NzY1OTE1Jndp/ZHRoPTgwMA",      // Red Turmeric/Kumkum (User Provided)
+  "panchamrutha": "/panchamrutha.jpeg", // Local Image (User Provided)
+  "abhisheka": "https://images.unsplash.com/photo-1601056639638-cd69862283e5?q=80&w=600",    // Milk/Abhisheka
+  "alankara": "https://images.unsplash.com/photo-1623838466185-3c126d459648?q=80&w=600",     // Flowers/Decoration
+  "anna": "https://images.unsplash.com/photo-1595955545772-50d4f1863695?q=80&w=600",         // Food/Rice
+  "shaswata": "https://images.unsplash.com/photo-1510255393664-9a840e4f3a9e?q=80&w=600",     // Lamp/Diya
+  "default": "https://images.unsplash.com/photo-1623945413009-b6ffdf317457?q=80&w=600"       // Temple Texture
+};
+
+const getSevaImage = (sevaName) => {
+  const name = (sevaName || '').toLowerCase();
+  if (name.includes('kumkum') || name.includes('archane')) return SEVA_IMAGES.archane;
+  if (name.includes('pancha') || name.includes('abhisheka')) return SEVA_IMAGES.panchamrutha;
+  if (name.includes('alankara') || name.includes('pushpa')) return SEVA_IMAGES.alankara;
+  if (name.includes('anna') || name.includes('prasada')) return SEVA_IMAGES.anna;
+  if (name.includes('shaswata')) return SEVA_IMAGES.shaswata;
+  return SEVA_IMAGES.default;
+};
 
 // Helper to determine Seva Theme based on name
 const getSevaTheme = (sevaName) => {
@@ -111,11 +135,18 @@ const getSevaTheme = (sevaName) => {
 };
 
 function App() {
+  // [AUTH] Security State
+  const [token, setToken] = useState(localStorage.getItem('access_token'));
+
+  // [I18N] Language State
+  const [lang, setLang] = useState('EN'); // Default English
+  const t = TRANSLATIONS[lang]; // Shortcut for current translation
+
   const [sevas, setSevas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Navigation state: 'home', 'shaswata', 'priest', or 'reports'
+  // Navigation state: 'home', 'shaswata', 'dashboard', or 'reports'
   const [activePage, setActivePage] = useState('home');
 
   // Modal state
@@ -138,8 +169,35 @@ function App() {
       }
     };
 
-    fetchSevas();
+    if (token) {
+      fetchSevas();
+    }
+  }, [token]);
+
+  // [UI] Parallax Background Effect
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY;
+      // Speed 0.9: Moves background almost at same speed as content to show full height
+      // Offset 0px: Starts at top
+      document.body.style.backgroundPositionY = `${0 - scrollPosition * 0.9}px`;
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // [AUTH] Logout Handler
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    setToken(null);
+    setActivePage('home'); // Reset view
+  };
+
+  // [AUTH] Route Protection: If no token, show Login Page
+  if (!token) {
+    return <Login setToken={setToken} />;
+  }
 
   // Handle seva card click - open booking modal for regular sevas
   // or navigate to shaswata page for shaswata sevas
@@ -176,188 +234,200 @@ function App() {
               </div>
               <div className="flex flex-col">
                 <span className="text-2xl font-bold font-heading text-gray-900 leading-none">S.T.A.R.</span>
-                <span className="text-[10px] font-semibold tracking-[0.2em] text-orange-600 uppercase mt-0.5">Tarikere</span>
+                <span className="text-[10px] font-semibold tracking-[0.2em] text-orange-600 uppercase mt-0.5">{t.appSubtitle}</span>
               </div>
             </div>
 
             {/* Navigation Items */}
             <div className="flex items-center gap-1 md:gap-2">
-              <button
-                onClick={() => setActivePage('home')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activePage === 'home'
-                    ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-100'
-                    : 'text-gray-500 hover:text-orange-600 hover:bg-orange-50'
-                  }`}
-              >
-                <Home className="w-4 h-4" />
-                <span className="hidden md:inline">Catalog</span>
-              </button>
 
+              {/* [I18N] Language Toggle */}
               <button
-                onClick={() => setActivePage('shaswata')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activePage === 'shaswata'
-                    ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-100'
-                    : 'text-gray-500 hover:text-orange-600 hover:bg-orange-50'
-                  }`}
+                onClick={() => setLang(lang === 'EN' ? 'KN' : 'EN')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 hover:bg-gray-50 transition-colors mr-2 text-gray-600"
+                title="Switch Language"
               >
-                <Sparkles className="w-4 h-4" />
-                <span className="hidden md:inline">Shaswata</span>
+                <Languages className="w-4 h-4" />
+                <span>{lang === 'EN' ? 'ಕನ್ನಡ' : 'ENGLISH'}</span>
               </button>
 
               <div className="h-6 w-px bg-gray-200 mx-2 hidden md:block"></div>
 
-              <button
-                onClick={() => setActivePage('priest')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activePage === 'priest'
-                    ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-100'
-                    : 'text-gray-500 hover:text-orange-600 hover:bg-orange-50'
-                  }`}
-              >
-                <Users className="w-4 h-4" />
-                <span className="hidden md:inline">Priest</span>
-              </button>
+              {/* Navigation Buttons Row */}
+              <div className="flex bg-gray-100/50 rounded-lg p-1 border border-gray-200 backdrop-blur-sm mr-2">
+                <button
+                  onClick={() => setActivePage('home')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'home' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  <Home size={14} /> {t.catalog}
+                </button>
+                <button
+                  onClick={() => setActivePage('dashboard')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'dashboard' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  <Users size={14} /> {t.dashboard}
+                </button>
+                <button
+                  onClick={() => setActivePage('reports')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'reports' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  <BarChart3 size={14} /> {t.reports}
+                </button>
+              </div>
 
+              {/* [AUTH] Logout Button */}
               <button
-                onClick={() => setActivePage('reports')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activePage === 'reports'
-                    ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-100'
-                    : 'text-gray-500 hover:text-orange-600 hover:bg-orange-50'
-                  }`}
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                title="Sign Out"
               >
-                <BarChart3 className="w-4 h-4" />
-                <span className="hidden md:inline">Reports</span>
+                <LogOut className="w-4 h-4" />
+                <span className="hidden md:inline">{t.logout}</span>
               </button>
             </div>
 
           </div>
         </div>
-      </nav>
+      </nav >
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 animate-fade-in-up">
+      < main className="max-w-7xl mx-auto px-4 py-8 animate-fade-in-up" >
 
         {/* HOME PAGE - Seva Catalog */}
-        {activePage === 'home' && (
-          <>
-            <div className="text-center mb-10">
-              <h2 className="text-4xl text-gray-800 mb-3 font-heading font-bold">
-                Seva Catalog
-              </h2>
-              <p className="text-gray-500 max-w-2xl mx-auto text-lg font-light">
-                Select a sacred offering to manage bookings. All sevas are performed with traditional Vedic precision.
-              </p>
-            </div>
-
-            {/* Loading State */}
-            {loading && (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-10 h-10 text-gray-400 animate-spin" />
-                <span className="ml-3 text-gray-500 text-lg font-medium">Loading sevas...</span>
+        {
+          activePage === 'home' && (
+            <>
+              <div className="text-center mb-10">
+                <h2 className="text-4xl text-gray-800 mb-3 font-heading font-bold">
+                  {t.appTitle}
+                </h2>
+                <p className="text-gray-500 max-w-2xl mx-auto text-lg font-light">
+                  {lang === 'EN' ? 'Select a sacred offering to manage bookings. All sevas are performed with traditional Vedic precision.' : 'ಬುಕಿಂಗ್‌ಗಳನ್ನು ನಿರ್ವಹಿಸಲು ಪವಿತ್ರ ಸೇವೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.'}
+                </p>
               </div>
-            )}
 
-            {/* Error State */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-center max-w-md mx-auto shadow-sm">
-                <p className="font-semibold">{error}</p>
-                <p className="text-sm mt-2 opacity-80">Make sure the backend server is running</p>
-              </div>
-            )}
-
-            {/* Seva Grid */}
-            {!loading && !error && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {sevas.map((seva) => {
-                  const theme = getSevaTheme(seva.name_eng);
-
-                  return (
-                    <div
-                      key={seva.id}
-                      onClick={() => handleSevaClick(seva)}
-                      className={`relative bg-white rounded-xl border-2 ${theme.borderColor} p-5 cursor-pointer card-hover group`}
-                    >
-                      {/* Header: Icon & Price */}
-                      <div className="flex justify-between items-start mb-4">
-                        {/* Icon Box */}
-                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${theme.bgGradient} flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                          {theme.icon}
-                        </div>
-
-                        {/* Price Badge */}
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase ${theme.badgeBg} ${theme.badgeText}`}>
-                          {parseFloat(seva.price) > 0 ? `₹${parseFloat(seva.price).toFixed(0)}` : 'Custom'}
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="mb-4">
-                        <h3 className="text-xl font-bold text-gray-800 font-heading mb-1 leading-tight line-clamp-2">
-                          {seva.name_eng}
-                        </h3>
-                        {seva.name_kan && (
-                          <p className="text-gray-500 text-sm font-medium">{seva.name_kan}</p>
-                        )}
-                      </div>
-
-                      {/* Tag list */}
-                      <div className="flex flex-wrap gap-2 mb-5 min-h-[1.5rem]">
-                        {seva.is_shaswata && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">
-                            Shaswata
-                          </span>
-                        )}
-                        {seva.is_slot_based && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700">
-                            Slot Based
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Action Button */}
-                      <button className={`w-full py-2.5 rounded-lg text-sm font-semibold border-2 bg-transparent transition-colors ${theme.buttonBorder}`}>
-                        {seva.is_shaswata ? 'Subscribe Now' : 'Book Seva'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Footer Info */}
-            {!loading && !error && sevas.length > 0 && (
-              <div className="text-center mt-16 pb-8">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-500 text-xs font-medium uppercase tracking-widest">
-                  <Sparkles className="w-3 h-3" />
-                  <span>{sevas.length} Sevas Available</span>
-                  <Sparkles className="w-3 h-3" />
+              {/* Loading State */}
+              {loading && (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-10 h-10 text-gray-400 animate-spin" />
+                  <span className="ml-3 text-gray-500 text-lg font-medium">{t.loading}</span>
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
 
-        {/* SHASWATA PAGE */}
-        {activePage === 'shaswata' && (
-          <div className="py-4">
-            <ShaswataForm
-              onSuccess={(result) => {
-                console.log('Shaswata subscription created:', result);
-              }}
-            />
-          </div>
-        )}
-      </main>
+              {/* Error State */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-center max-w-md mx-auto shadow-sm">
+                  <p className="font-semibold">{error}</p>
+                  <p className="text-sm mt-2 opacity-80">Make sure the backend server is running</p>
+                </div>
+              )}
 
-      {/* PRIEST DASHBOARD - Full Page (outside main) */}
-      {activePage === 'priest' && (
-        <PriestDashboard onBack={() => setActivePage('home')} />
-      )}
+              {/* Seva Grid */}
+              {!loading && !error && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {sevas.map((seva) => {
+                    const theme = getSevaTheme(seva.name_eng);
+                    const bgImage = getSevaImage(seva.name_eng);
+
+                    return (
+                      <div
+                        key={seva.id}
+                        onClick={() => handleSevaClick(seva)}
+                        className="relative h-64 rounded-2xl overflow-hidden cursor-pointer group shadow-lg hover:shadow-2xl transition-all duration-500"
+                      >
+                        {/* Background Image with Zoom Effect */}
+                        <div
+                          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+                          style={{ backgroundImage: `url(${bgImage})` }}
+                        />
+
+                        {/* Dark Overlay for Readability */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20 group-hover:opacity-90 transition-opacity duration-300" />
+
+                        {/* Content Container */}
+                        <div className="relative z-10 h-full p-5 flex flex-col justify-between">
+
+                          {/* Top Row: Price Badge */}
+                          <div className="flex justify-end">
+                            <div className="backdrop-blur-md bg-white/20 border border-white/30 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase shadow-sm">
+                              {parseFloat(seva.price) > 0 ? `₹${parseFloat(seva.price).toFixed(0)}` : 'Custom'}
+                            </div>
+                          </div>
+
+                          {/* Bottom Row: Info & Action */}
+                          <div>
+                            {/* Tags */}
+                            <div className="flex gap-2 mb-2">
+                              {seva.is_shaswata && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-violet-500/80 text-white backdrop-blur-sm">Shaswata</span>
+                              )}
+                              {seva.is_slot_based && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500/80 text-white backdrop-blur-sm">Slot Based</span>
+                              )}
+                            </div>
+
+                            <h3 className="text-xl font-bold text-white font-heading mb-1 leading-tight drop-shadow-md group-hover:text-orange-200 transition-colors">
+                              {lang === 'KN' && seva.name_kan ? seva.name_kan : seva.name_eng}
+                            </h3>
+
+                            {/* Action Button (Hidden by default, slides up or just stays visible) */}
+                            <button className={`w-full py-2 rounded-lg text-sm font-bold bg-white/10 backdrop-blur-md border border-white/40 text-white hover:bg-white hover:text-orange-600 transition-all`}>
+                              {seva.is_shaswata ? t.subscribeNow : t.bookNow}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Footer Info */}
+              {!loading && !error && sevas.length > 0 && (
+                <div className="text-center mt-16 pb-8">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-500 text-xs font-medium uppercase tracking-widest">
+                    <Sparkles className="w-3 h-3" />
+                    <span>{sevas.length} Sevas Available</span>
+                    <Sparkles className="w-3 h-3" />
+                  </div>
+                </div>
+              )}
+            </>
+          )
+        }
+
+        {/* Removed ShaswataForm from here - moved outside main */}
+      </main >
+
+      {/* CLERK DASHBOARD - Full Page (outside main) */}
+      {
+        activePage === 'dashboard' && (
+          <Dashboard onBack={() => setActivePage('home')} lang={lang} />
+        )
+      }
 
       {/* REPORTS DASHBOARD - Full Page (outside main) */}
-      {activePage === 'reports' && (
-        <ReportsDashboard onBack={() => setActivePage('home')} />
-      )}
-    </div>
+      {
+        activePage === 'reports' && (
+          <ReportsDashboard onBack={() => setActivePage('home')} lang={lang} />
+        )
+      }
+
+      {/* GLOBAL MODALS */}
+      <BookingModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        seva={selectedSeva}
+        lang={lang}
+      />
+
+      {/* SHASWATA FORM MODAL */}
+      <ShaswataForm
+        isOpen={activePage === 'shaswata'}
+        onClose={() => setActivePage('home')}
+        lang={lang}
+      />
+    </div >
   );
 }
 
