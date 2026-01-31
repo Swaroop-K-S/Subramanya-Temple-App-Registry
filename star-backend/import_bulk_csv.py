@@ -1,6 +1,12 @@
 """
 BULK MIGRATION SCRIPT: import_bulk_csv.py
-Usage: python import_bulk_csv.py
+Usage: python star-backend/import_bulk_csv.py
+
+This script:
+1. Finds the '2025' folder relative to this script's location.
+2. Recursively searches for all .csv files.
+3. filters out non-data files (like reports/issues).
+4. Imports Devotees and Shaswata Subscriptions safely.
 """
 import pandas as pd
 import os
@@ -11,26 +17,26 @@ from database import SessionLocal
 from models import Devotee, ShaswataSubscription, SevaCatalog
 
 # --- CONFIGURATION ---
-# Use raw string (r"...") to handle backslashes in Windows paths
-FOLDER_PATH = r"C:\Users\swaro\Desktop\Subramanya Temple App & Registry\2025"
+# Dynamically find the 2025 folder (Go up one level from 'star-backend')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "..", "2025")
 
-# Expected Column Headers (Make sure ALL your CSVs match this pattern!)
-# If your CSVs have different names, rename them first or adjust these variables.
+# COLUMN MAPPING
+# The script will look for these headers. It is case-insensitive.
 COL_NAME = "Name"
-COL_PHONE = "Phone"        # Phone, Phone Number, Mobile
+COL_PHONE = "Phone"        # Matches "Phone", "Phone Number", "Mobile"
 COL_ADDRESS = "Address"
 COL_GOTHRA = "Gothra"
-COL_DATE = "Date"          # 20-May, 20/05
-COL_TYPE = "Type"          # General / Brahmachari
+COL_DATE = "Date"          # Matches "Date", "Pooje Date"
+COL_TYPE = "Type"          # To distinguish General vs Brahmachari (optional)
 
 def clean_phone(phone_val):
     """Standardizes phone numbers to 10 digits."""
     if pd.isna(phone_val): return None
     s = str(phone_val)
-    # Remove all non-numeric characters
-    digits = re.sub(r'\D', '', s)
+    digits = re.sub(r'\D', '', s) # Remove non-digits
     
-    # Handle prefixes like 91, +91, 0
+    # Handle prefixes (91, 0)
     if len(digits) > 10:
         if digits.startswith('91'): digits = digits[2:]
         elif digits.startswith('0'): digits = digits[1:]
@@ -40,22 +46,20 @@ def clean_phone(phone_val):
     return None
 
 def parse_date(date_str):
-    """
-    Parses dates like '20-May', '20/05', '20-05-2023'.
-    Returns (day, month).
-    """
+    """Parses '20-May', '20/05', etc. into (Day, Month)."""
     if pd.isna(date_str): return None, None
     try:
-        # Append a dummy year (2024) to help pandas parse "Day-Month" formats
         dt_str = str(date_str).strip()
-        # Try a few common formats
-        for fmt in ["%d-%b-%Y", "%d/%m/%Y", "%d-%m-%Y", "%d-%b"]:
+        # Common formats in your Excel sheets
+        formats = ["%d-%b", "%d-%b-%Y", "%d/%m", "%d/%m/%Y", "%d-%m-%Y"]
+        
+        for fmt in formats:
             try:
-                # If format is Day-Month (e.g. 20-May), add year
-                if fmt == "%d-%b":
-                    dt = pd.to_datetime(dt_str + "-2024", format="%d-%b-%Y")
+                # Append dummy year for "Day-Month" formats to help parsing
+                if "b" in fmt or fmt == "%d/%m":
+                     dt = pd.to_datetime(dt_str + "-2024", format=fmt if fmt != "%d/%m" else "%d/%m/%Y")
                 else:
-                    dt = pd.to_datetime(dt_str, dayfirst=True) # Assume Day First for India
+                     dt = pd.to_datetime(dt_str, dayfirst=True)
                 return dt.day, dt.month
             except:
                 continue
@@ -63,76 +67,97 @@ def parse_date(date_str):
         pass
     return None, None
 
+def find_column(df, target_keywords):
+    """Helper to find a column name that matches one of the keywords (case-insensitive)."""
+    for col in df.columns:
+        if any(keyword.lower() in col.lower() for keyword in target_keywords):
+            return col
+    return None
+
 def run_bulk_migration(dry_run=True):
     db = SessionLocal()
     print(f"--- STARTING BULK MIGRATION (Dry Run: {dry_run}) ---")
-    print(f"Looking in: {FOLDER_PATH}")
+    print(f"Scanning Directory: {os.path.abspath(DATA_DIR)}")
 
-    # 1. Find all CSV files
-    all_files = glob.glob(os.path.join(FOLDER_PATH, "*.csv"))
-    print(f"Found {len(all_files)} CSV files.")
-
-    # 2. Get Seva IDs
-    # Using name_eng to match the actual SevaCatalog model
+    # 1. Fetch Seva IDs
+    # Adjust these strings if your DB names are different
     general_seva = db.query(SevaCatalog).filter(SevaCatalog.name_eng.ilike("%Shaswata Pooja%")).first()
     brahm_seva = db.query(SevaCatalog).filter(SevaCatalog.name_eng.ilike("%Brahmachari%")).first()
 
     if not general_seva or not brahm_seva:
-        print("CRITICAL ERROR: Could not find Seva IDs. Check SevaCatalog table.")
-        print("Available Sevas:")
-        for seva in db.query(SevaCatalog).all():
-            print(f"  - {seva.id}: {seva.name_eng}")
+        print("❌ CRITICAL ERROR: Could not find Seva IDs. Check 'seva_catalog' table.")
+        print("   Ensure 'Shaswata Pooja' and 'Shaswata Brahmachari Pooja' exist.")
         return
+
+    # 2. Find CSV Files Recursively
+    all_files = glob.glob(os.path.join(DATA_DIR, "**", "*.csv"), recursive=True)
+    print(f"Found {len(all_files)} CSV files in total.")
 
     total_success = 0
     total_skipped = 0
 
-    # 3. Loop through files
+    # 3. Process Files
     for filepath in all_files:
         filename = os.path.basename(filepath)
-        print(f"\n📄 Processing: {filename}...")
+        
+        # skip temporary or system files
+        if filename.startswith("~$") or "Issue" in filename or "Report" in filename:
+            continue
+
+        print(f"\n📄 Analyzing: {filename}...")
         
         try:
-            # Try reading with different encodings if UTF-8 fails
+            # Try reading (UTF-8 or CP1252)
             try:
                 df = pd.read_csv(filepath, encoding='utf-8')
             except UnicodeDecodeError:
-                df = pd.read_csv(filepath, encoding='cp1252') # Common for Excel CSVs
+                df = pd.read_csv(filepath, encoding='cp1252')
             
-            # Normalize column names (strip spaces, lower case for matching)
-            # This helps if one file has "Name " and another has "Name"
+            # Clean header names
             df.columns = df.columns.str.strip()
+
+            # Identify Columns Dynamically
+            name_col = find_column(df, ["Name", "Devotee", "Name of"])
+            phone_col = find_column(df, ["Phone", "Mobile", "Contact"])
             
-            # Process Rows
+            # If no Name column, it's not a data file. Skip it.
+            if not name_col:
+                print(f"   ⚠️ Skipping (No 'Name' column found).")
+                continue
+
+            gothra_col = find_column(df, ["Gothra"])
+            address_col = find_column(df, ["Address", "Place"])
+            date_col = find_column(df, ["Date", "Pooje"])
+            
+            # Determine Seva Type based on File Name or Folder Name
+            # (Because separate files often mean separate categories)
+            is_brahmachari = "brahmachari" in filename.lower() or "rathotsava" in filename.lower() or "rathotsava" in filepath.lower()
+
             for index, row in df.iterrows():
                 # --- A. Extract Data ---
-                # Check if columns exist
-                if COL_NAME not in df.columns:
-                    print(f"   ⚠️ Skipping file (Missing '{COL_NAME}' column)")
-                    break
+                name = str(row.get(name_col, '')).strip()
+                if not name or name.lower() == 'nan': continue
 
-                name = str(row.get(COL_NAME, '')).strip()
-                phone = clean_phone(row.get(COL_PHONE, ''))
-                gothra = str(row.get(COL_GOTHRA, '')).strip()
-                address = str(row.get(COL_ADDRESS, '')).strip()
-                raw_type = str(row.get(COL_TYPE, '')).lower()
+                phone = clean_phone(row.get(phone_col, '')) if phone_col else None
+                gothra = str(row.get(gothra_col, '')).strip() if gothra_col else None
+                address = str(row.get(address_col, '')).strip() if address_col else None
                 
-                # --- B. Determine Logic ---
-                sub_type = "GREGORIAN"
-                day, month = None, None
-                target_seva_id = general_seva.id
-
-                if "brahmachari" in raw_type or "rathotsava" in raw_type:
+                # --- B. Classify Seva ---
+                if is_brahmachari:
                     target_seva_id = brahm_seva.id
                     sub_type = "RATHOTSAVA"
+                    seva_type_val = "BRAHMACHARI"
+                    day, month = None, None
                 else:
                     # General Shaswata
                     target_seva_id = general_seva.id
-                    day, month = parse_date(row.get(COL_DATE, ''))
+                    sub_type = "GREGORIAN"
+                    seva_type_val = "GENERAL"
+                    day, month = parse_date(row.get(date_col, '')) if date_col else (None, None)
+                    
                     if not day:
-                        # If date is missing for general pooja, check if it's Lunar?
-                        # For now, skip invalid dates for general
-                        print(f"   ❌ Row {index+2}: Invalid Date '{row.get(COL_DATE)}' for {name}")
+                        # Only skip if it's strictly General Pooja and date is missing
+                        print(f"   ⚠️ Row {index+2}: Skipped (Invalid Date) -> {name}")
                         total_skipped += 1
                         continue
 
@@ -141,57 +166,59 @@ def run_bulk_migration(dry_run=True):
                 if phone:
                     devotee = db.query(Devotee).filter(Devotee.phone_number == phone).first()
                 
+                # If phone matches, use existing. If not, create new.
                 if not devotee:
-                    # If phone missing, try matching EXACT Name + Gothra (Optional but risky)
-                    # Let's create new if unique
                     if not dry_run:
-                        # Using full_name_en and gothra_en to match the actual Devotee model
-                        devotee = Devotee(full_name_en=name, phone_number=phone, gothra_en=gothra, address=address)
+                        devotee = Devotee(
+                            full_name_en=name, 
+                            phone_number=phone, 
+                            gothra_en=gothra, 
+                            address=address
+                        )
                         db.add(devotee)
                         db.flush()
                         print(f"   👤 New Devotee: {name}")
                     else:
-                        print(f"   👤 [Dry Run] Would create: {name}")
+                        print(f"   👤 [Dry Run] Would create Devotee: {name}")
 
-                # --- D. Check Duplicate Subscription ---
+                # --- D. Check Duplicates ---
                 if devotee and not dry_run:
                     exists = db.query(ShaswataSubscription).filter(
                         ShaswataSubscription.devotee_id == devotee.id,
                         ShaswataSubscription.seva_id == target_seva_id
                     ).first()
-                    
+
                     if exists:
                         print(f"   ⚠️ Duplicate: {name} already has this Seva.")
                         total_skipped += 1
                         continue
 
-                # --- E. Create Subscription ---
+                # --- E. Add Subscription ---
                 if not dry_run:
                     new_sub = ShaswataSubscription(
                         devotee_id=devotee.id,
                         seva_id=target_seva_id,
                         subscription_type=sub_type,
+                        seva_type=seva_type_val,
                         event_day=day,
                         event_month=month,
                         is_active=True
                     )
                     db.add(new_sub)
                     total_success += 1
-                    print(f"   ✅ Added Seva: {name} ({sub_type})")
+                    print(f"   ✅ Added: {name} ({seva_type_val})")
 
         except Exception as e:
-            print(f"   ❌ CRITICAL ERROR reading file {filename}: {e}")
+            print(f"   ❌ Error reading file {filename}: {e}")
 
-    # 4. Final Commit
+    # 4. Commit
     if not dry_run:
         db.commit()
-        print(f"\n🎉 ALL DONE! Successfully added: {total_success}, Skipped: {total_skipped}")
+        print(f"\n🎉 DONE! Added: {total_success}, Skipped: {total_skipped}")
     else:
-        print(f"\n🚧 DRY RUN FINISHED. Validated {len(all_files)} files.")
-        print("To run for real, change 'dry_run=True' to 'dry_run=False' in the code.")
+        print(f"\n🚧 DRY RUN COMPLETE. To execute, change 'dry_run=True' to 'dry_run=False'.")
     
     db.close()
 
 if __name__ == "__main__":
-    # RUN THIS FIRST!
     run_bulk_migration(dry_run=True)
