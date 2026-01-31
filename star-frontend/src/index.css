@@ -9,13 +9,22 @@
 
 /* 2. Base Styles & Variables */
 :root {
+  /* Temple Palette */
+  --temple-saffron: #FF9933;
+  --temple-saffron-dark: #D97706;
+  --temple-gold: #F59E0B;
+  --temple-sand: #FFF5E1;
+  --temple-red: #C53030;
+  --temple-stone: #1F2937;
+  --temple-brown: #5D4037;
+
   /* Fonts */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-heading: 'Playfair Display', serif;
 
   font-family: var(--font-sans);
   line-height: 1.5;
-  color: #1a1a1a;
+  color: var(--temple-stone);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -26,22 +35,18 @@
 body {
   margin: 0;
   min-height: 100vh;
-
-  /* Parallax Background Image */
-  background-image: url('/temple-bg.jpeg');
-  background-attachment: fixed;
-  background-size: cover;
-  background-position: center top;
+  background-color: #FFFDF5;
+  background: radial-gradient(circle at top, #FFF5E1, #FFFDF5);
   position: relative;
 }
 
-/* Glassmorphism Overlay for Readability */
+/* Sacred Overlay with subtle parallax hint */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.8));
+  background: linear-gradient(to bottom, rgba(255, 253, 245, 0.96), rgba(255, 255, 255, 0.9));
   pointer-events: none;
 }
 
@@ -87,8 +92,8 @@ body::before {
 
 /* Scrollbar Polish */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -96,12 +101,10 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  /* Slate-300 */
-  border-radius: 4px;
+  background: var(--temple-saffron);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-  /* Slate-400 */
+  background: var(--temple-saffron-dark);
 }

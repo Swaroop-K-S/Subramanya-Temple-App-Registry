@@ -227,14 +227,14 @@ function App() {
             {/* Logo Section */}
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActivePage('home')}>
               <div className="relative">
-                <div className="absolute inset-0 bg-orange-400 blur-sm rounded-lg opacity-40 group-hover:opacity-60 transition-opacity"></div>
-                <div className="relative p-2 bg-gradient-to-br from-orange-500 to-pink-500 rounded-lg text-white shadow-sm">
+                <div className="absolute inset-0 bg-temple-saffron blur-sm rounded-lg opacity-40 group-hover:opacity-60 transition-opacity"></div>
+                <div className="relative p-2 bg-gradient-to-br from-temple-saffron to-temple-gold rounded-lg text-white shadow-sm">
                   <Flower className="w-6 h-6 animate-[spin_10s_linear_infinite_paused] group-hover:animate-[spin_10s_linear_infinite]" />
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-2xl font-bold font-heading text-gray-900 leading-none">S.T.A.R.</span>
-                <span className="text-[10px] font-semibold tracking-[0.2em] text-orange-600 uppercase mt-0.5">{t.appSubtitle}</span>
+                <span className="text-2xl font-bold font-heading text-temple-brown leading-none">S.T.A.R.</span>
+                <span className="text-[10px] font-semibold tracking-[0.2em] text-temple-saffron-dark uppercase mt-0.5">{t.appSubtitle}</span>
               </div>
             </div>
 
@@ -257,19 +257,19 @@ function App() {
               <div className="flex bg-gray-100/50 rounded-lg p-1 border border-gray-200 backdrop-blur-sm mr-2">
                 <button
                   onClick={() => setActivePage('home')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'home' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'home' ? 'bg-white text-temple-saffron shadow-sm' : 'text-gray-500 hover:text-temple-brown'}`}
                 >
                   <Home size={14} /> {t.catalog}
                 </button>
                 <button
                   onClick={() => setActivePage('dashboard')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'dashboard' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'dashboard' ? 'bg-white text-temple-saffron shadow-sm' : 'text-gray-500 hover:text-temple-brown'}`}
                 >
                   <Users size={14} /> {t.dashboard}
                 </button>
                 <button
                   onClick={() => setActivePage('reports')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'reports' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activePage === 'reports' ? 'bg-white text-temple-saffron shadow-sm' : 'text-gray-500 hover:text-temple-brown'}`}
                 >
                   <BarChart3 size={14} /> {t.reports}
                 </button>
@@ -298,7 +298,7 @@ function App() {
           activePage === 'home' && (
             <>
               <div className="text-center mb-10">
-                <h2 className="text-4xl text-gray-800 mb-3 font-heading font-bold">
+                <h2 className="text-4xl text-temple-brown mb-3 font-heading font-bold">
                   {t.appTitle}
                 </h2>
                 <p className="text-gray-500 max-w-2xl mx-auto text-lg font-light">
@@ -371,7 +371,7 @@ function App() {
                             </h3>
 
                             {/* Action Button (Hidden by default, slides up or just stays visible) */}
-                            <button className={`w-full py-2 rounded-lg text-sm font-bold bg-white/10 backdrop-blur-md border border-white/40 text-white hover:bg-white hover:text-orange-600 transition-all`}>
+                            <button className={`w-full py-2 rounded-lg text-sm font-bold bg-white/10 backdrop-blur-md border border-white/40 text-white hover:bg-temple-saffron hover:text-white transition-all`}>
                               {seva.is_shaswata ? t.subscribeNow : t.bookNow}
                             </button>
                           </div>

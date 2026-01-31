@@ -167,6 +167,8 @@ def get_reports(start_date: str, end_date: str, db: Session = Depends(get_db)):
     """
     try:
         report = get_financial_report(db, start_date, end_date)
+        # Add period info to match requested structure
+        report["period"] = {"start": start_date, "end": end_date}
         return report
     except Exception as e:
         traceback.print_exc()
@@ -330,10 +332,19 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
         "seva": row[4], "date_info": "One-Time", "notes": row[5] or "Booked via App", "type": "BOOKING"
     } for row in transaction_result]
     
+    # 4. Calculate Daily Revenue
+    revenue_query = text("""
+        SELECT SUM(amount) FROM transactions 
+        WHERE seva_date = :date OR CAST(transaction_date AS DATE) = :date
+    """)
+    daily_revenue = db.execute(revenue_query, {"date": target_date}).scalar() or 0
+
     return {
         "date": {"day": target_date.day, "month": target_date.month, "year": target_date.year, "weekday": target_date.strftime("%A")},
         "panchangam": panchangam,
-        "pujas": lunar_pujas + gregorian_pujas + transaction_pujas
+        "pujas": lunar_pujas + gregorian_pujas + transaction_pujas,
+        "revenue": daily_revenue,
+        "festivals": ["Shiva Rathri (Upcoming)", "Pradosha"] if panchangam["maasa"] == "Magha" else ["Daily Sevas"]
     }
 
 # =============================================================================

@@ -5,11 +5,13 @@ import {
     PieChart, Pie, Cell
 } from 'recharts';
 import { Calendar, Download, RefreshCcw, ArrowLeft, IndianRupee, CreditCard, Banknote } from 'lucide-react';
+import { TRANSLATIONS } from './translations';
 import api from '../services/api';
 
 const COLORS = ['#F97316', '#8B5CF6', '#10B981', '#F43F5E'];
 
-const ReportsDashboard = ({ onBack }) => {
+const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
+    const t = TRANSLATIONS[lang];
     // State
     const [dateRange, setDateRange] = useState({
         start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], // 1st of current month
@@ -58,8 +60,8 @@ const ReportsDashboard = ({ onBack }) => {
 
     // Prepare Pie Data
     const pieData = reportData ? [
-        { name: 'Cash', value: reportData.financials.cash, color: '#F59E0B' }, // Amber for Cash
-        { name: 'UPI', value: reportData.financials.upi, color: '#10B981' }   // Emerald for UPI
+        { name: 'Cash', value: reportData.financials.cash, color: '#FF9933' }, // Saffron for Cash
+        { name: 'UPI', value: reportData.financials.upi, color: '#F59E0B' }   // Gold for UPI
     ].filter(d => d.value > 0) : [];
 
     return (
@@ -67,32 +69,34 @@ const ReportsDashboard = ({ onBack }) => {
             {/* Header with Date Picker */}
             <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <button onClick={onBack} className="text-sm font-semibold text-gray-500 hover:text-orange-600 mb-2 flex items-center gap-1 transition-colors">
-                        <ArrowLeft size={16} /> Back to Dashboard
+                    <button onClick={onBack} className="text-sm font-semibold text-gray-500 hover:text-temple-saffron mb-2 flex items-center gap-1 transition-colors">
+                        <ArrowLeft size={16} /> {lang === 'KN' ? 'ಹಿಂದಕ್ಕೆ' : 'Back to Dashboard'}
                     </button>
-                    <h1 className="text-3xl font-bold font-heading text-slate-800">Financial Reports</h1>
+                    <h1 className="text-3xl font-bold font-heading text-temple-brown">
+                        {lang === 'KN' ? 'ಹಣಕಾಸು ವರದಿಗಳು' : 'Financial Reports'}
+                    </h1>
                     <p className="text-slate-500 text-sm mt-1">Track temple revenue and seva statistics</p>
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-3 items-end">
-                    <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex items-center gap-3">
+                    <div className="bg-white p-3 rounded-xl shadow-sm border border-temple-sand flex items-center gap-3">
                         <div className="flex flex-col">
                             <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Start Date</label>
                             <input
                                 type="date"
                                 value={dateRange.start}
                                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                                className="font-semibold text-slate-700 outline-none text-sm bg-transparent"
+                                className="font-semibold text-temple-brown outline-none text-sm bg-transparent"
                             />
                         </div>
-                        <div className="h-8 w-[1px] bg-gray-200"></div>
+                        <div className="h-8 w-[1px] bg-temple-sand"></div>
                         <div className="flex flex-col">
                             <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">End Date</label>
                             <input
                                 type="date"
                                 value={dateRange.end}
                                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                                className="font-semibold text-slate-700 outline-none text-sm bg-transparent"
+                                className="font-semibold text-temple-brown outline-none text-sm bg-transparent"
                             />
                         </div>
                     </div>
@@ -100,10 +104,10 @@ const ReportsDashboard = ({ onBack }) => {
                     <button
                         onClick={fetchReport}
                         disabled={loading}
-                        className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-orange-200 active:scale-95 transition-all flex items-center gap-2"
+                        className="bg-temple-saffron hover:bg-temple-saffron-dark text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-temple-saffron/20 active:scale-95 transition-all flex items-center gap-2"
                     >
                         {loading ? <RefreshCcw size={20} className="animate-spin" /> : <RefreshCcw size={20} />}
-                        Generate
+                        {lang === 'KN' ? 'ಹುಡುಕಿ' : 'Generate'}
                     </button>
                 </div>
             </div>
@@ -119,7 +123,7 @@ const ReportsDashboard = ({ onBack }) => {
                 {error && !loading && (
                     <div className="bg-red-50 border border-red-100 p-8 rounded-2xl text-center">
                         <p className="text-red-500 font-bold mb-4">{error}</p>
-                        <button onClick={fetchReport} className="text-orange-600 font-bold hover:underline">Try Again</button>
+                        <button onClick={fetchReport} className="text-temple-saffron font-bold hover:underline">Try Again</button>
                     </div>
                 )}
 
@@ -128,12 +132,12 @@ const ReportsDashboard = ({ onBack }) => {
                         {/* Stats Row */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Total */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 relative overflow-hidden">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-temple-sand relative overflow-hidden">
                                 <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <IndianRupee size={80} className="text-orange-500" />
+                                    <IndianRupee size={80} className="text-temple-saffron" />
                                 </div>
                                 <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Total Collection</p>
-                                <h3 className="text-4xl font-black text-slate-800">{formatCurrency(reportData.financials.total)}</h3>
+                                <h3 className="text-4xl font-black text-temple-brown">{formatCurrency(reportData.financials.total)}</h3>
                                 <p className="text-xs text-slate-400 mt-2 font-medium">
                                     For {dateRange.start} to {dateRange.end}
                                 </p>
@@ -167,17 +171,17 @@ const ReportsDashboard = ({ onBack }) => {
                             {/* Bar Chart - Seva Popularity */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
                                 <h3 className="text-lg font-bold text-slate-800 mb-6">Seva Popularity</h3>
-                                <div className="flex-1 min-h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                <div className="h-[300px] w-full" style={{ minWidth: 0 }}>
+                                    <ResponsiveContainer width="100%" height={300}>
                                         <BarChart data={reportData.seva_stats.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                             <XAxis type="number" hide />
                                             <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} interval={0} />
                                             <RechartsTooltip
-                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                                itemStyle={{ color: '#f97316', fontWeight: 'bold' }}
+                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                                itemStyle={{ color: '#FF9933', fontWeight: 'bold' }}
                                             />
-                                            <Bar dataKey="count" fill="#4f46e5" radius={[0, 4, 4, 0]} barSize={20} name="Count" />
+                                            <Bar dataKey="count" fill="#FF9933" radius={[0, 4, 4, 0]} barSize={20} name="Count" />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -186,8 +190,8 @@ const ReportsDashboard = ({ onBack }) => {
                             {/* Pie Chart - Payment Split */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
                                 <h3 className="text-lg font-bold text-slate-800 mb-6">Payment Method Split</h3>
-                                <div className="flex-1 min-h-[300px] flex items-center justify-center">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                <div className="h-[300px] w-full flex items-center justify-center" style={{ minWidth: 0 }}>
+                                    <ResponsiveContainer width="100%" height={300}>
                                         <PieChart>
                                             <Pie
                                                 data={pieData}
@@ -212,11 +216,11 @@ const ReportsDashboard = ({ onBack }) => {
 
                         {/* Data Table */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Detailed Breakdown</h3>
+                            <div className="p-4 border-b border-gray-100 bg-temple-sand/50 flex justify-between items-center">
+                                <h3 className="font-bold text-temple-brown text-sm uppercase tracking-wider">Detailed Breakdown</h3>
                                 <button
                                     onClick={handleExport}
-                                    className="text-orange-600 hover:text-orange-700 text-xs font-bold flex items-center gap-1"
+                                    className="text-temple-saffron hover:text-temple-saffron-dark text-xs font-bold flex items-center gap-1"
                                 >
                                     <Download size={14} /> Export CSV
                                 </button>
