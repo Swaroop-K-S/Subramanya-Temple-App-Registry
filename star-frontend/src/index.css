@@ -164,3 +164,41 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--temple-saffron-dark);
 }
+
+/* Dark Mode Scrollbar Overrides */
+.dark ::-webkit-scrollbar-track {
+  background: #0F172A;
+  /* slate-900 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  /* slate-700 */
+}
+
+/* Global Form Elements - Dark Mode Polish */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0F172A;
+  /* slate-900 */
+  border-color: #334155;
+  /* slate-700 */
+  color: #E2E8F0;
+  /* slate-200 */
+}
+
+/* Remove default white background from browser user-agent styles if needed */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark textarea:-webkit-autofill,
+.dark textarea:-webkit-autofill:hover,
+.dark textarea:-webkit-autofill:focus,
+.dark select:-webkit-autofill,
+.dark select:-webkit-autofill:hover,
+.dark select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #E2E8F0;
+  -webkit-box-shadow: 0 0 0px 1000px #0F172A inset;
+  transition: background-color 5000s ease-in-out 0s;
+}

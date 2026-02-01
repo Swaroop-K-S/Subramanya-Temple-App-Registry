@@ -23,6 +23,7 @@ const getLocalDateStr = (date) => {
 const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
     const t = TRANSLATIONS[lang];
     const { theme } = useTheme(); // Hook into ThemeContext
+    const isDarkMode = theme === 'dark';
     // State
     const [dateRange, setDateRange] = useState({
         start: getLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), // 1st of current month
@@ -207,8 +208,13 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                                             <XAxis type="number" hide />
                                             <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12, fill: theme === 'dark' ? '#94a3b8' : '#64748b' }} interval={0} />
                                             <RechartsTooltip
-                                                contentStyle={{ backgroundColor: 'var(--tooltip-bg)', borderColor: 'var(--tooltip-border)', color: 'var(--tooltip-text)', borderRadius: '12px' }}
-                                                itemStyle={{ color: theme === 'dark' ? '#CBD5E1' : '#F97316', fontWeight: 'bold' }}
+                                                contentStyle={{
+                                                    backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+                                                    borderColor: isDarkMode ? '#334155' : '#ccc',
+                                                    color: isDarkMode ? '#f1f5f9' : '#000',
+                                                    borderRadius: '12px'
+                                                }}
+                                                itemStyle={{ color: isDarkMode ? '#CBD5E1' : '#F97316', fontWeight: 'bold' }}
                                                 cursor={{ fill: '#334155', opacity: 0.2 }}
                                             />
                                             <Bar dataKey="count" fill={theme === 'dark' ? '#CBD5E1' : '#F97316'} radius={[0, 4, 4, 0]} barSize={20} name="Count" />
@@ -236,7 +242,14 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                                                     <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                                                 ))}
                                             </Pie>
-                                            <RechartsTooltip contentStyle={{ backgroundColor: 'var(--tooltip-bg)', borderColor: 'var(--tooltip-border)', color: 'var(--tooltip-text)', borderRadius: '12px' }} />
+                                            <RechartsTooltip
+                                                contentStyle={{
+                                                    backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+                                                    borderColor: isDarkMode ? '#334155' : '#ccc',
+                                                    color: isDarkMode ? '#f1f5f9' : '#000',
+                                                    borderRadius: '12px'
+                                                }}
+                                            />
                                             <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-slate-500 dark:text-slate-400">{value}</span>} />
                                         </PieChart>
                                     </ResponsiveContainer>
