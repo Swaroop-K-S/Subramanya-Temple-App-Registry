@@ -51,10 +51,10 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-orange-200',
       bgGradient: 'from-orange-500 to-red-500',
-      iconColor: 'text-orange-600',
-      badgeBg: 'bg-orange-50',
-      badgeText: 'text-orange-700',
-      buttonBorder: 'border-orange-200 hover:bg-orange-50 text-orange-700',
+      iconColor: 'text-orange-600 dark:text-slate-400',
+      badgeBg: 'bg-orange-50 dark:bg-slate-800',
+      badgeText: 'text-orange-700 dark:text-slate-300',
+      buttonBorder: 'border-orange-200 hover:bg-orange-50 text-orange-700 dark:border-slate-700 dark:hover:bg-slate-800 dark:text-slate-300',
       icon: <Flame className="w-6 h-6 text-white" />
     };
   }
@@ -219,10 +219,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen pb-12">
+    <div className="min-h-screen pb-12 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-500">
 
       {/* FINAL GLASSMORPHISM NAV BAR */}
-      <nav className="sticky top-0 z-50 w-full backdrop-blur-lg bg-white/80 border-b border-gray-100/50">
+      <nav className="sticky top-0 z-50 w-full backdrop-blur-lg bg-white/80 dark:bg-slate-900/60 border-b border-gray-100/50 dark:border-slate-700/50 transition-all duration-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-18 py-3">
 
@@ -235,8 +235,8 @@ function App() {
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-2xl font-bold font-heading text-temple-brown leading-none">S.T.A.R.</span>
-                <span className="text-temple-saffron-dark text-[10px] font-bold tracking-[0.2em] uppercase">Temple Registry</span>
+                <span className="text-2xl font-bold font-heading text-temple-brown dark:text-amber-100 leading-none transition-colors duration-500">S.T.A.R.</span>
+                <span className="text-temple-saffron-dark dark:text-temple-saffron text-[10px] font-bold tracking-[0.2em] uppercase">Temple Registry</span>
               </div>
             </div>
 
@@ -359,7 +359,7 @@ function App() {
             {/* Header Section */}
             <header className="mb-12 text-center relative">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-temple-saffron blur-[100px] opacity-20 -z-10 rounded-full animate-pulse" />
-              <h1 className="text-4xl md:text-5xl font-black text-temple-brown mb-4 font-heading drop-shadow-sm tracking-tight">
+              <h1 className="text-4xl md:text-5xl font-black text-temple-brown dark:text-amber-100 mb-4 font-heading drop-shadow-sm tracking-tight transition-colors duration-500">
                 {t.mainTitle}
               </h1>
               <p className="text-lg text-temple-stone max-w-2xl mx-auto font-medium leading-relaxed">
@@ -434,7 +434,7 @@ function App() {
                         </h3>
 
                         {/* Book Now Button - Actions */}
-                        <button className="w-full mb-4 py-3.5 rounded-xl text-sm font-bold uppercase tracking-wide bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/50 hover:scale-105 active:scale-95 transition-all duration-300">
+                        <button className="w-full mb-4 py-3.5 rounded-xl text-sm font-bold uppercase tracking-wide bg-gradient-to-r from-orange-500 to-red-500 dark:from-slate-600 dark:to-slate-500 text-white shadow-lg shadow-orange-500/50 dark:shadow-slate-500/40 hover:scale-105 active:scale-95 transition-all duration-300">
                           {seva.is_shaswata ? t.subscribeNow : t.bookNow}
                         </button>
                       </div>

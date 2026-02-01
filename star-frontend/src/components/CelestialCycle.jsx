@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
-import useLiveClock from '../hooks/useLiveClock';
+import { useTempleTime } from '../context/TimeContext';
 
 const CelestialCycle = ({ sunrise, sunset, dateDisplay }) => {
-    const { time } = useLiveClock();
+    const { currentTime } = useTempleTime();
     const [percentage, setPercentage] = useState(0);
     const [isNight, setIsNight] = useState(false);
 
@@ -24,7 +24,7 @@ const CelestialCycle = ({ sunrise, sunset, dateDisplay }) => {
     useEffect(() => {
         const calculatePosition = () => {
             // Use the live time from the hook
-            const currentMinutes = time.getHours() * 60 + time.getMinutes();
+            const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
 
             const startMinutes = parseTimeToMinutes(sunrise);
             const endMinutes = parseTimeToMinutes(sunset);
@@ -65,12 +65,12 @@ const CelestialCycle = ({ sunrise, sunset, dateDisplay }) => {
         };
 
         calculatePosition();
-    }, [time, sunrise, sunset]); // Re-run whenever 'time' updates
+    }, [currentTime, sunrise, sunset]); // Re-run whenever 'time' updates
 
     // Visual Theme Configurations
     const theme = isNight ? {
         // Night Theme
-        containerClass: "bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 border-white/10 shadow-indigo-500/20",
+        containerClass: "bg-gradient-to-r from-indigo-950 to-slate-900 border-white/10 shadow-indigo-500/20",
         textColor: "text-slate-200",
         subTextColor: "text-slate-400",
         iconColor: "#e0f2fe", // Moon

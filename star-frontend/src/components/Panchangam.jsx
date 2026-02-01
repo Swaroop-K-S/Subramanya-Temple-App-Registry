@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Sun, Moon, ShieldAlert, Sparkles, ScrollText, Copy, Check, Calendar, RefreshCw } from 'lucide-react';
 import api from '../services/api';
 import CelestialCycle from './CelestialCycle';
-import useLiveClock from '../hooks/useLiveClock';
+import { useTempleTime } from '../context/TimeContext';
 
 const Panchangam = () => {
-    const { time } = useLiveClock(); // Get live time
+    const { currentDate, isNewDay } = useTempleTime(); // Get live time
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -23,17 +24,18 @@ const Panchangam = () => {
     });
 
     // The Midnight Watcher: Auto-update selectedDate when day changes
+    // The Midnight Watcher: Auto-update selectedDate when day changes
     useEffect(() => {
-        const liveYear = time.getFullYear();
-        const liveMonth = String(time.getMonth() + 1).padStart(2, '0');
-        const liveDay = String(time.getDate()).padStart(2, '0');
-        const liveDateString = `${liveYear}-${liveMonth}-${liveDay}`;
+        if (isNewDay) {
+            const liveYear = currentDate.getFullYear();
+            const liveMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
+            const liveDay = String(currentDate.getDate()).padStart(2, '0');
+            const liveDateString = `${liveYear}-${liveMonth}-${liveDay}`;
 
-        if (liveDateString !== selectedDate) {
             // Day has changed! Auto-update state to trigger fetchPanchangam
             setSelectedDate(liveDateString);
         }
-    }, [time, selectedDate]);
+    }, [isNewDay, currentDate]);
 
     // Fetch data whenever selectedDate changes (Manual or Auto)
     useEffect(() => {
@@ -82,7 +84,7 @@ const Panchangam = () => {
                 <div className="relative animate-[spin_3s_linear_infinite]">
                     <Sun className="w-16 h-16 text-temple-saffron opacity-80" />
                 </div>
-                <p className="mt-4 text-temple-brown font-heading font-bold animate-pulse">Loading Divine Almanac...</p>
+                <p className="mt-4 text-temple-brown dark:text-amber-100 font-heading font-bold animate-pulse">Loading Divine Almanac...</p>
             </div>
         );
     }
@@ -127,12 +129,12 @@ const Panchangam = () => {
                         type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-white/50 backdrop-blur-sm border border-white/60 rounded-xl text-sm font-bold text-temple-brown shadow-sm focus:outline-none focus:ring-2 focus:ring-temple-saffron/50 cursor-pointer hover:bg-white/80 transition-all"
+                        className="pl-10 pr-4 py-2 bg-white/50 backdrop-blur-sm border border-white/60 dark:bg-slate-800/60 dark:border-slate-700/50 rounded-xl text-sm font-bold text-temple-brown dark:text-amber-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-temple-saffron/50 cursor-pointer hover:bg-white/80 dark:hover:bg-slate-800 transition-all"
                     />
                 </div>
                 <button
                     onClick={handleRefresh}
-                    className="p-2 bg-white/50 backdrop-blur-sm border border-white/60 rounded-xl text-temple-stone/50 hover:text-temple-saffron hover:bg-white transition-all shadow-sm hover:rotate-180 duration-500"
+                    className="p-2 bg-white/50 backdrop-blur-sm border border-white/60 dark:bg-slate-800/60 dark:border-slate-700/50 rounded-xl text-temple-stone/50 dark:text-slate-400 hover:text-temple-saffron dark:hover:text-temple-saffron hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm hover:rotate-180 duration-500"
                     title="Refresh Data"
                 >
                     <RefreshCw className="w-4 h-4" />
@@ -156,9 +158,9 @@ const Panchangam = () => {
                     { label: 'Maasa', value: data.attributes?.maasa },
                     { label: 'Paksha', value: data.attributes?.paksha }
                 ].map((item, index) => (
-                    <div key={index} className="glass-card p-6 border border-white/60 hover:border-temple-saffron/30 transition-all duration-300 hover:shadow-lg group flex flex-col items-center text-center justify-center min-h-[120px]">
-                        <p className="text-xs font-bold text-temple-brown/70 uppercase tracking-widest mb-2">{item.label}</p>
-                        <p className="text-xl font-bold text-temple-saffron font-heading group-hover:scale-105 transition-transform">
+                    <div key={index} className="glass-card p-6 border border-white/60 dark:border-white/10 dark:bg-slate-900/60 hover:border-temple-saffron/30 transition-all duration-300 hover:shadow-lg group flex flex-col items-center text-center justify-center min-h-[120px]">
+                        <p className="text-xs font-bold text-temple-brown/70 dark:text-amber-100/70 uppercase tracking-widest mb-2">{item.label}</p>
+                        <p className="text-xl font-bold text-temple-saffron dark:text-orange-400 font-heading group-hover:scale-105 transition-transform">
                             {item.value || '-'}
                         </p>
                     </div>
@@ -166,19 +168,20 @@ const Panchangam = () => {
             </div>
 
             {/* 3. Inauspicious Times (Warning Zone) */}
-            <div className="bg-red-50 rounded-2xl border border-red-100 p-6 flex flex-col md:flex-row gap-6 items-center justify-center shadow-sm">
-                <div className="flex items-center gap-3 text-red-800/80">
+            <div className="bg-red-50 dark:bg-red-950/20 rounded-2xl border border-red-100 dark:border-red-900/30 p-6 flex flex-col md:flex-row gap-6 items-center justify-center shadow-sm relative overflow-hidden">
+                <div className="absolute inset-0 bg-red-500/5 dark:bg-red-500/10 z-0"></div>
+                <div className="flex items-center gap-3 text-red-800/80 dark:text-red-300 z-10">
                     <ShieldAlert className="w-6 h-6 flex-shrink-0 animate-pulse-slow" />
                     <span className="font-bold text-sm uppercase tracking-wide">Inauspicious Times</span>
                 </div>
                 <div className="flex flex-wrap justify-center gap-8 md:gap-12">
                     <div className="text-center">
-                        <span className="block text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">Rahukala</span>
-                        <span className="font-heading font-bold text-xl text-red-700">{data.inauspicious?.rahu}</span>
+                        <span className="block text-[10px] font-bold text-red-400 dark:text-red-400/80 uppercase tracking-wider mb-1">Rahukala</span>
+                        <span className="font-heading font-bold text-xl text-red-700 dark:text-red-200">{data.inauspicious?.rahu}</span>
                     </div>
                     <div className="text-center">
-                        <span className="block text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">Yamaganda</span>
-                        <span className="font-heading font-bold text-xl text-red-700">{data.inauspicious?.yama}</span>
+                        <span className="block text-[10px] font-bold text-red-400 dark:text-red-400/80 uppercase tracking-wider mb-1">Yamaganda</span>
+                        <span className="font-heading font-bold text-xl text-red-700 dark:text-red-200">{data.inauspicious?.yama}</span>
                     </div>
                 </div>
             </div>
@@ -194,10 +197,10 @@ const Panchangam = () => {
                         <span>Generate Daily Sankalpa</span>
                     </button>
                 ) : (
-                    <div className="max-w-3xl mx-auto glass-card p-10 border-t-4 border-temple-saffron animate-fade-in-up text-left relative shadow-2xl">
+                    <div className="max-w-3xl mx-auto glass-card dark:bg-slate-900/80 p-10 border-t-4 border-temple-saffron animate-fade-in-up text-left relative shadow-2xl">
                         <button
                             onClick={() => handleCopySankalpa(sankalpaText)}
-                            className="absolute top-4 right-4 p-2 text-temple-stone/40 hover:text-temple-saffron transition-colors rounded-lg hover:bg-orange-50"
+                            className="absolute top-4 right-4 p-2 text-temple-stone/40 dark:text-slate-500 hover:text-temple-saffron transition-colors rounded-lg hover:bg-orange-50 dark:hover:bg-slate-800"
                             title="Copy to clipboard"
                         >
                             {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
@@ -205,12 +208,12 @@ const Panchangam = () => {
 
                         <div className="text-center mb-8">
                             <Sparkles className="w-8 h-8 text-temple-gold mx-auto mb-3 opacity-80" />
-                            <h3 className="font-heading font-bold text-2xl text-temple-brown">Daily Sankalpa Mantra</h3>
+                            <h3 className="font-heading font-bold text-2xl text-temple-brown dark:text-amber-100">Daily Sankalpa Mantra</h3>
                             <div className="h-1 w-16 bg-temple-saffron/30 mx-auto mt-4 rounded-full" />
                         </div>
 
-                        <div className="bg-temple-surface/50 p-6 rounded-xl border border-temple-saffron/10 shadow-inner">
-                            <p className="text-lg md:text-xl font-heading leading-relaxed text-center text-temple-ink/80 italic font-medium">
+                        <div className="bg-temple-surface/50 dark:bg-slate-800/50 p-6 rounded-xl border border-temple-saffron/10 dark:border-slate-700 shadow-inner">
+                            <p className="text-lg md:text-xl font-heading leading-relaxed text-center text-temple-ink/80 dark:text-slate-300 italic font-medium">
                                 "{sankalpaText}"
                             </p>
                         </div>
@@ -218,7 +221,7 @@ const Panchangam = () => {
                         <div className="mt-8 text-center">
                             <button
                                 onClick={() => setShowSankalpa(false)}
-                                className="text-xs font-bold text-temple-stone/40 hover:text-temple-saffron uppercase tracking-widest transition-colors hover:underline decoration-temple-saffron/30 underline-offset-4"
+                                className="text-xs font-bold text-temple-stone/40 dark:text-slate-500 hover:text-temple-saffron uppercase tracking-widest transition-colors hover:underline decoration-temple-saffron/30 underline-offset-4"
                             >
                                 Close Sankalpa
                             </button>

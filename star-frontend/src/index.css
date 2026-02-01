@@ -18,29 +18,66 @@
   --temple-stone: #2C3E50;
   --temple-brown: #6D4C41;
 
+  /* Dynamic Primary Color System */
+  --primary-color: #F97316;
+  /* Orange/Saffron (Day) */
+  --primary-glow: rgba(249, 115, 22, 0.5);
+
+  /* Theme Variables (Default Light) */
+  --temple-bg: #FDFCF0;
+  --temple-card-bg: rgba(255, 255, 255, 0.95);
+  --temple-text-primary: #5D4037;
+  /* Brown */
+
   /* Fonts */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-heading: 'Playfair Display', serif;
 
   font-family: var(--font-sans);
   line-height: 1.5;
-  color: var(--temple-stone);
+  color: var(--temple-text-primary);
+  /* Use variable */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Tooltip Variables (Light Default) */
+  --tooltip-bg: #ffffff;
+  --tooltip-border: #e2e8f0;
+  --tooltip-text: #1e293b;
+}
+
+/* Dark Mode Overrides */
+.dark {
+  --temple-bg: #0F172A;
+  /* Deep Midnight Blue */
+  --temple-card-bg: rgba(15, 23, 42, 0.8);
+  /* Dark Glass */
+  --temple-text-primary: #E2E8F0;
+  /* Silver/White */
+
+  /* Tooltip Dark Variables */
+  --tooltip-bg: #1e293b;
+  --tooltip-border: #334155;
+  --tooltip-text: #f8fafc;
+
+  /* Ash Grey Night Theme Overrides */
+  --primary-color: #94a3b8;
+  /* Ash Grey (Night) */
+  --primary-glow: rgba(148, 163, 184, 0.4);
 }
 
 /* Clean Background - Warm Cream with Very Subtle Gradient */
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #FDFCF0;
+  min-height: 100vh;
+  background-color: var(--temple-bg);
   /* Very subtle warm radial gradient - NO dark overlays */
-  background:
-    radial-gradient(ellipse at top center, rgba(253, 252, 240, 1) 0%, rgba(253, 252, 240, 0.95) 100%),
-    #FDFCF0;
+  background: var(--temple-bg);
+  transition: background-color 0.5s ease, color 0.3s ease;
   position: relative;
 }
 
@@ -58,7 +95,7 @@ body {
    ========================================================================== */
 .glass-card {
   /* 95% opacity - almost solid white for maximum readability */
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--temple-card-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(0, 0, 0, 0.06);

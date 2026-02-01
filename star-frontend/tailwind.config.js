@@ -4,6 +4,7 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
+    darkMode: 'class', // Enable class-based dark mode
     theme: {
         extend: {
             colors: {
@@ -21,6 +22,9 @@ export default {
                     brown: '#5D4037',            // Keeping brown for specific accents
                     sand: '#FFFBF2',             // Mapping sand to surface
                     'saffron-dark': '#CC7000',   // Darker shade of new saffron for hover states
+
+                    // Dynamic Theme Color (Auto-Switches Day/Night)
+                    main: 'var(--primary-color)',
                 },
             },
             fontFamily: {
