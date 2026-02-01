@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from decimal import Decimal
 from enum import Enum
-from datetime import date
+from datetime import date, datetime
 
 
 # =============================================================================
@@ -307,3 +307,15 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+class UserResponse(BaseModel):
+    """Response schema for user data (excludes password)"""
+    id: int
+    username: str
+    role: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+

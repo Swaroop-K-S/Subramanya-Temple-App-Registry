@@ -1,0 +1,21 @@
+File,Status,Rows,Invalid Phones,Invalid Dates
+Gothra List.xlsx,Skipped (matches 'Gothra List'),0,0,0
+~$Gothra List.xlsx,Skipped (matches '~$'),0,0,0
+2025 January\5 Jan 2025 Pooje.xlsx,Cleaned 0 rows,0,0,0
+2025 March\Issues List_5March2025.xlsx,Skipped (matches 'Issue'),0,0,0
+RATHOTSAVA  POSTAL ADDRESSES\RATHOTSAVA_31Dec2025.xlsx,No 'Name' column found,0,0,0
+Shashvatha Pooje\Samithi Mebers.xlsx,Skipped (matches 'Samithi'),0,0,0
+Shashvatha Pooje\Shashvatha Pooje_30Dec2024 V1.3_Upto nove 30 2025.xlsx,Cleaned,2406,40,67
+Shashvatha Pooje\~$Shashvatha Pooje_30Dec2024 V1.2.xlsx,Skipped (matches '~$'),0,0,0
+Shashvatha Pooje\AAJIVA SADSAYA DETAILS\AAJIVA SADSAYARU.xlsx,Cleaned,79,0,5
+Shashvatha Pooje\Archive\Shashvatha Pooje_30Dec2024 V1.0.xlsx,Cleaned,169,2,0
+Shashvatha Pooje\Archive\Shashvatha Pooje_30Dec2024 V1.1.xlsx,Cleaned,169,2,0
+Shashvatha Pooje\LAKSHMI\Shashvatha Pooje_30Dec2024 V1.4.xlsx,Empty file,0,0,0
+Shashvatha Pooje\LAKSHMI\2025 rathosatsava\Reports\TransactionReport21-12-2025.xlsx,Skipped (matches 'Report'),0,0,0
+Shashvatha Pooje\LAKSHMI\2025 rathosatsava\Reports\TransactionReport22-12-2025.xlsx,Skipped (matches 'Report'),0,0,0
+Shashvatha Pooje\LAKSHMI\2025 rathosatsava\Reports\TransactionReport23-12-2025.xlsx,Skipped (matches 'Report'),0,0,0
+Shashvatha Pooje\LAKSHMI\2025 rathosatsava\Reports\TransactionReport24-12-2025.xlsx,Skipped (matches 'Report'),0,0,0
+Shashvatha Pooje\OLD FILES JUNE 30-2025\Shashvatha Pooje_30Dec2024 V1.2.xlsx,Cleaned 0 rows,0,0,0
+Shashvatha Pooje\OLD FILES JUNE 30-2025\Shashvatha Pooje_30Dec2024 V1.3_Upto nove 30 2025.xlsx,Cleaned,2406,40,67
+Shashvatha Pooje\OLD FILES JUNE 30-2025\~$Shashvatha Pooje_30Dec2024 V1.3_Upto 1July2025.xlsx,Skipped (matches '~$'),0,0,0
+Shashvatha Pooje\OLD FILES JUNE 30-2025\~$Shashvatha Pooje_30Dec2024 V1.3_Upto nove 30 2025.xlsx,Skipped (matches '~$'),0,0,0

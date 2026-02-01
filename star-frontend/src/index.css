@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   S.T.A.R. Application Theme - Modern Mesh
+   S.T.A.R. Application Theme - Modern High-Contrast
    ========================================================================== */
 
 /* 1. Fonts Import */
@@ -9,14 +9,14 @@
 
 /* 2. Base Styles & Variables */
 :root {
-  /* Temple Palette */
-  --temple-saffron: #FF9933;
-  --temple-saffron-dark: #D97706;
-  --temple-gold: #F59E0B;
-  --temple-sand: #FFF5E1;
-  --temple-red: #C53030;
-  --temple-stone: #1F2937;
-  --temple-brown: #5D4037;
+  /* Temple Palette - High Contrast */
+  --temple-saffron: #E67E22;
+  --temple-saffron-dark: #D35400;
+  --temple-gold: #F39C12;
+  --temple-sand: #FDF6E9;
+  --temple-red: #C0392B;
+  --temple-stone: #2C3E50;
+  --temple-brown: #6D4C41;
 
   /* Fonts */
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -32,22 +32,16 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Clean Background - Warm Cream with Very Subtle Gradient */
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #FFFDF5;
-  background: radial-gradient(circle at top, #FFF5E1, #FFFDF5);
+  background-color: #FDFCF0;
+  /* Very subtle warm radial gradient - NO dark overlays */
+  background:
+    radial-gradient(ellipse at top center, rgba(253, 252, 240, 1) 0%, rgba(253, 252, 240, 0.95) 100%),
+    #FDFCF0;
   position: relative;
-}
-
-/* Sacred Overlay with subtle parallax hint */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(to bottom, rgba(255, 253, 245, 0.96), rgba(255, 255, 255, 0.9));
-  pointer-events: none;
 }
 
 /* 3. Utility Classes */
@@ -55,12 +49,37 @@ body::before {
 /* Heading Font Utility */
 .font-heading,
 .font-sacred {
-  /* Alias font-sacred for compatibility */
   font-family: var(--font-heading);
   font-weight: 700;
 }
 
-/* Card Hover Effect */
+/* ==========================================================================
+   Glass Card - 95% Opacity (Almost Solid White Porcelain)
+   ========================================================================== */
+.glass-card {
+  /* 95% opacity - almost solid white for maximum readability */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 1.5rem;
+  /* Distinct shadow so cards POP off the light background */
+  box-shadow:
+    0 4px 20px 0 rgba(0, 0, 0, 0.08),
+    0 1px 4px 0 rgba(0, 0, 0, 0.04);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--temple-saffron);
+  /* Stronger shadow on hover with saffron glow */
+  box-shadow:
+    0 12px 40px 0 rgba(230, 126, 34, 0.18),
+    0 4px 16px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Card Hover Effect (Legacy) */
 .card-hover {
   transition: all 0.3s ease;
   transform: translateY(0);

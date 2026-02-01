@@ -16,7 +16,7 @@ from models import SevaCatalog
 from schemas import (
     TransactionCreate, TransactionResponse, SevaResponse,
     ShaswataCreate, ShaswataSubscriptionResponse,
-    UserCreate, UserLogin, Token, TokenData
+    UserCreate, UserLogin, Token, TokenData, UserResponse
 )
 from crud import (
     create_transaction, get_daily_transactions,
@@ -136,6 +136,88 @@ def login_for_access_token(form_data: UserLogin, db: Session = Depends(get_db)):
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+# =============================================================================
+# API Routes - User Management
+# =============================================================================
+
+@app.get("/users", response_model=List[UserResponse], tags=["User Management"])
+def list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all users (Admin only)"""
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can view users"
+        )
+    return db.query(User).all()
+
+@app.post("/users", response_model=UserResponse, tags=["User Management"])
+def create_user(
+    user_data: UserCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new user (Admin only)"""
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can create users"
+        )
+    
+    # Check if username already exists
+    existing = db.query(User).filter(User.username == user_data.username).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+    
+    # Create user
+    hashed_pwd = get_password_hash(user_data.password)
+    new_user = User(
+        username=user_data.username,
+        hashed_password=hashed_pwd,
+        role=user_data.role.lower()
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.delete("/users/{user_id}", tags=["User Management"])
+def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a user (Admin only)"""
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can delete users"
+        )
+    
+    # Find user
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Prevent deleting yourself
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete yourself"
+        )
+    
+    db.delete(user)
+    db.commit()
+    return {"message": f"User '{user.username}' deleted successfully"}
 
 # =============================================================================
 # API Routes - Health & Sevas
@@ -258,23 +340,7 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
 
     # Calculate Panchangam using Astronomical Data
     pc = PanchangCalculator()
-    panchang_data = pc.calculate(target_date)
-    
-    panchangam = {
-        "maasa": panchang_data["maasa"],
-        "is_adhika": panchang_data.get("is_adhika", False),
-        "paksha": panchang_data["paksha"],
-        "tithi": panchang_data["tithi"],
-        "nakshatra": panchang_data["nakshatra"],
-        "description": panchang_data.get("description", f"{panchang_data['maasa']} {panchang_data['paksha']} {panchang_data['tithi']}"),
-        "sunrise": panchang_data.get("sunrise", "-"),
-        "sunset": panchang_data.get("sunset", "-"),
-        "moonrise": panchang_data.get("moonrise", "-"),
-        "rahukala": panchang_data.get("rahukala", "-"),
-        "yamaganda": panchang_data.get("yamaganda", "-"),
-        "yoga": panchang_data.get("yoga", "-"),
-        "karana": panchang_data.get("karana", "-")
-    }
+    panchangam = pc.calculate(target_date) # Returns Rich JSON Object
     
     # 1. Lunar Query - Find subscriptions matching TODAY's Tithi
     lunar_query = text("""
@@ -290,9 +356,9 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     """)
     
     lunar_result = db.execute(lunar_query, {
-        "maasa": panchangam["maasa"],
-        "paksha": panchangam["paksha"],
-        "tithi": panchangam["tithi"]
+        "maasa": panchangam["attributes"]["maasa"],
+        "paksha": panchangam["attributes"]["paksha"],
+        "tithi": panchangam["attributes"]["tithi"]
     }).fetchall()
     
     lunar_pujas = [{
@@ -334,7 +400,7 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     
     # 4. Calculate Daily Revenue
     revenue_query = text("""
-        SELECT SUM(amount) FROM transactions 
+        SELECT SUM(amount_paid) FROM transactions 
         WHERE seva_date = :date OR CAST(transaction_date AS DATE) = :date
     """)
     daily_revenue = db.execute(revenue_query, {"date": target_date}).scalar() or 0
@@ -344,7 +410,7 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
         "panchangam": panchangam,
         "pujas": lunar_pujas + gregorian_pujas + transaction_pujas,
         "revenue": daily_revenue,
-        "festivals": ["Shiva Rathri (Upcoming)", "Pradosha"] if panchangam["maasa"] == "Magha" else ["Daily Sevas"]
+        "festivals": [panchangam["is_festival"]] if panchangam["is_festival"] else (["Shiva Rathri (Upcoming)", "Pradosha"] if panchangam["attributes"]["maasa"] == "Magha" else ["Daily Sevas"])
     }
 
 # =============================================================================

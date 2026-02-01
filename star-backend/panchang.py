@@ -45,6 +45,22 @@ KARANAS = [
     "Shakuni", "Chatushpada", "Naga", "Kimstughna"
 ]
 
+# Samvatsaras (60-year Jupiter Cycle)
+SAMVATSARAS = [
+    "Prabhava", "Vibhava", "Shukla", "Pramoda", "Prajotpatti", "Angirasa", "Srimukha", "Bhava", "Yuva", "Dhatri",
+    "Ishvara", "Bahudhanya", "Pramathi", "Vikrama", "Vrishaprajna", "Chitrabhanu", "Subhanu", "Tarana", "Parthiva", "Vyaya",
+    "Sarvajit", "Sarvadhari", "Virodhi", "Vikriti", "Khara", "Nandana", "Vijaya", "Jaya", "Manmatha", "Durmukha",
+    "Hevilambi", "Vilambi", "Vikari", "Sharvari", "Plava", "Shubhakrit", "Shobhakrit", "Krodhi", "Viswavasu", "Parabhava",
+    "Plavanga", "Keelaka", "Saumya", "Sadharana", "Virodhikrit", "Paridhavi", "Pramadicha", "Ananda", "Rakshasa", "Nala",
+    "Pingala", "Kalayukthi", "Siddharthi", "Raudra", "Durmathi", "Dundubhi", "Rudhirodgari", "Raktakshi", "Krodhana", "Akshaya"
+]
+
+# Ritus (6 Seasons)
+RITUS = ["Vasantha", "Greeshma", "Varsha", "Sharad", "Hemantha", "Shishira"]
+
+# Vasaras (Weekdays: Mon=0 ... Sun=6)
+VASARAS = ["Indu", "Bhouma", "Soumya", "Guru", "Bhrigu", "Sthira", "Bhanu"]
+
 class PanchangCalculator:
     # Location: Bangalore (Lat: 12.97, Lon: 77.59)
     LAT = '12.9716'
@@ -245,21 +261,78 @@ class PanchangCalculator:
         final_masa_index = masa_index % 12
         masa_name = MASAS[final_masa_index]
 
+        # --- Vedic Attributes Calculation ---
+        
+        # 1. Samvatsara (Chandramana - South Indian System)
+        # Saka Era = Gregorian Year - 78
+        # Logic: If Jan/Feb/Mar AND we are in the ending lunar months (Pushya-Phalguna),
+        # then we are still in the PREVIOUS Saka year.
+        greg_year = dt_input.year
+        saka_year = greg_year - 78
+        if dt_input.month < 4 and final_masa_index >= 9:
+            saka_year -= 1
+            
+        samvatsara_index = (saka_year + 11) % 60
+        samvatsara_name = SAMVATSARAS[samvatsara_index]
+
+        # 2. Ritu (Season)
+        # 0,1=Vasantha, 2,3=Greeshma, ...
+        ritu_index = int(final_masa_index / 2)
+        ritu_name = RITUS[ritu_index % 6]
+
+        # 3. Ayana (Solstice)
+        # Based on Nirayana Sun Longitude (Sidereal)
+        # Uttarayana: Makara (270) to Karka (90)
+        # Dakshinayana: Karka (90) to Makara (270)
+        # Note: s_sid_lon is in degrees (0-360)
+        if 90 <= s_sid_lon < 270:
+            ayana_name = "Dakshinayana"
+        else:
+            ayana_name = "Uttarayana"
+
+        # 4. Vasara (Weekday)
+        # dt_input.weekday(): 0=Mon, 6=Sun
+        vasara_name = VASARAS[dt_input.weekday()]
+
+        # Basic Festival Logic
+        is_festival = False
+        festival_name = None
+        if "Purnima" in tithi_name:
+            is_festival = True
+            festival_name = "Purnima"
+        elif "Amavasya" in tithi_name:
+             is_festival = True
+             festival_name = "Amavasya"
+        elif "Ekadashi" in tithi_name:
+             is_festival = True
+             festival_name = "Ekadashi"
+        
         return {
-            "maasa": masa_name,
-            "is_adhika": is_adhika,
-            "paksha": paksha,
-            "tithi": tithi_name,
-            "nakshatra": nakshatra_name,
-            "yoga": yoga_name,
-            "karana": karana_name,
-            "sunrise": sunrise_str,
-            "sunset": sunset_str,
-            "moonrise": moonrise_str,
-            "rahukala": kaalas["rahukala"],
-            "yamaganda": kaalas["yamaganda"],
-            "description": f"{'Adhika ' if is_adhika else ''}{masa_name} {paksha} {tithi_name}",
-            "formatted_masa": f"{'Adhika ' if is_adhika else ''}{masa_name}"
+            "date": dt_input.strftime("%Y-%m-%d"),
+            "sun_cycle": {
+                "sunrise": sunrise_str,
+                "sunset": sunset_str,
+                "moonrise": moonrise_str
+            },
+            "attributes": {
+                "samvatsara": samvatsara_name,
+                "ayana": ayana_name,
+                "ritu": ritu_name,
+                "maasa": masa_name,
+                "paksha": paksha,
+                "tithi": tithi_name,
+                "nakshatra": nakshatra_name,
+                "yoga": yoga_name,
+                "karana": karana_name,
+                "vasara_sanskrit": vasara_name,
+                "is_adhika": is_adhika
+            },
+            "inauspicious": {
+                "rahu": kaalas["rahukala"],
+                "yama": kaalas["yamaganda"]
+            },
+            "is_festival": festival_name if is_festival else None,
+            "description": f"Shubhe Shobhane Muhurthe {samvatsara_name} Nama Samvatsare {ayana_name} {ritu_name} Ritau {masa_name} Mase {paksha} Pakshe {tithi_name} Tithau"
         }
 
 if __name__ == "__main__":

@@ -54,6 +54,33 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
     });
     const [processedIds, setProcessedIds] = useState(new Set());
 
+    // The Midnight Watcher: Auto-switch date if system day changes
+    useEffect(() => {
+        const checkDate = () => {
+            const now = new Date();
+            const currentSelected = selectedDate instanceof Date ? selectedDate : new Date(selectedDate);
+
+            const isSameDay =
+                now.getDate() === currentSelected.getDate() &&
+                now.getMonth() === currentSelected.getMonth() &&
+                now.getFullYear() === currentSelected.getFullYear();
+
+            // If system date is different from selected date (assuming user wants to see Today)
+            // But only force update if the selected date was "Today" before the switch? 
+            // The requirement says: "If the Day, Month, or Year is different... Update selectedDate to new Date()"
+            // This implies forcing the view to Today at midnight.
+
+            if (!isSameDay) {
+                console.log("Midnight Watcher: Switching to new day...");
+                setSelectedDate(new Date()); // This triggers fetchDailySankalpa via existing useEffect
+                setProcessedIds(new Set()); // Reset local checklist text
+            }
+        };
+
+        const interval = setInterval(checkDate, 60000); // Check every 1 minute
+        return () => clearInterval(interval);
+    }, [selectedDate]);
+
     useEffect(() => {
         fetchDailySankalpa();
     }, [selectedDate]);
@@ -70,6 +97,9 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
 
             const response = await api.get(`/daily-sankalpa?date_str=${dateForApi}`);
             const data = response.data;
+
+            console.log("Dashboard API Response:", data);
+            console.log("Panchangam Data:", data.panchangam);
 
             setPujas(data.pujas || []);
             setPanchangam(data.panchangam || {});
@@ -183,175 +213,90 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
                     ))}
                 </div>
 
-                {/* 3. Panchang Card (Highlight) */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-5">
-                        <div className="bg-gradient-to-br from-temple-saffron to-temple-saffron-dark rounded-3xl p-8 shadow-2xl shadow-temple-saffron/30 text-white relative overflow-hidden h-full flex flex-col justify-between transition-all duration-300 hover:-translate-y-1">
-                            <div className="absolute top-0 right-0 p-8 opacity-10">
-                                <Moon size={160} className="rotate-12" />
+                {/* 3. Recent Transactions Table (Full Width) */}
+                <div className="flex flex-col h-full min-h-[500px]">
+                    <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 overflow-hidden flex-1 flex flex-col h-full transition-all duration-300 hover:shadow-xl">
+                        <div className="p-6 bg-temple-sand flex justify-between items-center border-b border-temple-gold/10">
+                            <h3 className="font-black text-temple-brown text-sm uppercase tracking-widest">{lang === 'KN' ? 'ಗೌರವಾನ್ವಿತ ಸೇವೆಗಳ ಪಟ್ಟಿ' : 'Recent Scheduled Sevas'}</h3>
+                            <div className="px-3 py-1 bg-white rounded-full text-[10px] font-black text-temple-saffron border border-temple-saffron/20">
+                                {pujas.length} {t.transactions}
                             </div>
-
-                            <div>
-                                <div className="flex items-center gap-2 mb-6">
-                                    <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-[10px] font-black uppercase tracking-tighter">
-                                        {lang === 'KN' ? 'ದೈನಂದಿನ ಪಂಚಾಂಗ' : 'Daily Panchangam'}
-                                    </div>
-                                    {panchangam.is_adhika && (
-                                        <div className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-black">
-                                            {t.extraMonth}
-                                        </div>
-                                    )}
-                                </div>
-                                <h2 className="text-4xl font-black mb-2 font-heading tracking-tight leading-none italic">
-                                    {panchangam.maasa} {panchangam.paksha}
-                                </h2>
-                                <h3 className="text-xl font-bold opacity-90 mb-6">
-                                    {panchangam.tithi} {t.tithi} • {panchangam.nakshatra}
-                                </h3>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                                        <div className="flex items-center gap-2 text-white/60 text-[10px] font-black uppercase mb-1">
-                                            <Sun size={12} /> {t.sunrise}
-                                        </div>
-                                        <p className="font-black text-lg">{panchangam.sunrise || "-"}</p>
-                                    </div>
-                                    <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-                                        <div className="flex items-center gap-2 text-white/60 text-[10px] font-black uppercase mb-1">
-                                            <AlertCircle size={12} /> {t.rahukala}
-                                        </div>
-                                        <p className="font-black text-lg">{panchangam.rahukala || "-"}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => setIsSankalpaOpen(!isSankalpaOpen)}
-                                className="mt-8 flex items-center justify-center gap-2 py-4 bg-white text-temple-saffron font-black rounded-2xl shadow-lg hover:bg-temple-sand transition-all group"
-                            >
-                                <Scroll size={20} className="group-hover:rotate-12 transition-transform" />
-                                {lang === 'KN' ? 'ಪುರೋಹಿತರ ಸಂಕಲ್ಪ' : 'Show Priest Sankalpa'}
-                                {isSankalpaOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                            </button>
                         </div>
-                    </div>
 
-                    {/* 4. Recent Transactions Table */}
-                    <div className="lg:col-span-7 flex flex-col">
-                        <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 overflow-hidden flex-1 flex flex-col h-full transition-all duration-300 hover:shadow-xl">
-                            <div className="p-6 bg-temple-sand flex justify-between items-center border-b border-temple-gold/10">
-                                <h3 className="font-black text-temple-brown text-sm uppercase tracking-widest">{lang === 'KN' ? 'ಗೌರವಾನ್ವಿತ ಸೇವೆಗಳ ಪಟ್ಟಿ' : 'Recent Scheduled Sevas'}</h3>
-                                <div className="px-3 py-1 bg-white rounded-full text-[10px] font-black text-temple-saffron border border-temple-saffron/20">
-                                    {pujas.length} {t.transactions}
+                        <div className="overflow-auto flex-1 h-[400px]">
+                            {loading ? (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+                                    <Loader2 size={40} className="animate-spin text-temple-saffron" />
+                                    <p className="font-black text-xs uppercase tracking-widest opacity-40">Connecting to Sanctum...</p>
                                 </div>
-                            </div>
+                            ) : pujas.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 italic">
+                                    <Flower size={48} className="mb-4 text-temple-sand" />
+                                    <p>No sevas registered for this alignment.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left text-xs">
+                                    <thead className="sticky top-0 bg-temple-sand text-temple-brown font-black uppercase tracking-tight z-10">
+                                        <tr>
+                                            <th className="px-6 py-4">State</th>
+                                            <th className="px-6 py-4">Devotee</th>
+                                            <th className="px-6 py-4">Seva Offering</th>
+                                            <th className="px-6 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-temple-sand">
+                                        {pujas.map((puja) => {
+                                            const theme = getSevaTheme(puja.seva);
+                                            const uniqueKey = `${puja.type}-${puja.id}`;
+                                            const isDone = processedIds.has(uniqueKey);
 
-                            <div className="overflow-auto flex-1 h-[400px]">
-                                {loading ? (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
-                                        <Loader2 size={40} className="animate-spin text-temple-saffron" />
-                                        <p className="font-black text-xs uppercase tracking-widest opacity-40">Connecting to Sanctum...</p>
-                                    </div>
-                                ) : pujas.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 italic">
-                                        <Flower size={48} className="mb-4 text-temple-sand" />
-                                        <p>No sevas registered for this alignment.</p>
-                                    </div>
-                                ) : (
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="sticky top-0 bg-temple-sand text-temple-brown font-black uppercase tracking-tight z-10">
-                                            <tr>
-                                                <th className="px-6 py-4">State</th>
-                                                <th className="px-6 py-4">Devotee</th>
-                                                <th className="px-6 py-4">Seva Offering</th>
-                                                <th className="px-6 py-4 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-temple-sand">
-                                            {pujas.map((puja) => {
-                                                const theme = getSevaTheme(puja.seva);
-                                                const uniqueKey = `${puja.type}-${puja.id}`;
-                                                const isDone = processedIds.has(uniqueKey);
-
-                                                return (
-                                                    <tr
-                                                        key={uniqueKey}
-                                                        className={`transition-all duration-300 hover:bg-temple-sand/30 group ${isDone ? 'opacity-50 grayscale' : ''}`}
-                                                    >
-                                                        <td className="px-6 py-4">
-                                                            <button
-                                                                onClick={() => toggleProcessed(uniqueKey)}
-                                                                className={`p-2 rounded-xl transition-all ${isDone ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300 hover:text-temple-saffron'}`}
-                                                            >
-                                                                {isDone ? <CheckCircle size={20} /> : <Circle size={20} />}
-                                                            </button>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <p className="font-black text-temple-brown text-sm">{puja.name}</p>
-                                                            <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                                                                <MapPin size={8} /> {puja.gothra || 'Samanya'}
-                                                            </p>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-black border ${theme.bg} ${theme.text} ${theme.color.replace('border-l-', 'border-')}`}>
-                                                                {theme.icon}
-                                                                {puja.seva}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            <button
-                                                                onClick={() => openWhatsApp(puja.phone, puja.name, puja.seva)}
-                                                                className="p-2 text-green-600 hover:bg-green-600 hover:text-white rounded-xl transition-all shadow-sm"
-                                                            >
-                                                                <MessageCircle size={18} />
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
+                                            return (
+                                                <tr
+                                                    key={uniqueKey}
+                                                    className={`transition-all duration-300 hover:bg-temple-sand/30 group ${isDone ? 'opacity-50 grayscale' : ''}`}
+                                                >
+                                                    <td className="px-6 py-4">
+                                                        <button
+                                                            onClick={() => toggleProcessed(uniqueKey)}
+                                                            className={`p-2 rounded-xl transition-all ${isDone ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300 hover:text-temple-saffron'}`}
+                                                        >
+                                                            {isDone ? <CheckCircle size={20} /> : <Circle size={20} />}
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <p className="font-black text-temple-brown text-sm">{puja.name}</p>
+                                                        <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                            <MapPin size={8} /> {puja.gothra || 'Samanya'}
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-black border ${theme.bg} ${theme.text} ${theme.color.replace('border-l-', 'border-')}`}>
+                                                            {theme.icon}
+                                                            {puja.seva}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <button
+                                                            onClick={() => openWhatsApp(puja.phone, puja.name, puja.seva)}
+                                                            className="p-2 text-green-600 hover:bg-green-600 hover:text-white rounded-xl transition-all shadow-sm"
+                                                        >
+                                                            <MessageCircle size={18} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
                     </div>
                 </div>
-
-                {/* 5. Sankalpa Expanded Section */}
-                {isSankalpaOpen && panchangam.maasa && (
-                    <div className="bg-white/90 backdrop-blur-xl p-8 rounded-3xl border border-temple-saffron/20 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex items-center gap-3 mb-6 border-b border-temple-sand pb-4">
-                            <div className="p-3 bg-temple-saffron rounded-full text-white">
-                                <Scroll size={24} />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-black text-temple-brown font-heading uppercase tracking-wide">{t.dailySankalpa}</h3>
-                                <p className="text-xs font-bold text-slate-400">Sacred Invocation Helper for Priests</p>
-                            </div>
-                        </div>
-                        <div className="bg-temple-sand/50 p-8 rounded-2xl font-serif text-lg leading-relaxed text-temple-brown border border-white relative">
-                            <div className="absolute top-4 left-4 opacity-5 rotate-12">
-                                <Flower size={120} />
-                            </div>
-                            <p className="relative z-10 italic">
-                                "Shubhe Shobhane Muhurthe, Aದ್ಯ Brahmanah Dviteeya Parardhe, Shweta Varaha Kalpe, Vaivasvata Manvantare, Ashtavimshatitame Kaliyuge, Prathama Pade, Jambu Dvipe, Bharata Varshe, Bharata Khande, Meroh Dakshine Parshve... <br /><br />
-                                <strong>{selectedDate.getFullYear()}</strong> Namaka Samvatsare,
-                                <strong> {selectedDate.getMonth() < 6 ? 'Uttarayane' : 'Dakshinayane'}</strong>,
-                                <strong> {panchangam.maasa}</strong> Mase,
-                                <strong> {panchangam.paksha}</strong> Pakshe,
-                                <strong> {panchangam.tithi}</strong> Tithau,
-                                <strong> {['Bhanu', 'Indu', 'Bhauma', 'Saumya', 'Guru', 'Bhrigu', 'Sthira'][selectedDate.getDay()]}</strong> Vasara Yuktayam,
-                                <strong> {panchangam.nakshatra}</strong> Nakshatra Yuktayam, <br />
-                                <strong> {panchangam.yoga}</strong> Yoga,
-                                <strong> {panchangam.karana}</strong> Karana, <br />
-                                Evam Guna Visheshana Vishishtayam, Asyam Shubha Tithau, Asmakam Saha Kutumbanam..."
-                            </p>
-                        </div>
-                    </div>
-                )}
             </div>
+
         </div>
     );
 };
+
 
 export default Dashboard;
