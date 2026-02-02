@@ -6,9 +6,12 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell
 } from 'recharts';
-import { Calendar, Download, RefreshCcw, ArrowLeft, IndianRupee, CreditCard, Banknote } from 'lucide-react';
+import { Calendar, Download, RefreshCcw, ArrowLeft, IndianRupee, CreditCard, Banknote, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { TRANSLATIONS } from './translations';
 import api from '../services/api';
+import { formatDateReport } from '../utils/dateUtils';
 
 const COLORS = ['#F97316', '#8B5CF6', '#10B981', '#F43F5E'];
 
@@ -72,6 +75,42 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
         window.open(url, '_blank');
     };
 
+    // Generate PDF
+    const downloadPDF = () => {
+        if (!reportData) return;
+        const doc = new jsPDF();
+
+        // Title
+        doc.setFontSize(18);
+        doc.text("S.T.A.R. Financial Report", 14, 15);
+
+        // Date Range
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Date Range: ${formatDateReport(dateRange.start)} to ${formatDateReport(dateRange.end)}`, 14, 25);
+
+        // Table
+        const tableColumn = ["Seva Name", "Count", "Revenue"];
+        const tableRows = [];
+
+        reportData.seva_stats.forEach(seva => {
+            const sevaData = [
+                seva.name,
+                seva.count,
+                formatCurrency(seva.revenue)
+            ];
+            tableRows.push(sevaData);
+        });
+
+        doc.autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 30,
+        });
+
+        doc.save('Seva_Report.pdf');
+    };
+
 
 
     // Initial Fetch
@@ -89,9 +128,20 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
     };
 
     // Prepare Pie Data
+    // Prepare Pie Data
     const pieData = reportData ? [
-        { name: 'Cash', value: reportData.financials.cash, color: '#FF9933' }, // Saffron for Cash
-        { name: 'UPI', value: reportData.financials.upi, color: '#F59E0B' }   // Gold for UPI
+        {
+            name: 'Cash',
+            value: reportData.financials.cash,
+            // Day: Saffron | Night: Slate-400 (Ash)
+            color: isDarkMode ? '#94a3b8' : '#FF9933'
+        },
+        {
+            name: 'UPI',
+            value: reportData.financials.upi,
+            // Day: Gold | Night: Slate-600 (Darker Ash)
+            color: isDarkMode ? '#475569' : '#F59E0B'
+        }
     ].filter(d => d.value > 0) : [];
 
     return (
@@ -169,7 +219,7 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                                 <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">Total Collection</p>
                                 <h3 className="text-4xl font-black text-temple-brown dark:text-amber-100">{formatCurrency(reportData.financials.total)}</h3>
                                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 font-medium">
-                                    For {dateRange.start} to {dateRange.end}
+                                    For {formatDateReport(dateRange.start)} to {formatDateReport(dateRange.end)}
                                 </p>
                             </div>
 
@@ -261,12 +311,20 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-500">
                             <div className="p-4 border-b border-gray-100 dark:border-slate-800 bg-temple-sand/50 dark:bg-slate-900 flex justify-between items-center">
                                 <h3 className="font-bold text-temple-brown dark:text-amber-100 text-sm uppercase tracking-wider">Detailed Breakdown</h3>
-                                <button
-                                    onClick={handleExport}
-                                    className="text-temple-saffron hover:text-temple-saffron-dark text-xs font-bold flex items-center gap-1"
-                                >
-                                    <Download size={14} /> Export CSV
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={downloadPDF}
+                                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                                    >
+                                        <FileText size={14} /> Export PDF
+                                    </button>
+                                    <button
+                                        onClick={handleExport}
+                                        className="text-temple-saffron hover:text-temple-saffron-dark text-xs font-bold flex items-center gap-1"
+                                    >
+                                        <Download size={14} /> Export CSV
+                                    </button>
+                                </div>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm">

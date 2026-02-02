@@ -51,6 +51,7 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-orange-200',
       bgGradient: 'from-orange-500 to-red-500',
+      buttonShadow: 'shadow-orange-500/50',
       iconColor: 'text-orange-600 dark:text-slate-400',
       badgeBg: 'bg-orange-50 dark:bg-slate-800',
       badgeText: 'text-orange-700 dark:text-slate-300',
@@ -64,6 +65,7 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-blue-200',
       bgGradient: 'from-blue-500 to-cyan-500',
+      buttonShadow: 'shadow-blue-500/50',
       iconColor: 'text-blue-600',
       badgeBg: 'bg-blue-50',
       badgeText: 'text-blue-700',
@@ -77,6 +79,7 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-pink-200',
       bgGradient: 'from-pink-500 to-rose-500',
+      buttonShadow: 'shadow-pink-500/50',
       iconColor: 'text-pink-600',
       badgeBg: 'bg-pink-50',
       badgeText: 'text-pink-700',
@@ -90,6 +93,7 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-amber-200',
       bgGradient: 'from-amber-500 to-yellow-500',
+      buttonShadow: 'shadow-amber-500/50',
       iconColor: 'text-amber-600',
       badgeBg: 'bg-amber-50',
       badgeText: 'text-amber-700',
@@ -103,6 +107,7 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-violet-200',
       bgGradient: 'from-violet-500 to-purple-500',
+      buttonShadow: 'shadow-violet-500/50',
       iconColor: 'text-violet-600',
       badgeBg: 'bg-violet-50',
       badgeText: 'text-violet-700',
@@ -116,6 +121,7 @@ const getSevaTheme = (sevaName) => {
     return {
       borderColor: 'border-indigo-200',
       bgGradient: 'from-indigo-500 to-blue-600',
+      buttonShadow: 'shadow-indigo-500/50',
       iconColor: 'text-indigo-600',
       badgeBg: 'bg-indigo-50',
       badgeText: 'text-indigo-700',
@@ -128,6 +134,7 @@ const getSevaTheme = (sevaName) => {
   return {
     borderColor: 'border-emerald-200',
     bgGradient: 'from-emerald-500 to-teal-500',
+    buttonShadow: 'shadow-emerald-500/50',
     iconColor: 'text-emerald-600',
     badgeBg: 'bg-emerald-50',
     badgeText: 'text-emerald-700',
@@ -396,11 +403,11 @@ function App() {
                     <div
                       key={seva.id}
                       onClick={() => handleSevaClick(seva)}
-                      className="relative h-96 rounded-2xl overflow-hidden cursor-pointer group shadow-2xl transition-all duration-500 hover:shadow-orange-500/20"
+                      className="relative h-96 rounded-2xl overflow-hidden cursor-pointer group shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl border border-gray-100 dark:border-slate-800"
                     >
                       {/* 1. Full-Height Background Image (Cover) */}
                       <div
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+                        className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
                         style={{ backgroundImage: `url(${bgImage})` }}
                       />
 
@@ -409,32 +416,44 @@ function App() {
 
                       {/* 3. Price Tag: Glassmorphism Pill (Top Right) */}
                       <div className="absolute top-4 right-4 z-20">
-                        <div className="backdrop-blur-md bg-black/40 border border-white/20 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg tracking-wide">
+                        <div className="backdrop-blur-xl bg-white/10 border border-white/20 text-white px-4 py-1.5 rounded-full text-base font-bold font-heading shadow-[0_0_15px_rgba(255,255,255,0.3)] tracking-wide">
                           {parseFloat(seva.price) > 0 ? `₹${parseFloat(seva.price).toFixed(0)}` : 'Custom'}
                         </div>
                       </div>
 
-                      {/* Tags (Top Left) */}
-                      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2">
-                        {seva.is_shaswata && (
-                          <span className="px-3 py-1 rounded-lg text-[10px] font-bold uppercase bg-violet-600/90 text-white shadow-lg backdrop-blur-sm border border-violet-400/30">Shaswata</span>
-                        )}
-                        {seva.is_slot_based && (
-                          <span className="px-3 py-1 rounded-lg text-[10px] font-bold uppercase bg-blue-600/90 text-white shadow-lg backdrop-blur-sm border border-blue-400/30">Slot</span>
-                        )}
+                      {/* Tags & Icon (Top Left) */}
+                      <div className="absolute top-4 left-4 z-20 flex flex-col">
+                        {/* Theme Icon - Glass Circle */}
+                        <div className="w-8 h-8 rounded-full backdrop-blur-md bg-white/20 border border-white/30 flex items-center justify-center text-white shadow-sm mb-2">
+                          {theme.icon}
+                        </div>
+
+                        {/* Badges */}
+                        <div className="flex flex-col gap-2">
+                          {seva.is_shaswata && (
+                            <span className="w-fit px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-violet-500/20 text-violet-100 border border-violet-200/20 shadow-lg backdrop-blur-md">Shaswata</span>
+                          )}
+                          {seva.is_slot_based && (
+                            <span className="w-fit px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-blue-500/20 text-blue-100 border border-blue-200/20 shadow-lg backdrop-blur-md">Slot</span>
+                          )}
+                        </div>
                       </div>
 
 
                       {/* 4. Content Container (Bottom Aligned) */}
                       <div className="absolute bottom-0 left-0 right-0 p-6 z-20 flex flex-col gap-4">
 
-                        {/* Title: Bottom-Left, White, Bold Serif */}
-                        <h3 className="text-2xl font-bold text-white font-heading leading-tight drop-shadow-md">
+                        {/* Title: Bottom-Left, White, Bold Serif, with Shadow Pop */}
+                        <h3 className="text-2xl font-bold text-white font-heading leading-tight drop-shadow-lg text-shadow-sm">
                           {lang === 'KN' && seva.name_kan ? seva.name_kan : seva.name_eng}
                         </h3>
 
+                        {/* Theme Divider Line */}
+                        <div className={`h-1 w-12 rounded-full mb-4 bg-gradient-to-r ${theme.bgGradient}`} />
+
                         {/* Book Now Button - Actions */}
-                        <button className="w-full mb-4 py-3.5 rounded-xl text-sm font-bold uppercase tracking-wide bg-gradient-to-r from-orange-500 to-red-500 dark:from-slate-600 dark:to-slate-500 text-white shadow-lg shadow-orange-500/50 dark:shadow-slate-500/40 hover:scale-105 active:scale-95 transition-all duration-300">
+                        <button className={`relative overflow-hidden group w-full mb-4 py-3.5 rounded-xl text-sm font-bold uppercase tracking-wide bg-gradient-to-r ${theme.bgGradient} text-white shadow-lg ${theme.buttonShadow} hover:scale-105 active:scale-95 transition-all duration-300`}>
+                          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:animate-shine" />
                           {seva.is_shaswata ? t.subscribeNow : t.bookNow}
                         </button>
                       </div>

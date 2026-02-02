@@ -73,12 +73,26 @@
 body {
   margin: 0;
   min-height: 100vh;
-  min-height: 100vh;
-  background-color: var(--temple-bg);
-  /* Very subtle warm radial gradient - NO dark overlays */
-  background: var(--temple-bg);
+  /* Premium Mesh Gradient Background */
+  background: linear-gradient(-45deg, #FDFCF0, #FFF3E0, #FFECB3, #FDFCF0);
+  background-size: 400% 400%;
+  animation: breathe 15s ease infinite;
   transition: background-color 0.5s ease, color 0.3s ease;
   position: relative;
+}
+
+@keyframes breathe {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 /* 3. Utility Classes */
@@ -109,10 +123,10 @@ body {
 
 .glass-card:hover {
   transform: translateY(-6px);
-  border-color: var(--temple-saffron);
+  border-color: var(--primary-color);
   /* Stronger shadow on hover with saffron glow */
   box-shadow:
-    0 12px 40px 0 rgba(230, 126, 34, 0.18),
+    0 12px 40px 0 var(--primary-glow),
     0 4px 16px 0 rgba(0, 0, 0, 0.1);
 }
 
@@ -201,4 +215,25 @@ body {
   -webkit-text-fill-color: #E2E8F0;
   -webkit-box-shadow: 0 0 0px 1000px #0F172A inset;
   transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Shine Animation */
+@keyframes shine {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shine {
+  animation: shine 1.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }

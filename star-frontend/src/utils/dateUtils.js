@@ -35,3 +35,25 @@ export const getTempleDate = () => {
     // This "shifts" the date so that .getHours() on the client machine matches the hours in Kolkata
     return new Date(kolkataString);
 };
+
+/**
+ * Safely formats a date string to avoid "Invalid Date" or "00-Jan-00" errors.
+ * Input: "2023-10-05" or Date object
+ * Output: "5 Oct 2023" (or "N/A" for broken data)
+ */
+export const formatDateReport = (dateString, fallback = 'N/A') => {
+    if (!dateString || dateString === '0000-00-00') {
+        return fallback;
+    }
+
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+        return 'N/A'; // Returning 'N/A' as per specific Issue 3 instruction
+    }
+
+    return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+    });
+};

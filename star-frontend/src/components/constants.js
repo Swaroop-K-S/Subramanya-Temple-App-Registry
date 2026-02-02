@@ -166,7 +166,7 @@ export const ENGLISH_MONTHS = [
 
 // Masas (Bilingual - for language-aware dropdowns)
 export const MASAS = [
-    { en: "Chaitra", kn: "ಚೈತ್ರ" },
+    { en: "Chaithra", kn: "ಚೈತ್ರ" },
     { en: "Vaishakha", kn: "ವೈಶಾಖ" },
     { en: "Jyeshtha", kn: "ಜ್ಯೇಷ್ಠ" },
     { en: "Ashadha", kn: "ಆಷಾಢ" },

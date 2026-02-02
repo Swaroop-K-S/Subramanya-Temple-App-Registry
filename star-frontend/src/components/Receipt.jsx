@@ -1,9 +1,17 @@
 import React from 'react';
 import { Flower } from 'lucide-react';
 import { NAKSHATRAS, RASHIS } from './constants';
+import { formatDateReport } from '../utils/dateUtils';
 
 const Receipt = ({ transaction, seva, lang }) => {
-    if (!transaction || !seva) return null;
+    if (!transaction) return <div className="p-4 text-red-500">No receipt data available</div>;
+    if (!seva) return null;
+
+    // Safe Defaults using Optional Chaining
+    const receipt_no = transaction?.receipt_no || '---';
+    const amount_paid = transaction?.amount_paid || 0;
+    const payment_mode = transaction?.payment_mode || '-';
+    const date = transaction?.date;
 
     // Bilingual Labels
     const labels = {
@@ -32,17 +40,17 @@ const Receipt = ({ transaction, seva, lang }) => {
     // Helper to get the correct bilingual name based on language
     const getBilingualName = () => {
         if (lang === 'KN') {
-            return transaction.devotee_name_kn || transaction.devotee_name_en || transaction.devotee_name || '-';
+            return transaction?.devotee_name_kn || transaction?.devotee_name_en || transaction?.devotee_name || '-';
         }
-        return transaction.devotee_name_en || transaction.devotee_name_kn || transaction.devotee_name || '-';
+        return transaction?.devotee_name_en || transaction?.devotee_name_kn || transaction?.devotee_name || '-';
     };
 
     // Helper to get the correct bilingual gothra based on language
     const getBilingualGothra = () => {
         if (lang === 'KN') {
-            return transaction.gothra_kn || transaction.gothra_en || transaction.gothra || '-';
+            return transaction?.gothra_kn || transaction?.gothra_en || transaction?.gothra || '-';
         }
-        return transaction.gothra_en || transaction.gothra_kn || transaction.gothra || '-';
+        return transaction?.gothra_en || transaction?.gothra_kn || transaction?.gothra || '-';
     };
 
     return (
@@ -71,12 +79,12 @@ const Receipt = ({ transaction, seva, lang }) => {
                 <div className="flex justify-between items-center mb-8 bg-orange-50 p-3 rounded-lg border border-orange-100">
                     <div>
                         <p className="text-xs text-gray-500 font-bold uppercase">{getLabel('receiptNo')}</p>
-                        <p className="font-mono font-bold text-lg text-gray-800">#{transaction.receipt_no}</p>
+                        <p className="font-mono font-bold text-lg text-gray-800">#{receipt_no}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-xs text-gray-500 font-bold uppercase">{getLabel('date')}</p>
                         <p className="font-mono font-bold text-gray-800">
-                            {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {formatDateReport(date || new Date())}
                         </p>
                     </div>
                 </div>
@@ -108,7 +116,8 @@ const Receipt = ({ transaction, seva, lang }) => {
                     </div>
 
                     {/* Optional Details with Translation Lookup */}
-                    {(transaction.gothra || transaction.gothra_en || transaction.nakshatra || transaction.rashi) && (
+                    {/* Optional Details with Translation Lookup */}
+                    {(transaction?.gothra || transaction?.gothra_en || transaction?.nakshatra || transaction?.rashi) && (
                         <>
                             <div>
                                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">{getLabel('gothra')}</p>
@@ -117,13 +126,13 @@ const Receipt = ({ transaction, seva, lang }) => {
                             <div>
                                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">{getLabel('nakshatra')}</p>
                                 <p className="font-semibold text-gray-800">
-                                    {getTranslatedValue(transaction.nakshatra, NAKSHATRAS)}
+                                    {getTranslatedValue(transaction?.nakshatra, NAKSHATRAS)}
                                 </p>
                             </div>
                             <div>
                                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">{getLabel('rashi')}</p>
                                 <p className="font-semibold text-gray-800">
-                                    {getTranslatedValue(transaction.rashi, RASHIS)}
+                                    {getTranslatedValue(transaction?.rashi, RASHIS)}
                                 </p>
                             </div>
                         </>
@@ -132,14 +141,14 @@ const Receipt = ({ transaction, seva, lang }) => {
                     {/* Amount */}
                     <div>
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">{getLabel('amount')}</p>
-                        <p className="text-xl font-bold text-gray-900">₹ {transaction.amount_paid}</p>
+                        <p className="text-xl font-bold text-gray-900">₹ {amount_paid}</p>
                     </div>
 
                     {/* Payment Mode */}
                     <div>
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">{getLabel('paymentMode')}</p>
                         <div className="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-xs font-bold text-gray-600">
-                            {transaction.payment_mode}
+                            {payment_mode}
                         </div>
                     </div>
                 </div>
