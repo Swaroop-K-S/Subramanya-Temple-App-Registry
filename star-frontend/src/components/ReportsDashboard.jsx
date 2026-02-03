@@ -145,7 +145,7 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
     ].filter(d => d.value > 0) : [];
 
     return (
-        <div className="bg-slate-50 dark:bg-slate-950 min-h-screen p-6 animate-in fade-in zoom-in duration-300 transition-colors duration-500">
+        <div className="min-h-screen p-6 animate-in fade-in zoom-in duration-300 transition-colors duration-500 bg-[var(--bg-primary)]">
             {/* Header with Date Picker */}
             <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
