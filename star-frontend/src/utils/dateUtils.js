@@ -52,7 +52,7 @@ export const formatDateReport = (dateString, fallback = 'N/A') => {
     }
 
     return date.toLocaleDateString('en-GB', {
-        day: 'numeric',
+        day: '2-digit',
         month: 'short',
         year: 'numeric'
     });

@@ -4,6 +4,7 @@ import { NAKSHATRAS, RASHIS } from './constants';
 import { formatDateReport } from '../utils/dateUtils';
 
 const Receipt = ({ transaction, seva, lang }) => {
+    // Safety Guard
     if (!transaction) return <div className="p-4 text-red-500">No receipt data available</div>;
     if (!seva) return null;
 
@@ -11,6 +12,7 @@ const Receipt = ({ transaction, seva, lang }) => {
     const receipt_no = transaction?.receipt_no || '---';
     const amount_paid = transaction?.amount_paid || 0;
     const payment_mode = transaction?.payment_mode || '-';
+    // Use optional chaining for date access
     const date = transaction?.date;
 
     // Bilingual Labels
@@ -115,7 +117,6 @@ const Receipt = ({ transaction, seva, lang }) => {
                         </div>
                     </div>
 
-                    {/* Optional Details with Translation Lookup */}
                     {/* Optional Details with Translation Lookup */}
                     {(transaction?.gothra || transaction?.gothra_en || transaction?.nakshatra || transaction?.rashi) && (
                         <>
