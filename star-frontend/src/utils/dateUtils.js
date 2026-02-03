@@ -26,14 +26,29 @@ const IST_OPTIONS = {
  * Do NOT send this Date object back to the server as ISO string without awareness that it is shifted.
  */
 export const getTempleDate = () => {
+    // robust parsing using Intl
     const now = new Date();
 
-    // Get the ISO string for the current time in Kolkata
-    const kolkataString = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    // Get distinct parts for Asia/Kolkata
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: 'numeric', second: 'numeric',
+        hour12: false
+    });
 
-    // Create a new Date object from that string
-    // This "shifts" the date so that .getHours() on the client machine matches the hours in Kolkata
-    return new Date(kolkataString);
+    const parts = formatter.formatToParts(now);
+    const getPart = (type) => parseInt(parts.find(p => p.type === type)?.value || 0, 10);
+
+    const year = getPart('year');
+    const month = getPart('month') - 1; // JS months are 0-11
+    const day = getPart('day');
+    const hour = getPart('hour');
+    const minute = getPart('minute');
+    const second = getPart('second');
+
+    // Create a date object that *behaves* like it's in local time with these values
+    return new Date(year, month, day, hour, minute, second);
 };
 
 /**

@@ -183,7 +183,7 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
 
             <div className="max-w-7xl mx-auto space-y-8">
 
-                {/* 2. Stats Row: 4 Glassmorphic Cards */}
+                {/* 2. Stats Row: 4 Divine Glass Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {[
                         {
@@ -193,7 +193,6 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
                             theme: {
                                 iconBg: 'bg-indigo-50 dark:bg-indigo-900/20',
                                 iconColor: 'text-indigo-600 dark:text-indigo-400',
-                                blob: 'bg-indigo-500'
                             }
                         },
                         {
@@ -203,7 +202,6 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
                             theme: {
                                 iconBg: 'bg-emerald-50 dark:bg-emerald-900/20',
                                 iconColor: 'text-emerald-600 dark:text-emerald-400',
-                                blob: 'bg-emerald-500'
                             }
                         },
                         {
@@ -213,7 +211,6 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
                             theme: {
                                 iconBg: 'bg-rose-50 dark:bg-rose-900/20',
                                 iconColor: 'text-rose-600 dark:text-rose-400',
-                                blob: 'bg-rose-500'
                             }
                         },
                         {
@@ -223,29 +220,25 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
                             theme: {
                                 iconBg: 'bg-amber-50 dark:bg-amber-900/20',
                                 iconColor: 'text-amber-600 dark:text-amber-400',
-                                blob: 'bg-amber-500'
                             }
                         }
                     ].map((stat, i) => (
                         <div
                             key={i}
-                            className="bg-gradient-to-br from-white/90 via-white/60 to-white/30 dark:from-slate-900/90 dark:via-slate-900/60 dark:to-slate-900/30 border border-white/40 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] backdrop-blur-xl p-6 rounded-2xl flex items-center justify-between group overflow-hidden relative transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl"
+                            className="glass-card p-6 flex items-center justify-between group relative overflow-hidden"
                         >
-                            {/* Shine Effect */}
-                            <span className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
-
-                            {/* Decorative Blob */}
-                            <div className={`absolute top-0 right-0 w-32 h-32 opacity-5 rounded-full -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700 ${stat.theme.blob}`} />
+                            {/* Decorative Background Glow */}
+                            <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-150 duration-700 ${stat.theme.iconBg.split(' ')[0].replace('-50', '-500')}`} />
 
                             <div className="relative z-10">
-                                <p className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-60 text-slate-500 dark:text-slate-400 mb-2">{stat.label}</p>
-                                <p className={`font-black text-slate-800 dark:text-white ${stat.label === 'Upcoming Festivals' ? 'text-xl' : 'text-4xl'}`}>
+                                <p className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-70 text-temple-stone dark:text-slate-400 mb-2">{stat.label}</p>
+                                <p className={`font-black font-heading text-temple-brown dark:text-white ${stat.label === 'Upcoming Festivals' ? 'text-xl' : 'text-4xl'}`}>
                                     {stat.value}
                                 </p>
                             </div>
 
-                            <div className={`p-4 rounded-2xl ${stat.theme.iconBg} ${stat.theme.iconColor} shadow-inner transition-transform group-hover:rotate-12`}>
-                                {React.cloneElement(stat.icon, { size: 32 })}
+                            <div className={`p-4 rounded-2xl ${stat.theme.iconBg} ${stat.theme.iconColor} shadow-sm group-hover:scale-110 transition-transform`}>
+                                {React.cloneElement(stat.icon, { size: 28 })}
                             </div>
                         </div>
                     ))}
@@ -253,8 +246,8 @@ const Dashboard = ({ onBack, lang = 'EN' }) => {
 
                 {/* 3. Recent Transactions Table (Full Width) */}
                 <div className="flex flex-col h-full min-h-[500px]">
-                    <div className="bg-gradient-to-br from-white/90 via-white/60 to-white/30 dark:from-slate-900/90 dark:via-slate-900/60 dark:to-slate-900/30 rounded-3xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] backdrop-blur-xl overflow-hidden flex-1 flex flex-col h-full transition-all duration-300 hover:shadow-xl">
-                        <div className="p-6 bg-temple-sand dark:bg-slate-800 flex justify-between items-center border-b border-temple-gold/10 dark:border-slate-700/50">
+                    <div className="glass-card overflow-hidden flex-1 flex flex-col h-full">
+                        <div className="p-6 bg-temple-sand/30 dark:bg-slate-800/30 flex justify-between items-center border-b border-[var(--border-subtle)]">
                             <h3 className="font-black text-temple-brown dark:text-amber-100 text-sm uppercase tracking-widest">{lang === 'KN' ? 'ಗೌರವಾನ್ವಿತ ಸೇವೆಗಳ ಪಟ್ಟಿ' : 'Recent Scheduled Sevas'}</h3>
                             <div className="px-3 py-1 bg-white dark:bg-slate-800 rounded-full text-[10px] font-black text-temple-saffron dark:text-slate-400 border border-temple-saffron/20 dark:border-slate-500/20">
                                 {pujas.length} {t.transactions}

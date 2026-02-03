@@ -226,10 +226,11 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen pb-12 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-500">
+    <div className="min-h-screen pb-12 transition-colors duration-500">
+
 
       {/* FINAL GLASSMORPHISM NAV BAR */}
-      <nav className="sticky top-0 z-50 w-full backdrop-blur-lg bg-white/80 dark:bg-slate-900/60 border-b border-gray-100/50 dark:border-slate-700/50 transition-all duration-500">
+      <nav className="sticky top-0 z-50 w-full backdrop-blur-lg bg-[var(--bg-glass)] border-b border-[var(--border-subtle)] transition-all duration-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-18 py-3">
 
@@ -403,7 +404,7 @@ function App() {
                     <div
                       key={seva.id}
                       onClick={() => handleSevaClick(seva)}
-                      className="relative h-96 rounded-2xl overflow-hidden cursor-pointer group shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl border border-gray-100 dark:border-slate-800"
+                      className="relative h-96 rounded-2xl overflow-hidden cursor-pointer group shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl border border-[var(--border-subtle)]"
                     >
                       {/* 1. Full-Height Background Image (Cover) */}
                       <div

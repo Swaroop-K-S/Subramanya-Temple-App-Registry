@@ -1,58 +1,43 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useTempleTime } from './TimeContext';
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-    const { currentTime } = useTempleTime();
+    // 1. Initialize State (Check localStorage or default to 'light')
+    const [theme, setTheme] = useState(() => {
+        const saved = localStorage.getItem('theme');
+        // Default to 'light' if no preference
+        return saved === 'dark' ? 'dark' : 'light';
+    });
 
-    // START WITH LIGHT MODE DEFAULT (Since most temple traffic is daytime)
-    const [theme, setTheme] = useState('light');
-    const [isManualOverride, setIsManualOverride] = useState(false);
-
-    // BULLETPROOF AUTO-SWITCH LOGIC
-    useEffect(() => {
-        // 1. Get exact current hour and minute
-        const hours = currentTime.getHours();
-        const minutes = currentTime.getMinutes();
-        const totalMinutes = hours * 60 + minutes;
-
-        // 2. Define Day: 6:00 AM (360) to 6:00 PM (1080)
-        const isDaytime = totalMinutes >= 360 && totalMinutes < 1080;
-        const correctTheme = isDaytime ? 'light' : 'dark';
-
-        // 3. FORCE RESET at exact boundaries (6 AM and 6 PM)
-        if (totalMinutes === 360 || totalMinutes === 1080) {
-            setIsManualOverride(false);
-        }
-
-        // 4. APPLY correct theme if user hasn't locked it
-        if (!isManualOverride && theme !== correctTheme) {
-            console.log(`☀️ Time is ${hours}:${minutes}. Switching to ${correctTheme} mode.`);
-            setTheme(correctTheme);
-        }
-    }, [currentTime, isManualOverride, theme]);
-
-    // THEME INJECTOR (Updates the actual HTML class)
+    // 2. Effect: Apply Theme to DOM
     useEffect(() => {
         const root = document.documentElement;
+
+        // Remove both to ensure clean switch
+        root.classList.remove('light', 'dark');
+
         if (theme === 'dark') {
             root.classList.add('dark');
             root.style.colorScheme = 'dark';
         } else {
-            root.classList.remove('dark');
+            root.classList.add('light');
             root.style.colorScheme = 'light';
         }
+
+        // Persist preference
+        localStorage.setItem('theme', theme);
+
+        console.log(`🎨 Theme Changed to: ${theme.toUpperCase()}`);
     }, [theme]);
 
-    // MANUAL TOGGLE (User overrides the clock)
+    // 3. Toggle Function
     const toggleTheme = () => {
-        setIsManualOverride(true);
         setTheme(prev => prev === 'light' ? 'dark' : 'light');
     };
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, isManualOverride }}>
+        <ThemeContext.Provider value={{ theme, toggleTheme }}>
             {children}
         </ThemeContext.Provider>
     );

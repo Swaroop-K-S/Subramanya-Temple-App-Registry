@@ -1,169 +1,149 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 /* ==========================================================================
-   S.T.A.R. Application Theme - Modern High-Contrast
+   S.T.A.R. - DIVINE DESIGN SYSTEM (v2.0)
    ========================================================================== */
 
-/* 1. Fonts Import */
+/* 1. Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
-/* 2. Base Styles & Variables */
-:root {
-  /* Temple Palette - High Contrast */
-  --temple-saffron: #E67E22;
-  --temple-saffron-dark: #D35400;
-  --temple-gold: #F39C12;
-  --temple-sand: #FDF6E9;
-  --temple-red: #C0392B;
-  --temple-stone: #2C3E50;
-  --temple-brown: #6D4C41;
-
-  /* Dynamic Primary Color System */
-  --primary-color: #F97316;
-  /* Orange/Saffron (Day) */
-  --primary-glow: rgba(249, 115, 22, 0.5);
-
-  /* Theme Variables (Default Light) */
-  --temple-bg: #FDFCF0;
-  --temple-card-bg: rgba(255, 255, 255, 0.95);
-  --temple-text-primary: #5D4037;
-  /* Brown */
+@theme {
+  /* Semantic Colors */
+  --color-temple-saffron: #E67E22;
+  --color-temple-saffron-dark: #D35400;
+  --color-temple-gold: #F39C12;
+  --color-temple-sand: #FDF6E9;
+  --color-temple-red: #C0392B;
+  --color-temple-stone: #2C3E50;
+  --color-temple-brown: #6D4C41;
 
   /* Fonts */
-  --font-sans: 'Inter', system-ui, sans-serif;
   --font-heading: 'Playfair Display', serif;
+  --font-sans: 'Inter', sans-serif;
 
-  font-family: var(--font-sans);
-  line-height: 1.5;
-  color: var(--temple-text-primary);
-  /* Use variable */
+  /* Animations */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-shine: shine 1.5s infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  @keyframes float {
 
-  /* Tooltip Variables (Light Default) */
-  --tooltip-bg: #ffffff;
-  --tooltip-border: #e2e8f0;
-  --tooltip-text: #1e293b;
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes shine {
+    from {
+      transform: translateX(-100%);
+    }
+
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 0 0;
+    }
+
+    to {
+      background-position: -200% 0;
+    }
+  }
 }
 
-/* Dark Mode Overrides */
+/* 2. Theme Variables (Source of Truth) */
+:root {
+  color-scheme: light;
+
+  /* Light (Divine) Theme */
+  --bg-primary: #FDFCF0;
+  /* Warm Cream */
+  --bg-card: rgba(255, 255, 255, 0.90);
+  --bg-glass: rgba(255, 255, 255, 0.70);
+
+  --text-primary: #5D4037;
+  /* Deep Brown */
+  --text-secondary: #8D6E63;
+  --text-accent: #E67E22;
+  /* Saffron */
+
+  --border-subtle: rgba(141, 110, 99, 0.1);
+  --shadow-color: 230deg 20% 40%;
+}
+
+/* Dark (Mystic) Theme Override */
 .dark {
-  --temple-bg: #0F172A;
-  /* Deep Midnight Blue */
-  --temple-card-bg: rgba(15, 23, 42, 0.8);
-  /* Dark Glass */
-  --temple-text-primary: #E2E8F0;
-  /* Silver/White */
+  color-scheme: dark;
 
-  /* Tooltip Dark Variables */
-  --tooltip-bg: #1e293b;
-  --tooltip-border: #334155;
-  --tooltip-text: #f8fafc;
+  /* Dark (Mystic) Theme */
+  --bg-primary: #0F172A;
+  /* Deep Slate */
+  --bg-card: rgba(30, 41, 59, 0.85);
+  --bg-glass: rgba(15, 23, 42, 0.70);
 
-  /* Ash Grey Night Theme Overrides */
-  --primary-color: #94a3b8;
-  /* Ash Grey (Night) */
-  --primary-glow: rgba(148, 163, 184, 0.4);
+  --text-primary: #F1F5F9;
+  /* Off-white */
+  --text-secondary: #94A3B8;
+  /* Slate-400 */
+  --text-accent: #F39C12;
+  /* Gold */
+
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --shadow-color: 220deg 40% 5%;
+
+  /* Variable Re-mapping for Temple Colors in Dark Mode */
+  --color-temple-brown: #F1F5F9;
+  /* Text becomes white */
+  --color-temple-sand: #1E293B;
+  /* Sand becomes Slate */
 }
 
-/* Clean Background - Warm Cream with Very Subtle Gradient */
+/* 3. Base Resets */
 body {
-  margin: 0;
-  min-height: 100vh;
-  /* Premium Mesh Gradient Background */
-  background: linear-gradient(-45deg, #FDFCF0, #FFF3E0, #FFECB3, #FDFCF0);
-  background-size: 400% 400%;
-  animation: breathe 15s ease infinite;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   transition: background-color 0.5s ease, color 0.3s ease;
-  position: relative;
+  overflow-x: hidden;
 }
 
-@keyframes breathe {
-  0% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-/* 3. Utility Classes */
-
-/* Heading Font Utility */
-.font-heading,
-.font-sacred {
+/* 4. Utility Classes */
+.font-heading {
   font-family: var(--font-heading);
-  font-weight: 700;
 }
 
-/* ==========================================================================
-   Glass Card - 95% Opacity (Almost Solid White Porcelain)
-   ========================================================================== */
 .glass-card {
-  /* 95% opacity - almost solid white for maximum readability */
-  background: var(--temple-card-bg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background-color: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
   border-radius: 1.5rem;
-  /* Distinct shadow so cards POP off the light background */
   box-shadow:
-    0 4px 20px 0 rgba(0, 0, 0, 0.08),
-    0 1px 4px 0 rgba(0, 0, 0, 0.04);
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-  transform: translateY(-6px);
-  border-color: var(--primary-color);
-  /* Stronger shadow on hover with saffron glow */
-  box-shadow:
-    0 12px 40px 0 var(--primary-glow),
-    0 4px 16px 0 rgba(0, 0, 0, 0.1);
-}
-
-/* Card Hover Effect (Legacy) */
-.card-hover {
-  transition: all 0.3s ease;
-  transform: translateY(0);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}
-
-.card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-color: var(--text-accent);
 }
 
-/* 4. Animations */
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 20px, 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Scrollbar Polish */
+/* Smooth Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -171,69 +151,14 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--temple-saffron);
+  background: var(--text-secondary);
   border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--temple-saffron-dark);
-}
-
-/* Dark Mode Scrollbar Overrides */
-.dark ::-webkit-scrollbar-track {
-  background: #0F172A;
-  /* slate-900 */
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
-  /* slate-700 */
-}
-
-/* Global Form Elements - Dark Mode Polish */
-.dark input,
-.dark select,
-.dark textarea {
-  background-color: #0F172A;
-  /* slate-900 */
-  border-color: #334155;
-  /* slate-700 */
-  color: #E2E8F0;
-  /* slate-200 */
-}
-
-/* Remove default white background from browser user-agent styles if needed */
-.dark input:-webkit-autofill,
-.dark input:-webkit-autofill:hover,
-.dark input:-webkit-autofill:focus,
-.dark textarea:-webkit-autofill,
-.dark textarea:-webkit-autofill:hover,
-.dark textarea:-webkit-autofill:focus,
-.dark select:-webkit-autofill,
-.dark select:-webkit-autofill:hover,
-.dark select:-webkit-autofill:focus {
-  -webkit-text-fill-color: #E2E8F0;
-  -webkit-box-shadow: 0 0 0px 1000px #0F172A inset;
-  transition: background-color 5000s ease-in-out 0s;
-}
-
-/* Shine Animation */
-@keyframes shine {
-  from {
-    transform: translateX(-100%);
-  }
-
-  to {
-    transform: translateX(100%);
-  }
-}
-
-.animate-shine {
-  animation: shine 1.5s infinite;
-}
-
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+  background: var(--text-accent);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
