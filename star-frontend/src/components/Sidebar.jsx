@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Home, Calendar, BarChart3, IndianRupee, Settings, LogOut, Flower } from 'lucide-react';
+import { Home, Calendar, BarChart3, IndianRupee, Settings, LogOut, Flower, Truck } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     const menuItems = [
-        { id: 'home', icon: Home, label: 'Catalog' },
+        { id: 'home', icon: Home, label: 'Home' },
         { id: 'panchangam', icon: Calendar, label: 'Panchangam' },
-        { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
         { id: 'reports', icon: IndianRupee, label: 'Reports' },
+        { id: 'dispatch', icon: Truck, label: 'Dispatch' },
         { id: 'settings', icon: Settings, label: 'Settings' }
     ];
 

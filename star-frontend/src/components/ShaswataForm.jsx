@@ -36,7 +36,7 @@ const VARIANTS = {
     INPUT_ERROR: "animate-shake border-amber-500 ring-2 ring-amber-200 bg-amber-50"
 };
 
-export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
+export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialContext = null }) {
     const t = TRANSLATIONS[lang] || {};
 
     // =========================================================================
@@ -61,9 +61,39 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
         date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' }
     });
 
-    // Reset on Close
+    // Reset or Pre-fill on Open
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            // Only apply context if we haven't touched the form yet (or just force it once on open)
+            // We blindly apply it here because 'isOpen' transitioning to true means "New Session"
+            if (initialContext) {
+                const { date, panchangam } = initialContext;
+
+                // Default to Gregorian from context
+                const [year, month, day] = date ? date.split('-') : [null, 1, 1];
+
+                let newSevaDetails = {
+                    type: 'GENERAL',
+                    calendar: 'GREGORIAN',
+                    date: {
+                        day: parseInt(day),
+                        month: parseInt(month),
+                        masa: '',
+                        paksha: '',
+                        tithi: ''
+                    }
+                };
+
+                if (panchangam && panchangam.attributes) {
+                    newSevaDetails.date.masa = panchangam.attributes.maasa;
+                    newSevaDetails.date.paksha = panchangam.attributes.paksha;
+                    newSevaDetails.date.tithi = panchangam.attributes.tithi;
+                }
+
+                setSevaDetails(newSevaDetails);
+            }
+        } else {
+            // Reset on Close
             setTimeout(() => {
                 setStep(1);
                 setFormData({ devotee_name: '', gothra: '', phone: '', address: '' });
@@ -71,7 +101,8 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
                 setErrors({});
             }, 300); // Wait for exit animation
         }
-    }, [isOpen]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]); // REMOVED initialContext to prevent reset loops on parent re-renders
 
     // =========================================================================
     // AGENT LOGIC
@@ -154,8 +185,10 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
     const handleSubmit = async () => {
         setLoading(true);
         try {
+            const isGeneral = sevaDetails.type === 'GENERAL';
+
             let subscriptionType = 'RATHOTSAVA';
-            if (sevaDetails.type === 'GENERAL') {
+            if (isGeneral) {
                 subscriptionType = sevaDetails.calendar;
             }
 
@@ -164,13 +197,19 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
                 phone_number: formData.phone,
                 gothra: formData.gothra,
                 address: formData.address,
+
+                // Mapped Fields
+                seva_id: isGeneral ? 7 : 8, // 7: Shashwata, 8: Brahmachari
+                amount: isGeneral ? 5000.0 : 2500.0,
+                payment_mode: 'CASH', // Default for now
+
                 seva_type: sevaDetails.type,
                 subscription_type: subscriptionType,
-                ...(sevaDetails.type === 'GENERAL' && sevaDetails.calendar === 'GREGORIAN' && {
+                ...(isGeneral && sevaDetails.calendar === 'GREGORIAN' && {
                     event_day: parseInt(sevaDetails.date.day),
                     event_month: parseInt(sevaDetails.date.month),
                 }),
-                ...(sevaDetails.type === 'GENERAL' && sevaDetails.calendar === 'LUNAR' && {
+                ...(isGeneral && sevaDetails.calendar === 'LUNAR' && {
                     maasa: sevaDetails.date.masa,
                     paksha: sevaDetails.date.paksha,
                     tithi: sevaDetails.date.tithi,
@@ -182,7 +221,9 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
             setStep(3); // Success Step
         } catch (err) {
             console.error(err);
-            alert("Submission Failed. Please check connection.");
+            // Show more detailed error
+            const msg = err.response?.data?.detail || "Submission Failed. Please check connection.";
+            alert(msg);
         } finally {
             setLoading(false);
         }

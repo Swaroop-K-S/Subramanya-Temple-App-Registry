@@ -144,6 +144,8 @@ class ShaswataCreate(BaseModel):
     phone_number: str = Field(..., min_length=10, max_length=15, description="Contact phone number")
     gothra: Optional[str] = Field(None, max_length=50, description="Gotra")
     nakshatra: Optional[str] = Field(None, max_length=30, description="Birth star")
+    rashi: Optional[str] = Field(None, max_length=30, description="Zodiac sign")
+    address: Optional[str] = Field(None, description="Postal address")
     
     # Seva Information
     seva_id: Optional[int] = Field(None, description="ID of the Shaswata seva")

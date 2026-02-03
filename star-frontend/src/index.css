@@ -2,30 +2,41 @@
 @plugin "tailwindcss-animate";
 
 /* ==========================================================================
-   S.T.A.R. - DIVINE DESIGN SYSTEM (v2.0)
+   S.T.A.R. - DIVINE GLASS 3.0 DESIGN SYSTEM
    ========================================================================== */
 
 /* 1. Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
 @theme {
-  /* Semantic Colors */
+  /* Semantic Colors - Divine Palette */
   --color-temple-saffron: #E67E22;
   --color-temple-saffron-dark: #D35400;
   --color-temple-gold: #F39C12;
+  --color-temple-gold-light: #FDEBD0;
   --color-temple-sand: #FDF6E9;
   --color-temple-red: #C0392B;
   --color-temple-stone: #2C3E50;
   --color-temple-brown: #6D4C41;
 
+  /* Cosmic Palette */
+  --color-cosmic-void: #0B0E14;
+  --color-cosmic-indigo: #1E1B4B;
+  --color-cosmic-purple: #312E81;
+  --color-starlight: #F1F5F9;
+
   /* Fonts */
   --font-heading: 'Playfair Display', serif;
   --font-sans: 'Inter', sans-serif;
+  --font-display: 'Outfit', sans-serif;
 
   /* Animations */
   --animate-float: float 6s ease-in-out infinite;
-  --animate-shine: shine 1.5s infinite;
+  --animate-float-slow: float 8s ease-in-out infinite;
+  --animate-shine: shine 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-shimmer: shimmer 2s linear infinite;
+  --animate-pulse-golden: pulse-golden 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-reveals: reveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 
   @keyframes float {
 
@@ -40,12 +51,13 @@
   }
 
   @keyframes shine {
-    from {
-      transform: translateX(-100%);
+    0% {
+      transform: translateX(-150%) skewX(-15deg);
     }
 
-    to {
-      transform: translateX(100%);
+    50%,
+    100% {
+      transform: translateX(150%) skewX(-15deg);
     }
   }
 
@@ -58,6 +70,30 @@
       background-position: -200% 0;
     }
   }
+
+  @keyframes pulse-golden {
+
+    0%,
+    100% {
+      box-shadow: 0 0 0 0px rgba(243, 156, 18, 0.2);
+    }
+
+    50% {
+      box-shadow: 0 0 0 10px rgba(243, 156, 18, 0);
+    }
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 /* 2. Theme Variables (Source of Truth) */
@@ -65,19 +101,22 @@
   color-scheme: light;
 
   /* Light (Divine) Theme */
-  --bg-primary: #FDFCF0;
-  /* Warm Cream */
-  --bg-card: rgba(255, 255, 255, 0.90);
-  --bg-glass: rgba(255, 255, 255, 0.70);
+  --bg-primary: #FDFCF6;
+  /* Lighter Cream */
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-glass: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.6);
 
-  --text-primary: #5D4037;
-  /* Deep Brown */
+  --text-primary: #4A3530;
+  /* Softer Deep Brown */
   --text-secondary: #8D6E63;
-  --text-accent: #E67E22;
-  /* Saffron */
+  --text-accent: #D35400;
+  /* Deep Saffron */
 
-  --border-subtle: rgba(141, 110, 99, 0.1);
-  --shadow-color: 230deg 20% 40%;
+  --border-subtle: rgba(141, 110, 99, 0.15);
+  --shadow-sm: 0 4px 6px -1px rgba(109, 76, 65, 0.05);
+  --shadow-lg: 0 20px 25px -5px rgba(109, 76, 65, 0.1);
+  --glow-color: rgba(243, 156, 18, 0.3);
 }
 
 /* Dark (Mystic) Theme Override */
@@ -85,65 +124,90 @@
   color-scheme: dark;
 
   /* Dark (Mystic) Theme */
-  --bg-primary: #0F172A;
-  /* Deep Slate */
-  --bg-card: rgba(30, 41, 59, 0.85);
-  --bg-glass: rgba(15, 23, 42, 0.70);
+  --bg-primary: #020617;
+  /* Deepest Slate/Void */
+  --bg-card: rgba(15, 23, 42, 0.60);
+  --bg-glass: rgba(2, 6, 23, 0.60);
+  --glass-border: rgba(255, 255, 255, 0.08);
 
-  --text-primary: #F1F5F9;
-  /* Off-white */
+  --text-primary: #F8FAFC;
+  /* Crisp White */
   --text-secondary: #94A3B8;
-  /* Slate-400 */
-  --text-accent: #F39C12;
-  /* Gold */
+  --text-accent: #FCA5A5;
+  /* Rose Gold/Pinkish for contrast */
 
-  --border-subtle: rgba(255, 255, 255, 0.1);
-  --shadow-color: 220deg 40% 5%;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  --glow-color: rgba(243, 156, 18, 0.15);
 
   /* Variable Re-mapping for Temple Colors in Dark Mode */
-  --color-temple-brown: #F1F5F9;
-  /* Text becomes white */
-  --color-temple-sand: #1E293B;
-  /* Sand becomes Slate */
+  --color-temple-brown: #E2E8F0;
+  --color-temple-sand: #0F172A;
 }
 
-/* 3. Base Resets */
+/* 3. Base Resets & Global Styles */
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  transition: background-color 0.5s ease, color 0.3s ease;
+
+  /* Smooth transitions for theme switching */
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Noise Texture for that 'Grainy' Premium Feel */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 4. Utility Classes */
-.font-heading {
+/* Typography Rules */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-heading);
+  letter-spacing: -0.02em;
 }
 
+/* Sanskrit/Kannada Readability Rule */
+.lang-kn,
+.lang-sa {
+  line-height: 1.6;
+  /* leading-relaxed */
+}
+
+/* 4. Utility Classes - Divine Glass */
 .glass-card {
-  background-color: var(--bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--glass-border);
   border-radius: 1.5rem;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* GPU Acceleration */
+  will-change: transform, box-shadow;
+  transform: translate3d(0, 0, 0);
 }
 
 .glass-card:hover {
-  transform: translateY(-4px);
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translate3d(0, -5px, 0) scale(1.01);
+  box-shadow: var(--shadow-lg),
+    0 0 20px var(--glow-color);
   border-color: var(--text-accent);
+  z-index: 10;
 }
 
-/* Smooth Scrollbar */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -152,13 +216,24 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--text-secondary);
-  border-radius: 10px;
-  border: 2px solid transparent;
+  border-radius: 20px;
   background-clip: content-box;
+  opacity: 0.5;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-accent);
-  border: 2px solid transparent;
-  background-clip: content-box;
+}
+
+/* Utility: Text Gradients */
+.text-gradient-gold {
+  background: linear-gradient(135deg, #F39C12 0%, #D35400 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dark .text-gradient-gold {
+  background: linear-gradient(135deg, #FDEBD0 0%, #F39C12 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

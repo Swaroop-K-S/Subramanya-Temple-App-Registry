@@ -26,7 +26,7 @@ def generate_receipt_number() -> str:
 
 def get_or_create_devotee(db: Session, name_en: str, phone: str, 
                           name_kn: str = None, gothra_en: str = None, gothra_kn: str = None,
-                          nakshatra: str = None, rashi: str = None) -> int:
+                          nakshatra: str = None, rashi: str = None, address: str = None) -> int:
     """
     Find an existing devotee by phone number, or create a new one.
     Supports bilingual names (English + Kannada).
@@ -40,6 +40,7 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
         gothra_kn: Gotra in Kannada
         nakshatra: Birth star (stored in English)
         rashi: Zodiac sign (stored in English)
+        address: Postal address
         
     Returns:
         devotee_id: The ID of the existing or newly created devotee
@@ -62,11 +63,13 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
                     gothra_kn = COALESCE(:gothra_kn, gothra_kn),
                     nakshatra = COALESCE(:nakshatra, nakshatra),
                     rashi = COALESCE(:rashi, rashi),
+                    address = COALESCE(:address, address),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
             {"name_en": name_en, "name_kn": name_kn, "gothra_en": gothra_en, 
-             "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi, "id": devotee_id}
+             "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi, 
+             "address": address, "id": devotee_id}
         )
         db.commit()
         return devotee_id
@@ -74,12 +77,13 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
         # Create new devotee
         result = db.execute(
             text("""
-                INSERT INTO devotees (full_name_en, full_name_kn, phone_number, gothra_en, gothra_kn, nakshatra, rashi)
-                VALUES (:name_en, :name_kn, :phone, :gothra_en, :gothra_kn, :nakshatra, :rashi)
+                INSERT INTO devotees (full_name_en, full_name_kn, phone_number, gothra_en, gothra_kn, nakshatra, rashi, address)
+                VALUES (:name_en, :name_kn, :phone, :gothra_en, :gothra_kn, :nakshatra, :rashi, :address)
                 RETURNING id
             """),
             {"name_en": name_en, "name_kn": name_kn, "phone": phone, 
-             "gothra_en": gothra_en, "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi}
+             "gothra_en": gothra_en, "gothra_kn": gothra_kn, "nakshatra": nakshatra, 
+             "rashi": rashi, "address": address}
         )
         db.commit()
         new_id = result.fetchone()[0]
@@ -273,12 +277,15 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
     """
     try:
         # Step 1: Get or create devotee
+        # Step 1: Get or create devotee
         devotee_id = get_or_create_devotee(
             db=db,
             name_en=subscription.devotee_name,
             phone=subscription.phone_number,
             gothra_en=subscription.gothra,
-            nakshatra=subscription.nakshatra
+            nakshatra=subscription.nakshatra,
+            rashi=subscription.rashi,
+            address=subscription.address
         )
         
         # Step 2: Get seva name (optional - may be null for quick subscriptions)
