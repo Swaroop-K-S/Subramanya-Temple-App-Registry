@@ -141,6 +141,10 @@ class PanchangCalculator:
         moon = ephem.Moon()
         
         # Sun Times
+        sunrise_str = "-"
+        sunset_str = "-"
+        kaalas = {"rahukala": "-", "yamaganda": "-"}
+        
         try:
             rise_utc = obs.next_rising(sun)
             set_utc = obs.next_setting(sun)
@@ -152,11 +156,14 @@ class PanchangCalculator:
             weekday = dt_input.weekday()
             kaalas = PanchangCalculator.calculate_kaalas(rise_ist, set_ist, weekday)
         except (ephem.AlwaysUpError, ephem.AlwaysDownError):
-            sunrise_str = "-"
-            sunset_str = "-"
-            kaalas = {"rahukala": "-", "yamaganda": "-"}
+            # Already initialized to "-"
+            pass
+        except Exception as e:
+            print(f"Error calculating Sun info: {e}")
+            # Keep defaults
             
         # Moonrise
+        moonrise_str = "-"
         try:
             m_rise_utc = obs.next_rising(moon)
             m_rise_ist = PanchangCalculator._utc_to_ist(m_rise_utc)
@@ -164,7 +171,9 @@ class PanchangCalculator:
             # If request is for Day X, moon might rise at 2 AM on Day X+1 (technically same night)
             moonrise_str = PanchangCalculator._format_time(m_rise_ist)
         except (ephem.AlwaysUpError, ephem.AlwaysDownError):
-            moonrise_str = "-"
+            pass
+        except Exception:
+            pass
 
         # ---------------------------------------------------------
         # 2. Main Panchang Calculation (at 6:00 AM IST)

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Flame, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
-// import { API_BASE_URL } from '../config'; 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import { Flower, Lock, User, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 const Login = ({ setToken }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
     const navigate = useNavigate();
 
     const handleLogin = async (e) => {
@@ -17,11 +17,9 @@ const Login = ({ setToken }) => {
         setLoading(true);
 
         try {
-            const response = await fetch('http://localhost:8000/token', {
+            const response = await fetch(`${API_BASE_URL}/token`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
             });
 
@@ -31,126 +29,138 @@ const Login = ({ setToken }) => {
                 throw new Error(data.detail || 'Invalid credentials');
             }
 
-            // Success: Save token and redirect
-            localStorage.setItem('access_token', data.access_token);
-            setToken(data.access_token); // Update parent state immediately
-            navigate('/dashboard');
+            // Success Animation Trigger
+            setSuccess(true);
+            setTimeout(() => {
+                localStorage.setItem('access_token', data.access_token);
+                setToken(data.access_token);
+                navigate('/dashboard');
+            }, 800);
+
         } catch (err) {
             setError(err.message);
-        } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background with Overlay is handled by main index.css (body styles), 
-          but if this is a standalone route, we ensure the theme persists 
-          or add a specific container if needed. 
-          Assuming the global body background from index.css applies here.
-      */}
+        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-amber-900">
+            {/* LARGE WATERMARK BACKGROUND */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5 animate-pulse-slow">
+                <Flower size={600} className="text-amber-500" />
+            </div>
 
-            <div className="w-full max-w-md animate-fade-in-up">
-                {/* Divine Card */}
-                <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 overflow-hidden">
+            <div className="w-full max-w-md relative z-10 animate-fade-in-up">
+                {/* DEEP GLASS CARD */}
+                <div className="bg-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden relative">
 
-                    {/* Header - Saffron/Orange Gradient */}
-                    <div className="bg-gradient-to-r from-orange-500 to-red-600 p-8 text-center relative">
-                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    {/* Glossy Reflection Effect */}
+                    <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
 
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm mb-4 border-2 border-white/30 shadow-inner">
-                            <Flame className="w-8 h-8 text-white animate-pulse" />
+                    {/* Header */}
+                    <div className="p-10 pb-0 text-center relative z-10">
+                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-500/20 backdrop-blur-md mb-6 border border-amber-400/50 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-float">
+                            <Flower className="w-10 h-10 text-amber-300 drop-shadow-lg" />
                         </div>
 
-                        <h1 className="text-2xl font-bold text-white font-heading tracking-wide">
-                            S.T.A.R. Secure Access
+                        <h1 className="text-3xl font-black text-white font-heading tracking-wide mb-2 drop-shadow-md">
+                            S.T.A.R. Portal
                         </h1>
-                        <p className="text-orange-100 text-sm mt-1 font-medium">
-                            Temple Office Portal
+                        <p className="text-amber-100/70 text-sm font-medium tracking-widest uppercase">
+                            Subramanya Temple Registry
                         </p>
                     </div>
 
-                    {/* Login Form */}
-                    <div className="p-8">
+                    {/* Form */}
+                    <div className="p-10 pt-8">
                         <form onSubmit={handleLogin} className="space-y-6">
 
                             {/* Error Message */}
                             {error && (
-                                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r text-sm text-red-700 font-medium animate-pulse">
-                                    {error}
+                                <div className="bg-red-500/20 border border-red-500/50 p-3 rounded-xl text-sm text-red-200 font-medium animate-shake backdrop-blur-sm flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> {error}
                                 </div>
                             )}
 
-                            {/* Username Input */}
-                            <div className="space-y-1">
-                                <label className="block text-sm font-semibold text-gray-700">Username</label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <User className="h-5 w-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        className="block w-full pl-10 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all outline-none font-medium"
-                                        placeholder="Enter admin ID"
-                                    />
-                                </div>
+                            {/* Floating Label Input - Username */}
+                            <div className="relative group">
+                                <input
+                                    type="text"
+                                    required
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    className="peer w-full pl-12 pr-4 py-3.5 bg-black/20 hover:bg-black/30 border border-white/10 rounded-xl text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-inner"
+                                    placeholder="Username"
+                                />
+                                <label className="absolute left-12 top-3.5 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-amber-400 peer-focus:bg-slate-900 peer-focus:px-1 peer-focus:rounded-sm cursor-text">
+                                    Username
+                                </label>
+                                <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-500 group-hover:text-amber-400 peer-focus:text-amber-400 transition-colors" />
                             </div>
 
-                            {/* Password Input */}
-                            <div className="space-y-1">
-                                <label className="block text-sm font-semibold text-gray-700">Password</label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                                    </div>
-                                    <input
-                                        type="password"
-                                        required
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        className="block w-full pl-10 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all outline-none font-medium"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
+                            {/* Floating Label Input - Password */}
+                            <div className="relative group">
+                                <input
+                                    type="password"
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="peer w-full pl-12 pr-4 py-3.5 bg-black/20 hover:bg-black/30 border border-white/10 rounded-xl text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-inner"
+                                    placeholder="Password"
+                                />
+                                <label className="absolute left-12 top-3.5 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-amber-400 peer-focus:bg-slate-900 peer-focus:px-1 peer-focus:rounded-sm cursor-text">
+                                    Password
+                                </label>
+                                <Lock className="absolute left-4 top-3.5 h-5 w-5 text-gray-500 group-hover:text-amber-400 peer-focus:text-amber-400 transition-colors" />
                             </div>
 
-                            {/* Submit Button */}
+                            {/* Mystic Action Button */}
                             <button
                                 type="submit"
-                                disabled={loading}
-                                className="w-full flex items-center justify-center py-3 px-4 rounded-lg bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold tracking-wide shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+                                disabled={loading || success}
+                                className={`w-full relative group overflow-hidden py-4 rounded-xl font-bold tracking-wide shadow-[0_10px_30px_-10px_rgba(245,158,11,0.5)] transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-300
+                                    ${success
+                                        ? "bg-green-500 text-white ring-4 ring-green-500/30"
+                                        : "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:shadow-[0_0_20px_rgba(245,158,11,0.6)] ring-1 ring-white/20"}
+                                `}
                             >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                        Verifying...
-                                    </>
-                                ) : (
-                                    <>
-                                        Enter Temple Office
-                                        <ArrowRight className="w-5 h-5 ml-2" />
-                                    </>
+                                <div className="relative z-10 flex items-center justify-center gap-2">
+                                    {loading ? (
+                                        success ? (
+                                            <>
+                                                <CheckCircle2 className="w-6 h-6 animate-bounce" />
+                                                <span className="text-lg">Access Granted</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span className="tracking-widest opacity-90">VERIFYING...</span>
+                                            </>
+                                        )
+                                    ) : (
+                                        <>
+                                            <span>Start Session</span>
+                                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Shine Effect */}
+                                {!loading && !success && (
+                                    <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 group-hover:animate-shine" />
                                 )}
                             </button>
                         </form>
                     </div>
 
                     {/* Footer */}
-                    <div className="px-8 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
-                        <span>&copy; 2026 S.T.A.R.</span>
-                        <div className="flex gap-2">
-                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Secure Connection</span>
+                    <div className="px-10 py-5 bg-black/20 border-t border-white/5 flex justify-between items-center text-xs text-amber-100/40">
+                        <span className="font-mono tracking-widest">V 2.0.0 (OMNI)</span>
+                        <div className="flex gap-2 items-center">
+                            <Lock className="w-3 h-3" /> Encrypted Protocol
                         </div>
                     </div>
                 </div>
-
-                {/* Bottom Text */}
-                <p className="text-center text-white/80 text-sm mt-6 font-medium shadow-black drop-shadow-md">
-                    Restricted access for authorized personnel only.
-                </p>
             </div>
         </div>
     );

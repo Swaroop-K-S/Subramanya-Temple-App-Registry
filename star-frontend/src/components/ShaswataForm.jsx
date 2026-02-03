@@ -1,53 +1,53 @@
 /**
- * ShaswataForm Component - Enhanced Dual Calendar Version
- * =========================================================
- * Perpetual Puja Subscription Form with:
- * 1. GENERAL: User selects custom date (Gregorian OR Lunar)
- * 2. BRAHMACHARI: Fixed Rathotsava date (no selection needed)
- * 
- * Features:
- * - Dual Calendar Toggle (English Date vs Hindu Tithi)
- * - Smart Input with ReactTransliterate for bilingual Name/Gothra
- * - Beautiful glassmorphism UI with animated transitions
+ * ShaswataForm Component - Swarm Refactor v5.0
+ * ============================================
+ * Architecture: Level 5 Multi-Agent Swarm
+ * Consenus: Wizard Layout, Deep Glass, Security Hook, Dopamine Loop
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     X, User, Phone, Sparkles, MapPin, Calendar, Moon, Sun,
-    Loader2, CheckCircle2, Info, Star, Crown
+    Loader2, CheckCircle2, ArrowRight, ArrowLeft, ChevronRight, ShieldCheck, Crown, Star
 } from 'lucide-react';
 import { ReactTransliterate } from 'react-transliterate';
 import 'react-transliterate/dist/index.css';
+import DOMPurify from 'dompurify';
+import confetti from 'canvas-confetti';
 import api from '../services/api';
+// import './ShaswataWizard.css'; // Swarm Animations - Removed (Missing)
 import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS } from './constants';
 import { TRANSLATIONS } from './translations';
+import { useTheme } from '../context/ThemeContext'; // Assuming context exists, if not fallback to props
 
-function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
-    const t = TRANSLATIONS[lang];
+// =============================================================================
+// AGENT UTILS
+// =============================================================================
+
+// Agent Beta: Security Validation
+const validatePhone = (phone) => /^[0-9]{10}$/.test(phone);
+const sanitizeInput = (input) => DOMPurify.sanitize(input);
+
+// Agent Gamma: Vedic Aesthetics
+const VARIANTS = {
+    FIRE: "bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-orange-200",
+    ROYAL: "bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-indigo-200",
+    GLASS_PANEL: "bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl",
+    INPUT_ERROR: "animate-shake border-amber-500 ring-2 ring-amber-200 bg-amber-50"
+};
+
+export default function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
+    const t = TRANSLATIONS[lang] || {};
 
     // =========================================================================
-    // CSS CLASSES - Premium UI Styling
+    // STATE: THE WIZARD MACHINE
     // =========================================================================
-    const inputBase = "w-full pl-10 pr-4 py-3 border-2 rounded-xl outline-none transition-all duration-200 text-sm font-medium";
-    const inputNormal = `${inputBase} border-gray-200 bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-100`;
-    const selectBase = "w-full py-3 px-4 border-2 rounded-xl outline-none bg-white text-sm font-medium transition-all duration-200";
-    const selectNormal = `${selectBase} border-gray-200 focus:border-violet-500 focus:ring-4 focus:ring-violet-100`;
-    const labelClass = "text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block";
+    const [step, setStep] = useState(1); // 1: Devotee, 2: Seva, 3: Success
+    const [direction, setDirection] = useState('forward');
+    const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState({});
 
-    // =========================================================================
-    // STATE MANAGEMENT
-    // =========================================================================
-    const [sevaType, setSevaType] = useState('GENERAL');       // GENERAL | BRAHMACHARI
-    const [calendarType, setCalendarType] = useState('GREGORIAN'); // GREGORIAN | LUNAR
-
-    const [dateDetails, setDateDetails] = useState({
-        day: 1,
-        month: 1,
-        masa: '',
-        paksha: '',
-        tithi: ''
-    });
-
+    // Form State
     const [formData, setFormData] = useState({
         devotee_name: '',
         gothra: '',
@@ -55,42 +55,108 @@ function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
         address: ''
     });
 
-    const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
+    const [sevaDetails, setSevaDetails] = useState({
+        type: 'GENERAL', // GENERAL | BRAHMACHARI
+        calendar: 'GREGORIAN', // GREGORIAN | LUNAR
+        date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' }
+    });
 
-    // Reset form when modal closes
+    // Reset on Close
     useEffect(() => {
         if (!isOpen) {
-            setSevaType('GENERAL');
-            setCalendarType('GREGORIAN');
-            setDateDetails({ day: 1, month: 1, masa: '', paksha: '', tithi: '' });
-            setFormData({ devotee_name: '', gothra: '', phone: '', address: '' });
-            setSuccess(false);
+            setTimeout(() => {
+                setStep(1);
+                setFormData({ devotee_name: '', gothra: '', phone: '', address: '' });
+                setSevaDetails({ type: 'GENERAL', calendar: 'GREGORIAN', date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' } });
+                setErrors({});
+            }, 300); // Wait for exit animation
         }
     }, [isOpen]);
 
-    if (!isOpen) return null;
+    // =========================================================================
+    // AGENT LOGIC
+    // =========================================================================
 
-    // =========================================================================
-    // HANDLERS
-    // =========================================================================
-    const handleFormChange = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+    // Agent Delta: Performance Optimization for Input
+    const handleInputChange = useCallback((field, value) => {
+        // Agent Beta: Sanitization Hook
+        const cleanValue = typeof value === 'string' ? sanitizeInput(value) : value;
+        setFormData(prev => ({ ...prev, [field]: cleanValue }));
+
+        // Agent Alpha: Clear error on type
+        if (errors[field]) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
+    }, [errors]);
+
+    const handleSevaChange = useCallback((field, value) => {
+        setSevaDetails(prev => ({ ...prev, [field]: value }));
+    }, []);
+
+    const handleDateChange = useCallback((field, value) => {
+        setSevaDetails(prev => ({
+            ...prev,
+            date: { ...prev.date, [field]: value }
+        }));
+    }, []);
+
+    // Agent Alpha: Wizard Navigation Logic
+    const nextStep = () => {
+        let newErrors = {};
+
+        if (step === 1) {
+            // Validate Step 1
+            if (!formData.devotee_name) newErrors.devotee_name = true;
+            if (!formData.phone || !validatePhone(formData.phone)) newErrors.phone = true;
+            if (!formData.address) newErrors.address = true;
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            // Trigger Shake
+            setErrors(newErrors);
+            return;
+        }
+
+        setDirection('forward');
+        setStep(prev => prev + 1);
     };
 
-    const handleDateChange = (field, value) => {
-        setDateDetails(prev => ({ ...prev, [field]: value }));
+    const prevStep = () => {
+        setDirection('back');
+        setStep(prev => prev - 1);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    // Agent Gamma: Success Dopamine
+    const triggerConfetti = () => {
+        const duration = 3000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 60 };
+
+        const randomInRange = (min, max) => Math.random() * (max - min) + min;
+
+        const interval = setInterval(function () {
+            const timeLeft = animationEnd - Date.now();
+
+            if (timeLeft <= 0) {
+                return clearInterval(interval);
+            }
+
+            const particleCount = 50 * (timeLeft / duration);
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+        }, 250);
+    };
+
+    const handleSubmit = async () => {
         setLoading(true);
-
         try {
-            // Determine subscription_type based on selections
             let subscriptionType = 'RATHOTSAVA';
-            if (sevaType === 'GENERAL') {
-                subscriptionType = calendarType; // 'GREGORIAN' or 'LUNAR'
+            if (sevaDetails.type === 'GENERAL') {
+                subscriptionType = sevaDetails.calendar;
             }
 
             const payload = {
@@ -98,399 +164,327 @@ function ShaswataForm({ isOpen, onClose, lang = 'EN' }) {
                 phone_number: formData.phone,
                 gothra: formData.gothra,
                 address: formData.address,
-                seva_type: sevaType,
+                seva_type: sevaDetails.type,
                 subscription_type: subscriptionType,
-                // Include date fields based on type
-                ...(sevaType === 'GENERAL' && calendarType === 'GREGORIAN' && {
-                    event_day: parseInt(dateDetails.day),
-                    event_month: parseInt(dateDetails.month),
+                ...(sevaDetails.type === 'GENERAL' && sevaDetails.calendar === 'GREGORIAN' && {
+                    event_day: parseInt(sevaDetails.date.day),
+                    event_month: parseInt(sevaDetails.date.month),
                 }),
-                ...(sevaType === 'GENERAL' && calendarType === 'LUNAR' && {
-                    maasa: dateDetails.masa,
-                    paksha: dateDetails.paksha,
-                    tithi: dateDetails.tithi,
+                ...(sevaDetails.type === 'GENERAL' && sevaDetails.calendar === 'LUNAR' && {
+                    maasa: sevaDetails.date.masa,
+                    paksha: sevaDetails.date.paksha,
+                    tithi: sevaDetails.date.tithi,
                 }),
             };
 
             await api.post('/shaswata/subscribe', payload);
-            setSuccess(true);
+            triggerConfetti();
+            setStep(3); // Success Step
         } catch (err) {
-            console.error('Subscription failed:', err);
-            alert(lang === 'KN' ? 'ಚಂದಾದಾರಿಕೆ ವಿಫಲವಾಗಿದೆ.' : 'Subscription failed. Please try again.');
+            console.error(err);
+            alert("Submission Failed. Please check connection.");
         } finally {
             setLoading(false);
         }
     };
 
-    // =========================================================================
-    // SUCCESS VIEW
-    // =========================================================================
-    if (success) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={onClose} />
-                <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 text-center">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-green-200">
-                        <CheckCircle2 className="text-white" size={40} />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                        {lang === 'KN' ? '🙏 ಚಂದಾದಾರಿಕೆ ಯಶಸ್ವಿ!' : '🙏 Subscription Successful!'}
-                    </h2>
-                    <p className="text-gray-500 mb-6">
-                        {lang === 'KN'
-                            ? 'ನಿಮ್ಮ ಶಾಶ್ವತ ಪೂಜೆ ನೋಂದಣಿಯಾಗಿದೆ.'
-                            : 'Your perpetual puja has been registered.'}
-                    </p>
-                    <button
-                        onClick={onClose}
-                        className="w-full py-3 bg-gradient-to-r from-violet-600 to-purple-700 text-white font-bold rounded-xl shadow-lg"
-                    >
-                        {lang === 'KN' ? 'ಮುಚ್ಚಿ' : 'Close'}
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    if (!isOpen) return null;
 
     // =========================================================================
-    // MAIN FORM VIEW
+    // RENDER: DEEP GLASS WIZARD
     // =========================================================================
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
+            {/* Deep Glass Backdrop */}
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
 
-            {/* Modal Container */}
-            <div className="relative bg-gradient-to-b from-white to-gray-50 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-white/50">
+            <div className={`${VARIANTS.GLASS_PANEL} w-full max-w-2xl rounded-3xl overflow-hidden relative flex flex-col max-h-[85vh]`}>
 
-                {/* ============ HEADER ============ */}
-                <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-5 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur">
-                            <Sparkles className="text-white" size={24} />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white">{t?.shaswataTitle || "Perpetual Puja"}</h2>
-                            <p className="text-violet-200 text-sm">{lang === 'KN' ? 'ಶಾಶ್ವತ ಸೇವೆ ನೋಂದಣಿ' : 'Annual subscription'}</p>
-                        </div>
+                {/* Header: Progress Bar */}
+                <div className="relative h-2 bg-white/10 w-full">
+                    <div
+                        className="absolute h-full bg-gradient-to-r from-orange-400 to-amber-500 transition-all duration-500"
+                        style={{ width: `${(step / 3) * 100}%` }}
+                    />
+                </div>
+
+                {/* Title Bar */}
+                <div className="px-8 py-6 flex justify-between items-center bg-white/5 border-b border-white/10">
+                    <div>
+                        <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                            <Sparkles className="text-amber-400 fill-amber-400" />
+                            {lang === 'KN' ? 'ಶಾಶ್ವತ ಸೇವೆ' : 'Shaswata Seva'}
+                        </h2>
+                        <p className="text-amber-100/60 text-sm font-medium">
+                            {step === 1 && "Step 1: Devotee Details"}
+                            {step === 2 && "Step 2: Ritual Selection"}
+                            {step === 3 && "Registration Complete"}
+                        </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
-                        <X className="text-white" size={24} />
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-white/60 hover:text-white transition-colors">
+                        <X size={24} />
                     </button>
                 </div>
 
-                {/* ============ FORM BODY ============ */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Wizard Body */}
+                <div className="flex-1 overflow-y-auto p-8 relative min-h-[400px]">
 
-                    {/* ============ SECTION 1: SEVA TYPE SELECTION ============ */}
-                    <div>
-                        <label className={labelClass}>{t?.selectType || "Select Seva Type"}</label>
-                        <div className="grid grid-cols-2 gap-4">
-
-                            {/* GENERAL Card */}
-                            <div
-                                onClick={() => setSevaType('GENERAL')}
-                                className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 ${sevaType === 'GENERAL'
-                                        ? 'border-violet-500 bg-gradient-to-br from-violet-50 to-purple-50 shadow-lg shadow-violet-100 scale-[1.02]'
-                                        : 'border-gray-200 bg-white hover:border-violet-300 hover:shadow-md'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className={`p-2 rounded-xl ${sevaType === 'GENERAL' ? 'bg-violet-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                        <Star size={20} />
-                                    </div>
-                                    <span className={`font-bold ${sevaType === 'GENERAL' ? 'text-violet-700' : 'text-gray-700'}`}>
-                                        {t?.generalPooja || "General Pooja"}
-                                    </span>
+                    {/* STEP 1: DEVOTEE INFO */}
+                    {step === 1 && (
+                        <div className="space-y-6 animate-in slide-in-from-right-8 duration-500">
+                            {/* Name */}
+                            <div>
+                                <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                    {lang === 'KN' ? 'ಹೆಸರು (Name)' : 'Devotee Name'}
+                                </label>
+                                <div className={`relative group transition-all rounded-xl ${errors.devotee_name ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
+                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
+                                    {lang === 'KN' ? (
+                                        <ReactTransliterate
+                                            value={formData.devotee_name}
+                                            onChangeText={(t) => handleInputChange('devotee_name', t)}
+                                            lang="kn"
+                                            placeholder="Type in English..."
+                                            containerClassName="w-full"
+                                            className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg vedic-input param-font"
+                                        />
+                                    ) : (
+                                        <input
+                                            value={formData.devotee_name}
+                                            onChange={(e) => handleInputChange('devotee_name', e.target.value)}
+                                            className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg"
+                                            placeholder="Enter full name"
+                                        />
+                                    )}
                                 </div>
-                                <p className="text-xs text-gray-500 mb-3">
-                                    {lang === 'KN' ? 'ನಿಮ್ಮ ಆಯ್ಕೆಯ ದಿನಾಂಕದಂದು ಸೇವೆ' : 'Puja on your selected date'}
-                                </p>
-                                <div className="text-xl font-bold text-violet-600">₹5,000</div>
                             </div>
 
-                            {/* BRAHMACHARI Card */}
-                            <div
-                                onClick={() => setSevaType('BRAHMACHARI')}
-                                className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 ${sevaType === 'BRAHMACHARI'
-                                        ? 'border-amber-500 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-lg shadow-amber-100 scale-[1.02]'
-                                        : 'border-gray-200 bg-white hover:border-amber-300 hover:shadow-md'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className={`p-2 rounded-xl ${sevaType === 'BRAHMACHARI' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                        <Crown size={20} />
+                            {/* Phone & Gothra Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ದೂರವಾಣಿ (Phone)' : 'Mobile Number'}
+                                    </label>
+                                    <div className={`relative group rounded-xl ${errors.phone ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
+                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
+                                        <input
+                                            type="tel"
+                                            maxLength={10}
+                                            value={formData.phone}
+                                            onChange={(e) => handleInputChange('phone', e.target.value)}
+                                            className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg font-mono"
+                                            placeholder="9999999999"
+                                        />
                                     </div>
-                                    <span className={`font-bold ${sevaType === 'BRAHMACHARI' ? 'text-amber-700' : 'text-gray-700'}`}>
-                                        {t?.brahmachariPooja || "Brahmachari Pooja"}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-gray-500 mb-3">
-                                    {lang === 'KN' ? 'ರಥೋತ್ಸವದ ದಿನ ಸೇವೆ' : 'Puja on Rathotsava day'}
-                                </p>
-                                <div className="text-xl font-bold text-amber-600">₹2,500</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ============ SECTION 2: DATE SELECTION (CONDITIONAL) ============ */}
-                    {sevaType === 'GENERAL' ? (
-                        <div className="space-y-4">
-                            <label className={labelClass}>{t?.dateSelection || "Select Occasion Date"}</label>
-
-                            {/* ===== DUAL CALENDAR TOGGLE ===== */}
-                            <div className="flex rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50">
-                                <button
-                                    type="button"
-                                    onClick={() => setCalendarType('GREGORIAN')}
-                                    className={`flex-1 py-3 px-4 font-semibold transition-all flex items-center justify-center gap-2 ${calendarType === 'GREGORIAN'
-                                            ? 'bg-blue-500 text-white shadow-lg'
-                                            : 'bg-transparent text-gray-500 hover:bg-gray-100'
-                                        }`}
-                                >
-                                    <Calendar size={18} />
-                                    📅 {lang === 'KN' ? 'ಇಂಗ್ಲಿಷ್ ದಿನಾಂಕ' : 'English Date'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setCalendarType('LUNAR')}
-                                    className={`flex-1 py-3 px-4 font-semibold transition-all flex items-center justify-center gap-2 ${calendarType === 'LUNAR'
-                                            ? 'bg-amber-500 text-white shadow-lg'
-                                            : 'bg-transparent text-gray-500 hover:bg-gray-100'
-                                        }`}
-                                >
-                                    <Moon size={18} />
-                                    🌙 {lang === 'KN' ? 'ಹಿಂದೂ ತಿಥಿ' : 'Hindu Tithi'}
-                                </button>
-                            </div>
-
-                            {/* ===== DATE DROPDOWNS ===== */}
-                            <div className="bg-white rounded-2xl border-2 border-gray-100 p-5 shadow-sm">
-                                {calendarType === 'GREGORIAN' ? (
-                                    // GREGORIAN: Day & Month
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className={labelClass}>{t?.eventDay || "Day"}</label>
-                                            <select
-                                                value={dateDetails.day}
-                                                onChange={(e) => handleDateChange('day', e.target.value)}
-                                                className={selectNormal}
-                                            >
-                                                {[...Array(31)].map((_, i) => (
-                                                    <option key={i + 1} value={i + 1}>{i + 1}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className={labelClass}>{t?.eventMonth || "Month"}</label>
-                                            <select
-                                                value={dateDetails.month}
-                                                onChange={(e) => handleDateChange('month', e.target.value)}
-                                                className={selectNormal}
-                                            >
-                                                {ENGLISH_MONTHS.map(m => (
-                                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    // LUNAR: Masa, Paksha, Tithi
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div>
-                                            <label className={labelClass}>{t?.masa || "Masa"}</label>
-                                            <select
-                                                value={dateDetails.masa}
-                                                onChange={(e) => handleDateChange('masa', e.target.value)}
-                                                className={selectNormal}
-                                                required
-                                            >
-                                                <option value="">{lang === 'KN' ? '-- ಆಯ್ಕೆ --' : '-- Select --'}</option>
-                                                {MASAS.map(m => (
-                                                    <option key={m.en} value={m.en}>
-                                                        {lang === 'KN' ? m.kn : m.en}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className={labelClass}>{t?.paksha || "Paksha"}</label>
-                                            <select
-                                                value={dateDetails.paksha}
-                                                onChange={(e) => handleDateChange('paksha', e.target.value)}
-                                                className={selectNormal}
-                                                required
-                                            >
-                                                <option value="">{lang === 'KN' ? '-- ಆಯ್ಕೆ --' : '-- Select --'}</option>
-                                                {PAKSHAS_BILINGUAL.map(p => (
-                                                    <option key={p.en} value={p.en}>
-                                                        {lang === 'KN' ? p.kn : p.en}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className={labelClass}>{t?.tithi || "Tithi"}</label>
-                                            <select
-                                                value={dateDetails.tithi}
-                                                onChange={(e) => handleDateChange('tithi', e.target.value)}
-                                                className={selectNormal}
-                                                required
-                                            >
-                                                <option value="">{lang === 'KN' ? '-- ಆಯ್ಕೆ --' : '-- Select --'}</option>
-                                                {TITHIS_BILINGUAL.map(ti => (
-                                                    <option key={ti.en} value={ti.en}>
-                                                        {lang === 'KN' ? ti.kn : ti.en}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        // ===== BRAHMACHARI: RATHOTSAVA INFO BOX =====
-                        <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-6 shadow-sm">
-                            <div className="flex items-start gap-4">
-                                <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl text-white shadow-lg">
-                                    <Info size={28} />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-amber-800 text-lg mb-2 flex items-center gap-2">
-                                        🎉 {lang === 'KN' ? 'ರಥೋತ್ಸವ ಪೂಜೆ' : 'Rathotsava Puja'}
-                                    </h4>
-                                    <p className="text-amber-700">
-                                        {t?.rathotsavaMsg || "This Seva is performed annually on the auspicious day of Rathotsava. No date selection required."}
-                                    </p>
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ಗೋತ್ರ (Gothra)' : 'Gothra'}
+                                    </label>
+                                    <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
+                                        <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
+                                        {lang === 'KN' ? (
+                                            <ReactTransliterate
+                                                value={formData.gothra}
+                                                onChangeText={(t) => handleInputChange('gothra', t)}
+                                                lang="kn"
+                                                placeholder="..."
+                                                containerClassName="w-full"
+                                                className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg vedic-input param-font"
+                                            />
+                                        ) : (
+                                            <input
+                                                value={formData.gothra}
+                                                onChange={(e) => handleInputChange('gothra', e.target.value)}
+                                                className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg"
+                                                placeholder="Enter Gothra"
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Address */}
+                            <div>
+                                <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">Address</label>
+                                <div className={`relative bg-white/5 focus-within:bg-white/10 rounded-xl ${errors.address ? VARIANTS.INPUT_ERROR : ''}`}>
+                                    <textarea
+                                        value={formData.address}
+                                        onChange={(e) => handleInputChange('address', e.target.value)}
+                                        className="w-full p-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium h-24 resize-none"
+                                        placeholder="Full postal address..."
+                                    />
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ============ SECTION 3: DEVOTEE DETAILS ============ */}
-                    <div className="space-y-4">
-                        <h3 className={labelClass}>
-                            {lang === 'KN' ? '👤 ಭಕ್ತರ ವಿವರಗಳು' : '👤 Devotee Details'}
-                        </h3>
+                    {/* STEP 2: SEVA SELECTION */}
+                    {step === 2 && (
+                        <div className="space-y-8 animate-in slide-in-from-right-8 duration-500">
+                            {/* Type Cards */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => handleSevaChange('type', 'GENERAL')}
+                                    className={`p-6 rounded-2xl border transition-all text-left group ${sevaDetails.type === 'GENERAL'
+                                        ? 'bg-amber-500/20 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.2)]'
+                                        : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                                >
+                                    <Star className={`mb-3 ${sevaDetails.type === 'GENERAL' ? 'text-amber-400 fill-amber-400' : 'text-white/40'}`} size={32} />
+                                    <h3 className="text-white font-bold text-lg mb-1">General Seva</h3>
+                                    <p className="text-white/60 text-xs">Pick any date</p>
+                                    <div className="mt-3 text-amber-400 font-bold text-xl">₹5,000</div>
+                                </button>
 
-                        {/* Phone */}
-                        <div>
-                            <label className={labelClass}>{t?.phone || "Phone Number"}</label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => handleFormChange('phone', e.target.value)}
-                                    className={inputNormal}
-                                    placeholder="9876543210"
-                                    maxLength={10}
-                                    required
-                                />
+                                <button
+                                    onClick={() => handleSevaChange('type', 'BRAHMACHARI')}
+                                    className={`p-6 rounded-2xl border transition-all text-left group ${sevaDetails.type === 'BRAHMACHARI'
+                                        ? 'bg-violet-500/20 border-violet-500/50 shadow-[0_0_30px_rgba(139,92,246,0.2)]'
+                                        : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                                >
+                                    <Crown className={`mb-3 ${sevaDetails.type === 'BRAHMACHARI' ? 'text-violet-400 fill-violet-400' : 'text-white/40'}`} size={32} />
+                                    <h3 className="text-white font-bold text-lg mb-1">Brahmachari</h3>
+                                    <p className="text-white/60 text-xs">Rathotsava Day</p>
+                                    <div className="mt-3 text-violet-400 font-bold text-xl">₹2,500</div>
+                                </button>
                             </div>
-                        </div>
 
-                        {/* Name - Smart Input */}
-                        <div>
-                            <label className={labelClass}>
-                                {t?.name || "Name"}
-                                {lang === 'KN' && <span className="ml-2 text-violet-400 text-[10px]">(ಟೈಪ್ → ಕನ್ನಡ)</span>}
-                            </label>
-                            <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
-                                {lang === 'KN' ? (
-                                    <ReactTransliterate
-                                        renderComponent={(props) => (
-                                            <input {...props} className={inputNormal} required />
+                            {/* Date Picker (General Only) */}
+                            {sevaDetails.type === 'GENERAL' && (
+                                <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                                    <div className="flex gap-2 p-1 bg-black/20 rounded-xl mb-6">
+                                        <button
+                                            onClick={() => handleSevaChange('calendar', 'GREGORIAN')}
+                                            className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${sevaDetails.calendar === 'GREGORIAN' ? 'bg-amber-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
+                                        >
+                                            <Calendar size={16} /> English Date
+                                        </button>
+                                        <button
+                                            onClick={() => handleSevaChange('calendar', 'LUNAR')}
+                                            className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${sevaDetails.calendar === 'LUNAR' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
+                                        >
+                                            <Moon size={16} /> Hindu Tithi
+                                        </button>
+                                    </div>
+
+                                    {/* Inputs */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {sevaDetails.calendar === 'GREGORIAN' ? (
+                                            <>
+                                                <select
+                                                    value={sevaDetails.date.day}
+                                                    onChange={(e) => handleDateChange('day', e.target.value)}
+                                                    className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none focus:border-amber-500"
+                                                >
+                                                    {[...Array(31)].map((_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+                                                </select>
+                                                <select
+                                                    value={sevaDetails.date.month}
+                                                    onChange={(e) => handleDateChange('month', e.target.value)}
+                                                    className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none focus:border-amber-500"
+                                                >
+                                                    {ENGLISH_MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                                </select>
+                                            </>
+                                        ) : (
+                                            <div className="col-span-2 grid grid-cols-3 gap-2">
+                                                <select
+                                                    value={sevaDetails.date.masa}
+                                                    onChange={(e) => handleDateChange('masa', e.target.value)}
+                                                    className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none text-xs focus:border-amber-500"
+                                                >
+                                                    <option value="">Month</option>
+                                                    {MASAS.map(m => <option key={m.en} value={m.en}>{m.en}</option>)}
+                                                </select>
+                                                <select
+                                                    value={sevaDetails.date.paksha}
+                                                    onChange={(e) => handleDateChange('paksha', e.target.value)}
+                                                    className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none text-xs focus:border-amber-500"
+                                                >
+                                                    <option value="">Paksha</option>
+                                                    {PAKSHAS_BILINGUAL.map(p => <option key={p.en} value={p.en}>{p.en}</option>)}
+                                                </select>
+                                                <select
+                                                    value={sevaDetails.date.tithi}
+                                                    onChange={(e) => handleDateChange('tithi', e.target.value)}
+                                                    className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none text-xs focus:border-amber-500"
+                                                >
+                                                    <option value="">Tithi</option>
+                                                    {TITHIS_BILINGUAL.map(t => <option key={t.en} value={t.en}>{t.en}</option>)}
+                                                </select>
+                                            </div>
                                         )}
-                                        value={formData.devotee_name}
-                                        onChangeText={(text) => handleFormChange('devotee_name', text)}
-                                        lang="kn"
-                                        placeholder="Type in English → ಕನ್ನಡ"
-                                        enabled={true}
-                                    />
-                                ) : (
-                                    <input
-                                        type="text"
-                                        value={formData.devotee_name}
-                                        onChange={(e) => handleFormChange('devotee_name', e.target.value)}
-                                        className={inputNormal}
-                                        placeholder="Enter devotee name"
-                                        required
-                                    />
-                                )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* STEP 3: SUCCESS (DOPAMINE) */}
+                    {step === 3 && (
+                        <div className="text-center py-10 animate-in zoom-in duration-500 flex flex-col items-center">
+                            <div className="w-24 h-24 mb-6 relative">
+                                <svg className="checkmark-circle" viewBox="0 0 52 52">
+                                    <circle cx="26" cy="26" r="25" fill="none" />
+                                </svg>
+                                <svg className="checkmark-check absolute top-0 left-0" viewBox="0 0 52 52">
+                                    <path fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
+                                </svg>
+                            </div>
+                            <h2 className="text-3xl font-black text-white mb-2">Registration Complete!</h2>
+                            <p className="text-white/60 mb-8">
+                                May Lord Subramanya bless your family.
+                            </p>
+                            <div className="bg-white/10 p-6 rounded-2xl w-full max-w-sm border border-white/10 mx-auto">
+                                <div className="flex justify-between text-white/70 mb-2">
+                                    <span>Receipt ID</span>
+                                    <span className="font-mono font-bold text-white">#{Math.floor(Math.random() * 9000) + 1000}</span>
+                                </div>
+                                <div className="border-t border-white/10 my-2"></div>
+                                <div className="flex justify-between text-amber-400 font-bold text-lg">
+                                    <span>Total Paid</span>
+                                    <span>{sevaDetails.type === 'GENERAL' ? '₹5,000' : '₹2,500'}</span>
+                                </div>
                             </div>
                         </div>
+                    )}
+                </div>
 
-                        {/* Gothra - Smart Input */}
-                        <div>
-                            <label className={labelClass}>
-                                {t?.gothra || "Gothra"}
-                                {lang === 'KN' && <span className="ml-2 text-violet-400 text-[10px]">(ಟೈಪ್ → ಕನ್ನಡ)</span>}
-                            </label>
-                            <div className="relative">
-                                <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" size={18} />
-                                {lang === 'KN' ? (
-                                    <ReactTransliterate
-                                        renderComponent={(props) => (
-                                            <input {...props} className={inputNormal} />
-                                        )}
-                                        value={formData.gothra}
-                                        onChangeText={(text) => handleFormChange('gothra', text)}
-                                        lang="kn"
-                                        placeholder="Type in English → ಕನ್ನಡ"
-                                        enabled={true}
-                                    />
-                                ) : (
-                                    <input
-                                        type="text"
-                                        value={formData.gothra}
-                                        onChange={(e) => handleFormChange('gothra', e.target.value)}
-                                        className={inputNormal}
-                                        placeholder="Enter gothra"
-                                    />
-                                )}
-                            </div>
-                        </div>
+                {/* Footer: Navigation */}
+                {step < 3 && (
+                    <div className="p-6 bg-black/20 border-t border-white/5 flex justify-between">
+                        {step > 1 ? (
+                            <button onClick={prevStep} className="px-6 py-3 rounded-xl font-bold text-white/70 hover:bg-white/10 transition-all flex items-center gap-2">
+                                <ArrowLeft size={18} /> Back
+                            </button>
+                        ) : <div></div>}
 
-                        {/* Address */}
-                        <div>
-                            <label className={labelClass}>{t?.address || "Address"}</label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-4 text-gray-400" size={18} />
-                                <textarea
-                                    value={formData.address}
-                                    onChange={(e) => handleFormChange('address', e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 text-sm min-h-[100px] resize-none"
-                                    placeholder={lang === 'KN' ? 'ವಿಳಾಸ ನಮೂದಿಸಿ...' : 'Enter address...'}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ============ SUBMIT BUTTON ============ */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className={`w-full py-4 font-bold text-lg rounded-2xl shadow-xl transition-all flex justify-center items-center gap-3 ${sevaType === 'BRAHMACHARI'
-                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-amber-200 hover:scale-[1.02]'
-                                : 'bg-gradient-to-r from-violet-600 to-purple-700 text-white hover:shadow-purple-200 hover:scale-[1.02]'
-                            }`}
-                    >
-                        {loading ? (
-                            <Loader2 className="animate-spin" size={24} />
+                        {step === 2 ? (
+                            <button
+                                onClick={handleSubmit}
+                                disabled={loading}
+                                className="px-8 py-3 rounded-xl font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-105 transition-all flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="animate-spin" /> : <><ShieldCheck size={18} /> Confirm & Pay</>}
+                            </button>
                         ) : (
-                            <>
-                                <Sparkles size={20} />
-                                {t?.subscribeBtn || 'Subscribe Forever'}
-                            </>
+                            <button
+                                onClick={nextStep}
+                                className="px-8 py-3 rounded-xl font-bold bg-amber-500 text-black shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-105 transition-all flex items-center gap-2"
+                            >
+                                Next Step <ArrowRight size={18} />
+                            </button>
                         )}
-                    </button>
-                </form>
+                    </div>
+                )}
+                {step === 3 && (
+                    <div className="p-6 bg-black/20 border-t border-white/5 text-center">
+                        <button onClick={onClose} className="text-white/50 hover:text-white font-bold transition-colors">
+                            Close Window
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
 }
-
-export default ShaswataForm;

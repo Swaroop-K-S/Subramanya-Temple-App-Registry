@@ -15,6 +15,61 @@ import { formatDateReport } from '../utils/dateUtils';
 
 const COLORS = ['#F97316', '#8B5CF6', '#10B981', '#F43F5E'];
 
+// Rerender Assassin: Memoized Bar Chart
+const MemoizedBarChart = React.memo(({ data, theme, isDarkMode }) => (
+    <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme === 'dark' ? '#334155' : '#E5E7EB'} opacity={0.3} />
+            <XAxis type="number" hide />
+            <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12, fill: theme === 'dark' ? '#94a3b8' : '#5d4037', fontWeight: 600 }} interval={0} />
+            <RechartsTooltip
+                contentStyle={{
+                    backgroundColor: isDarkMode ? '#1e293b' : 'rgba(255, 255, 255, 0.95)',
+                    borderColor: isDarkMode ? '#334155' : '#F39C12',
+                    color: isDarkMode ? '#f1f5f9' : '#5d4037',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+                itemStyle={{ color: isDarkMode ? '#CBD5E1' : '#E67E22', fontWeight: 'bold' }}
+                cursor={{ fill: '#334155', opacity: 0.1 }}
+            />
+            <Bar dataKey="count" fill={theme === 'dark' ? '#CBD5E1' : '#E67E22'} radius={[0, 6, 6, 0]} barSize={24} name="Count" />
+        </BarChart>
+    </ResponsiveContainer>
+));
+
+// Rerender Assassin: Memoized Pie Chart
+const MemoizedPieChart = React.memo(({ data, isDarkMode }) => (
+    <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+            <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={5}
+                dataKey="value"
+            >
+                {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                ))}
+            </Pie>
+            <RechartsTooltip
+                contentStyle={{
+                    backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                    backdropFilter: 'blur(12px)',
+                    borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.5)',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)',
+                    padding: '12px'
+                }}
+            />
+            <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase">{value}</span>} />
+        </PieChart>
+    </ResponsiveContainer>
+));
+
 // Helper: Get Local YYYY-MM-DD
 const getLocalDateStr = (date) => {
     const year = date.getFullYear();
@@ -75,40 +130,22 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
         window.open(url, '_blank');
     };
 
-    // Generate PDF
-    const downloadPDF = () => {
+    // Generate PDF (Issue #5)
+    const handlePdfExport = () => {
         if (!reportData) return;
         const doc = new jsPDF();
 
         // Title
         doc.setFontSize(18);
-        doc.text("S.T.A.R. Financial Report", 14, 15);
-
-        // Date Range
-        doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(`Date Range: ${formatDateReport(dateRange.start)} to ${formatDateReport(dateRange.end)}`, 14, 25);
-
-        // Table
-        const tableColumn = ["Seva Name", "Count", "Revenue"];
-        const tableRows = [];
-
-        reportData.seva_stats.forEach(seva => {
-            const sevaData = [
-                seva.name,
-                seva.count,
-                formatCurrency(seva.revenue)
-            ];
-            tableRows.push(sevaData);
-        });
+        doc.text('Financial Report', 14, 20);
 
         doc.autoTable({
-            head: [tableColumn],
-            body: tableRows,
             startY: 30,
+            head: [['Seva Name', 'Count', 'Revenue']],
+            body: reportData.seva_stats.map(s => [s.name, s.count, formatCurrency(s.revenue)])
         });
 
-        doc.save('Seva_Report.pdf');
+        doc.save(`Temple_Report_${dateRange.start}.pdf`);
     };
 
 
@@ -209,40 +246,40 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
 
                 {reportData && !loading && !error && (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                        {/* Stats Row */}
+                        {/* Stats Row - Deep Glass V5 */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Total */}
-                            <div className="glass-card p-6 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <IndianRupee size={80} className="text-temple-saffron" />
+                            {/* Total - Premium Saffron Glass */}
+                            <div className="bg-gradient-to-br from-orange-50/90 via-orange-50/50 to-white/30 dark:from-slate-900/90 dark:via-slate-800/60 dark:to-slate-900/40 backdrop-blur-xl p-8 rounded-[2rem] border border-orange-200/50 dark:border-white/10 shadow-xl relative overflow-hidden group hover:-translate-y-2 transition-transform duration-500">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                                    <IndianRupee size={100} className="text-temple-saffron" />
                                 </div>
-                                <p className="text-temple-stone dark:text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">Total Collection</p>
-                                <h3 className="text-4xl font-black font-heading text-temple-brown dark:text-amber-100">{formatCurrency(reportData.financials.total)}</h3>
-                                <p className="text-xs text-slate-400 mt-2 font-medium">
-                                    For {formatDateReport(dateRange.start)} to {formatDateReport(dateRange.end)}
+                                <p className="text-temple-saffron-dark dark:text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em] mb-2">Total Collection</p>
+                                <h3 className="text-5xl font-black font-heading text-temple-brown dark:text-amber-100 drop-shadow-sm">{formatCurrency(reportData.financials.total)}</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-500 mt-3 font-medium flex items-center gap-1">
+                                    <Calendar size={12} /> {formatDateReport(dateRange.start)} - {formatDateReport(dateRange.end)}
                                 </p>
                             </div>
 
-                            {/* Cash */}
-                            <div className="glass-card p-6">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-yellow-600 dark:text-yellow-400">
-                                        <Banknote size={20} />
+                            {/* Cash - Gold Glass */}
+                            <div className="bg-gradient-to-br from-white/90 via-white/60 to-white/30 dark:from-slate-900/90 dark:via-slate-900/60 dark:to-slate-900/30 backdrop-blur-xl p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-xl transition-all hover:scale-[1.02]">
+                                <div className="flex items-center gap-4 mb-3">
+                                    <div className="p-3 bg-yellow-100/50 dark:bg-yellow-900/20 rounded-xl text-yellow-600 dark:text-yellow-400 shadow-sm">
+                                        <Banknote size={24} />
                                     </div>
-                                    <p className="text-temple-stone dark:text-slate-400 font-bold text-xs uppercase tracking-wider">Cash</p>
+                                    <p className="text-temple-stone dark:text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">Cash</p>
                                 </div>
-                                <h3 className="text-2xl font-bold font-heading text-temple-brown dark:text-slate-200">{formatCurrency(reportData.financials.cash)}</h3>
+                                <h3 className="text-3xl font-black font-heading text-temple-brown dark:text-slate-200">{formatCurrency(reportData.financials.cash)}</h3>
                             </div>
 
-                            {/* UPI */}
-                            <div className="glass-card p-6">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400">
-                                        <CreditCard size={20} />
+                            {/* UPI - Emerald Glass */}
+                            <div className="bg-gradient-to-br from-white/90 via-white/60 to-white/30 dark:from-slate-900/90 dark:via-slate-900/60 dark:to-slate-900/30 backdrop-blur-xl p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-xl transition-all hover:scale-[1.02]">
+                                <div className="flex items-center gap-4 mb-3">
+                                    <div className="p-3 bg-emerald-100/50 dark:bg-emerald-900/20 rounded-xl text-emerald-600 dark:text-emerald-400 shadow-sm">
+                                        <CreditCard size={24} />
                                     </div>
-                                    <p className="text-temple-stone dark:text-slate-400 font-bold text-xs uppercase tracking-wider">UPI Online</p>
+                                    <p className="text-temple-stone dark:text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">UPI Online</p>
                                 </div>
-                                <h3 className="text-2xl font-bold font-heading text-temple-brown dark:text-slate-200">{formatCurrency(reportData.financials.upi)}</h3>
+                                <h3 className="text-3xl font-black font-heading text-temple-brown dark:text-slate-200">{formatCurrency(reportData.financials.upi)}</h3>
                             </div>
                         </div>
 
@@ -252,25 +289,7 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                             <div className="glass-card p-6 flex flex-col">
                                 <h3 className="text-lg font-bold font-heading text-temple-brown dark:text-slate-200 mb-6">Seva Popularity</h3>
                                 <div className="h-[300px] w-full" style={{ minWidth: 0 }}>
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <BarChart data={reportData.seva_stats.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme === 'dark' ? '#334155' : '#E5E7EB'} opacity={0.3} />
-                                            <XAxis type="number" hide />
-                                            <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12, fill: theme === 'dark' ? '#94a3b8' : '#5d4037', fontWeight: 600 }} interval={0} />
-                                            <RechartsTooltip
-                                                contentStyle={{
-                                                    backgroundColor: isDarkMode ? '#1e293b' : 'rgba(255, 255, 255, 0.95)',
-                                                    borderColor: isDarkMode ? '#334155' : '#F39C12',
-                                                    color: isDarkMode ? '#f1f5f9' : '#5d4037',
-                                                    borderRadius: '12px',
-                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                                }}
-                                                itemStyle={{ color: isDarkMode ? '#CBD5E1' : '#E67E22', fontWeight: 'bold' }}
-                                                cursor={{ fill: '#334155', opacity: 0.1 }}
-                                            />
-                                            <Bar dataKey="count" fill={theme === 'dark' ? '#CBD5E1' : '#E67E22'} radius={[0, 6, 6, 0]} barSize={24} name="Count" />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                    <MemoizedBarChart data={reportData.seva_stats.slice(0, 5)} theme={theme} isDarkMode={isDarkMode} />
                                 </div>
                             </div>
 
@@ -278,33 +297,7 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                             <div className="glass-card p-6 flex flex-col">
                                 <h3 className="text-lg font-bold font-heading text-temple-brown dark:text-slate-200 mb-6">Payment Method Split</h3>
                                 <div className="h-[300px] w-full flex items-center justify-center" style={{ minWidth: 0 }}>
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <PieChart>
-                                            <Pie
-                                                data={pieData}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={80}
-                                                paddingAngle={5}
-                                                dataKey="value"
-                                            >
-                                                {pieData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                                                ))}
-                                            </Pie>
-                                            <RechartsTooltip
-                                                contentStyle={{
-                                                    backgroundColor: isDarkMode ? '#1e293b' : 'rgba(255, 255, 255, 0.95)',
-                                                    borderColor: isDarkMode ? '#334155' : '#F39C12',
-                                                    color: isDarkMode ? '#f1f5f9' : '#5d4037',
-                                                    borderRadius: '12px',
-                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                                }}
-                                            />
-                                            <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase">{value}</span>} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                                    <MemoizedPieChart data={pieData} isDarkMode={isDarkMode} />
                                 </div>
                             </div>
                         </div>
@@ -315,7 +308,7 @@ const ReportsDashboard = ({ onBack, lang = 'EN' }) => {
                                 <h3 className="font-bold text-temple-brown dark:text-amber-100 text-sm uppercase tracking-wider">Detailed Breakdown</h3>
                                 <div className="flex items-center gap-3">
                                     <button
-                                        onClick={downloadPDF}
+                                        onClick={handlePdfExport}
                                         className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-all active:scale-95"
                                     >
                                         <FileText size={14} /> Export PDF

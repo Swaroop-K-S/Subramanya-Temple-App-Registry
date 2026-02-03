@@ -203,6 +203,10 @@ def check_todays_pujas() -> dict:
     print("=" * 70)
     
     # Get today's dates
+    # Windows Console Fix: Force UTF-8 for emojis
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding='utf-8')
+
     gregorian = get_todays_gregorian()
     panchangam = get_todays_panchangam()
     
@@ -335,6 +339,17 @@ if __name__ == "__main__":
     
     # Run the daily check
     result = check_todays_pujas()
+
+    # Level 12: The Oracle Integration
+    # Predictive Infrastructure Check
+    try:
+        from oracle_ops import check_forecast_and_scale
+        print("\n\n" + "=" * 70)
+        print("[ORACLE] PREDICTIVE INFRASTRUCTURE CHECK")
+        print("=" * 70)
+        check_forecast_and_scale()
+    except Exception as e:
+        print(f"Oracle Malfunction: {e}")
     
     # Optionally print JSON for integration
     if len(sys.argv) > 1 and sys.argv[1] == "--json":

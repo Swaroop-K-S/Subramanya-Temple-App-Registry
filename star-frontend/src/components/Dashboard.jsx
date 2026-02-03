@@ -4,43 +4,47 @@ import {
     Calendar, Moon, Sun, Search, Filter,
     CheckCircle, Circle, MessageCircle, AlertCircle, Clock, Scroll, ChevronDown, ChevronUp, Star, CloudMoon,
     Flame, Droplets, Flower, Utensils, Crown, Sparkles,
-    ChevronLeft, ChevronRight, Loader2, IndianRupee, MapPin, PartyPopper
+    ChevronLeft, ChevronRight, Loader2, IndianRupee, MapPin, PartyPopper, Plus
 } from 'lucide-react';
 import { TRANSLATIONS } from './translations';
 import api from '../services/api';
+// Omni-UI Components
+import { OmniInput, OmniDropdown, OmniToggle } from './ui/Widgets';
+// Modals
+import BookingModal from './BookingModal';
 
+// --- VEDIC GLASS THEME ENGINE ---
 const getSevaTheme = (sevaName) => {
     const name = (sevaName || '').toLowerCase();
-
-    // Fire / Homa -> Saffron
+    // Fire / Homa -> Ember / Amber
     if (name.includes('archane') || name.includes('homa') || name.includes('mangalarathi'))
-        return { color: 'border-l-temple-saffron', bg: 'bg-orange-50 dark:bg-slate-800/50', text: 'text-temple-saffron-dark dark:text-slate-300', icon: <Flame size={16} className="text-temple-saffron dark:text-slate-400" /> };
-
-    // Water / Abhisheka -> Sky/Cyan
-    if (name.includes('abhisheka') || name.includes('theertha'))
-        return { color: 'border-l-cyan-500', bg: 'bg-cyan-50', text: 'text-cyan-700', icon: <Droplets size={16} className="text-cyan-500" /> };
-
-    // Flower / Alankara -> Rose/Pink
-    if (name.includes('alankara') || name.includes('pushpa'))
-        return { color: 'border-l-rose-400', bg: 'bg-rose-50', text: 'text-rose-700', icon: <Flower size={16} className="text-rose-400" /> };
-
-    // Food / Anna -> Gold
-    if (name.includes('anna') || name.includes('prasada'))
-        return { color: 'border-l-temple-gold', bg: 'bg-amber-50', text: 'text-amber-800', icon: <Utensils size={16} className="text-temple-gold" /> };
-
-    // Shaswata -> Brown/Stone
-    if (name.includes('shaswata') || name.includes('subscription'))
-        return { color: 'border-l-temple-brown', bg: 'bg-stone-50', text: 'text-temple-brown', icon: <Calendar size={16} className="text-temple-brown" /> };
-
-    // Royal -> Indigo/Crown
-    if (name.includes('mahapooja') || name.includes('sarva'))
-        return { color: 'border-l-indigo-500', bg: 'bg-indigo-50', text: 'text-indigo-700', icon: <Crown size={16} className="text-indigo-500" /> };
-
-    // Default -> Saffron
-    return { color: 'border-l-temple-saffron', bg: 'bg-orange-50', text: 'text-temple-saffron-dark', icon: <Sparkles size={16} className="text-temple-saffron" /> };
+        return {
+            card: 'bg-gradient-to-br from-orange-50/80 to-amber-100/30 border-orange-200 dark:from-orange-900/20 dark:to-slate-900',
+            iconBg: 'bg-orange-100 text-orange-600',
+            accent: 'text-orange-700'
+        };
+    // Water / Abhisheka -> Cyan / Sky
+    if (name.includes('abhisheka') || name.includes('theertha') || name.includes('panchamrutha'))
+        return {
+            card: 'bg-gradient-to-br from-cyan-50/80 to-blue-100/30 border-cyan-200 dark:from-cyan-900/20 dark:to-slate-900',
+            iconBg: 'bg-cyan-100 text-cyan-600',
+            accent: 'text-cyan-700'
+        };
+    // Nature / Alankara -> Rose / Pink
+    if (name.includes('alankara') || name.includes('pushpa') || name.includes('flower'))
+        return {
+            card: 'bg-gradient-to-br from-rose-50/80 to-pink-100/30 border-rose-200 dark:from-rose-900/20 dark:to-slate-900',
+            iconBg: 'bg-rose-100 text-rose-600',
+            accent: 'text-rose-700'
+        };
+    // Default -> Slate Glass
+    return {
+        card: 'bg-gradient-to-br from-slate-50/80 to-gray-100/30 border-slate-200 dark:from-slate-800/30 dark:to-slate-900',
+        iconBg: 'bg-slate-100 text-slate-600',
+        accent: 'text-slate-700'
+    };
 };
 
-// Helper: Get Local YYYY-MM-DD
 const getLocalDateStr = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -50,284 +54,174 @@ const getLocalDateStr = (date) => {
 
 const Dashboard = ({ onBack, lang = 'EN' }) => {
     const t = TRANSLATIONS[lang];
-    const { currentDate } = useTempleTime();
-    const [selectedDate, setSelectedDate] = useState(currentDate);
-    const [isSankalpaOpen, setIsSankalpaOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [pujas, setPujas] = useState([]);
-    const [panchangam, setPanchangam] = useState({});
-    const [stats, setStats] = useState({
-        total: 0,
-        revenue: 0,
-        active: 0,
-        festivals: []
-    });
-    const [processedIds, setProcessedIds] = useState(new Set());
+    const { currentDate } = useTempleTime(); // The Midnight Watcher Source
 
-    // The Midnight Watcher: Auto-switch date if system day changes
-    // The Midnight Watcher: Auto-switch date if system day changes
+    // State
+    const [selectedDate, setSelectedDate] = useState(currentDate);
+    const [sevas, setSevas] = useState([]); // Master Catalog
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('ALL');
+
+    // Selection for Booking
+    const [selectedSevaForBooking, setSelectedSevaForBooking] = useState(null);
+
+    // --- MIDNIGHT WATCHER SYNC ---
     useEffect(() => {
-        // When currentDate changes (at midnight), strictly reset user's view to Today
-        // This runs on mount (setting to itself, harmless) and on midnight auto-update
-        const todayStr = getLocalDateStr(currentDate);
-        console.log("Midnight Watcher: Date changed to", todayStr);
         setSelectedDate(currentDate);
-        setProcessedIds(new Set()); // Reset local checklist text
     }, [currentDate]);
 
+    // --- FETCH DATA ---
     useEffect(() => {
-        fetchDailySankalpa();
-    }, [selectedDate]);
+        const fetchCatalog = async () => {
+            setLoading(true);
+            try {
+                // In a real app we might fetch catalog separately mostly static
+                // Using existing /sevas endpoint if available or hardcoded for demo
+                // simulating fetch
+                const response = await api.get('/sevas');
+                setSevas(response.data || []);
+            } catch (err) {
+                console.error("Catalog Fetch Error", err);
+            } finally {
+                // Artificial delay for Skeleton Demo
+                setTimeout(() => setLoading(false), 800);
+            }
+        };
+        fetchCatalog();
+    }, []);
 
-    const fetchDailySankalpa = async () => {
-        setLoading(true);
-        try {
-            let dObj = selectedDate instanceof Date ? selectedDate : new Date(selectedDate);
-
-            const day = String(dObj.getDate()).padStart(2, '0');
-            const month = String(dObj.getMonth() + 1).padStart(2, '0');
-            const year = dObj.getFullYear();
-            const dateForApi = `${day}-${month}-${year}`;
-
-            const response = await api.get(`/daily-sankalpa?date_str=${dateForApi}`);
-            const data = response.data;
-
-            console.log("Dashboard API Response:", data);
-            console.log("Panchangam Data:", data.panchangam);
-
-            setPujas(data.pujas || []);
-            setPanchangam(data.panchangam || {});
-
-            // Calculate Stats from backend data
-            setStats({
-                total: (data.pujas || []).length,
-                revenue: data.revenue || 0,
-                active: (data.pujas || []).filter(p => !processedIds.has(`${p.type}-${p.id}`)).length,
-                festivals: data.festivals || []
-            });
-
-        } catch (error) {
-            console.error("Failed to fetch dashboard data:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Update active count when processedIds change
-    useEffect(() => {
-        setStats(prev => ({
-            ...prev,
-            active: pujas.filter(p => !processedIds.has(`${p.type}-${p.id}`)).length
-        }));
-    }, [processedIds, pujas]);
-
-    const toggleProcessed = (id) => {
-        setProcessedIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) newSet.delete(id);
-            else newSet.add(id);
-            return newSet;
-        });
-    };
-
-    const handleDateChange = (e) => {
-        setSelectedDate(e.target.value);
-    };
-
-    const formatCurrency = (amt) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amt);
-    };
-
-    const openWhatsApp = (phone, name, seva) => {
-        const message = `Namaste ${name}, your ${seva} seva has been performed today at S.T.A.R. Temple.`;
-        window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank');
-    };
+    // --- FILTER ---
+    const filteredSevas = sevas.filter(seva => {
+        const matchSearch = seva.name_eng?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            seva.name_kan?.includes(searchTerm);
+        const matchCat = categoryFilter === 'ALL' || seva.name_eng?.toUpperCase().includes(categoryFilter); // Simple heuristic
+        return matchSearch && matchCat;
+    });
 
     return (
-        <div className="min-h-screen p-4 md:p-8 animate-in fade-in duration-500 overflow-x-hidden">
-            {/* 1. Header: Transparent Namaste Welcome */}
+        <div className="min-h-screen p-4 md:p-8 animate-in fade-in duration-500 pb-32">
+
+            {/* Header: Omni-Input & Navigation */}
             <header className="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
-                    <button
-                        onClick={onBack}
-                        className="p-2 bg-white/50 backdrop-blur-md rounded-full hover:bg-temple-saffron hover:text-white dark:hover:bg-slate-600 transition-all shadow-sm border border-white/50"
-                    >
-                        <ChevronLeft size={20} />
+                    <button onClick={onBack} className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-all hover:-translate-x-1">
+                        <ChevronLeft className="text-slate-600" />
                     </button>
                     <div>
-                        <h1 className="text-3xl font-black font-heading text-temple-brown dark:text-amber-100 drop-shadow-sm flex items-center gap-2 transition-colors duration-500">
-                            <span className="text-temple-saffron">Namaste,</span> {lang === 'KN' ? 'ಸ್ವಾಗತ' : 'Welcome'}
+                        <h1 className="text-3xl font-black font-heading text-slate-800 dark:text-white tracking-tight">
+                            {t.bookSeva || "Seva Booking"}
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400 font-medium opacity-80">{t.appSubtitle} Temple Registry</p>
+                        <p className="text-slate-500 font-medium">Select a divine offering</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="bg-white/70 backdrop-blur-md p-2 rounded-2xl shadow-sm border border-temple-gold/20 flex items-center gap-3 pr-4">
-                        <div className="p-2 bg-temple-saffron dark:bg-slate-600 rounded-xl text-white shadow-md shadow-temple-saffron/20 dark:shadow-slate-500/20">
-                            <Calendar size={20} />
-                        </div>
-                        <input
-                            type="date"
-                            value={selectedDate instanceof Date ? getLocalDateStr(selectedDate) : selectedDate}
-                            onChange={handleDateChange}
-                            className="bg-transparent outline-none font-bold text-temple-brown dark:text-amber-100 cursor-pointer text-sm"
+                <div className="flex gap-4 w-full md:w-auto">
+                    <div className="w-full md:w-64">
+                        <OmniInput
+                            icon={Search}
+                            placeholder="Find Seva..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    {/* Dummy Filter for Demo */}
+                    <div className="w-40 hidden md:block">
+                        <OmniDropdown
+                            label="Category"
+                            value={categoryFilter}
+                            onChange={setCategoryFilter}
+                            options={[
+                                { label: 'All Sevas', value: 'ALL' },
+                                { label: 'Archana', value: 'ARCHANA' },
+                                { label: 'Abhisheka', value: 'ABHISHEKA' },
+                                { label: 'Homa', value: 'HOMA' },
+                            ]}
                         />
                     </div>
                 </div>
             </header>
 
-            <div className="max-w-7xl mx-auto space-y-8">
+            {/* SEVA GRID SYSTEM (CSS SUBGRID LOGIC) */}
+            <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-                {/* 2. Stats Row: 4 Divine Glass Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {[
-                        {
-                            label: 'Total Bookings',
-                            value: stats.total,
-                            icon: <Scroll />,
-                            theme: {
-                                iconBg: 'bg-indigo-50 dark:bg-indigo-900/20',
-                                iconColor: 'text-indigo-600 dark:text-indigo-400',
-                            }
-                        },
-                        {
-                            label: 'Revenue',
-                            value: formatCurrency(stats.revenue),
-                            icon: <IndianRupee />,
-                            theme: {
-                                iconBg: 'bg-emerald-50 dark:bg-emerald-900/20',
-                                iconColor: 'text-emerald-600 dark:text-emerald-400',
-                            }
-                        },
-                        {
-                            label: 'Active Sevas',
-                            value: stats.active,
-                            icon: <Sparkles />,
-                            theme: {
-                                iconBg: 'bg-rose-50 dark:bg-rose-900/20',
-                                iconColor: 'text-rose-600 dark:text-rose-400',
-                            }
-                        },
-                        {
-                            label: 'Upcoming Festivals',
-                            value: stats.festivals[0] || 'Daily Routine',
-                            icon: <PartyPopper />,
-                            theme: {
-                                iconBg: 'bg-amber-50 dark:bg-amber-900/20',
-                                iconColor: 'text-amber-600 dark:text-amber-400',
-                            }
-                        }
-                    ].map((stat, i) => (
-                        <div
-                            key={i}
-                            className="glass-card p-6 flex items-center justify-between group relative overflow-hidden"
-                        >
-                            {/* Decorative Background Glow */}
-                            <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-150 duration-700 ${stat.theme.iconBg.split(' ')[0].replace('-50', '-500')}`} />
-
-                            <div className="relative z-10">
-                                <p className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-70 text-temple-stone dark:text-slate-400 mb-2">{stat.label}</p>
-                                <p className={`font-black font-heading text-temple-brown dark:text-white ${stat.label === 'Upcoming Festivals' ? 'text-xl' : 'text-4xl'}`}>
-                                    {stat.value}
-                                </p>
-                            </div>
-
-                            <div className={`p-4 rounded-2xl ${stat.theme.iconBg} ${stat.theme.iconColor} shadow-sm group-hover:scale-110 transition-transform`}>
-                                {React.cloneElement(stat.icon, { size: 28 })}
-                            </div>
+                {loading ? (
+                    // --- SKELETON LOADERS (PULSE GRID) ---
+                    Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="h-48 rounded-3xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 animate-pulse relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent skew-x-12 animate-shine opacity-50" />
                         </div>
-                    ))}
-                </div>
-
-                {/* 3. Recent Transactions Table (Full Width) */}
-                <div className="flex flex-col h-full min-h-[500px]">
-                    <div className="glass-card overflow-hidden flex-1 flex flex-col h-full">
-                        <div className="p-6 bg-temple-sand/30 dark:bg-slate-800/30 flex justify-between items-center border-b border-[var(--border-subtle)]">
-                            <h3 className="font-black text-temple-brown dark:text-amber-100 text-sm uppercase tracking-widest">{lang === 'KN' ? 'ಗೌರವಾನ್ವಿತ ಸೇವೆಗಳ ಪಟ್ಟಿ' : 'Recent Scheduled Sevas'}</h3>
-                            <div className="px-3 py-1 bg-white dark:bg-slate-800 rounded-full text-[10px] font-black text-temple-saffron dark:text-slate-400 border border-temple-saffron/20 dark:border-slate-500/20">
-                                {pujas.length} {t.transactions}
-                            </div>
-                        </div>
-
-                        <div className="overflow-auto flex-1 h-[400px]">
-                            {loading ? (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
-                                    <Loader2 size={40} className="animate-spin text-temple-saffron" />
-                                    <p className="font-black text-xs uppercase tracking-widest opacity-40">Connecting to Sanctum...</p>
+                    ))
+                ) : filteredSevas.length > 0 ? (
+                    filteredSevas.map((seva) => {
+                        const theme = getSevaTheme(seva.name_eng);
+                        return (
+                            <div
+                                key={seva.id}
+                                onClick={() => setSelectedSevaForBooking(seva)}
+                                className={`
+                                    relative group cursor-pointer 
+                                    rounded-3xl p-6 
+                                    border ${theme.card} 
+                                    backdrop-blur-md shadow-sm hover:shadow-2xl 
+                                    transition-all duration-500 ease-out 
+                                    hover:-translate-y-2 hover:scale-[1.02]
+                                `}
+                            >
+                                {/* Floating Icon */}
+                                <div className={`
+                                    absolute top-6 right-6 w-12 h-12 rounded-2xl 
+                                    flex items-center justify-center 
+                                    ${theme.iconBg} shadow-sm 
+                                    group-hover:rotate-12 transition-transform duration-500
+                                `}>
+                                    <Sparkles size={20} />
                                 </div>
-                            ) : pujas.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 italic">
-                                    <Flower size={48} className="mb-4 text-temple-sand" />
-                                    <p>No sevas registered for this alignment.</p>
-                                </div>
-                            ) : (
-                                <table className="w-full text-left text-xs">
-                                    <thead className="sticky top-0 bg-temple-sand dark:bg-slate-800/90 backdrop-blur-sm text-temple-brown dark:text-amber-100 font-black uppercase tracking-tight z-10">
-                                        <tr>
-                                            <th className="px-6 py-4">State</th>
-                                            <th className="px-6 py-4">Devotee</th>
-                                            <th className="px-6 py-4">Seva Offering</th>
-                                            <th className="px-6 py-4 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-temple-sand">
-                                        {pujas.map((puja) => {
-                                            const theme = getSevaTheme(puja.seva);
-                                            const uniqueKey = `${puja.type}-${puja.id}`;
-                                            const isDone = processedIds.has(uniqueKey);
 
-                                            return (
-                                                <tr
-                                                    key={uniqueKey}
-                                                    className={`transition-all duration-300 hover:bg-temple-sand/30 dark:hover:bg-white/5 group ${isDone ? 'opacity-50 grayscale' : ''}`}
-                                                >
-                                                    <td className="px-6 py-4">
-                                                        <button
-                                                            onClick={() => toggleProcessed(uniqueKey)}
-                                                            className={`p-2 rounded-xl transition-all ${isDone ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300 hover:text-temple-saffron'}`}
-                                                        >
-                                                            {isDone ? <CheckCircle size={20} /> : <Circle size={20} />}
-                                                        </button>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <p className="font-black text-temple-brown dark:text-slate-300 text-sm">{puja.name}</p>
-                                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                                                            <MapPin size={8} /> {puja.gothra || 'Samanya'}
-                                                        </p>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-black border ${theme.bg} ${theme.text} ${theme.color.replace('border-l-', 'border-')}`}>
-                                                            {theme.icon}
-                                                            {puja.seva}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <button
-                                                            onClick={() => openWhatsApp(puja.phone, puja.name, puja.seva)}
-                                                            className="p-2 text-green-600 hover:bg-green-600 hover:text-white rounded-xl transition-all shadow-sm"
-                                                        >
-                                                            <MessageCircle size={18} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                                <div className="mt-2">
+                                    <div className="h-20 flex items-start pr-12">
+                                        <h3 className={`text-xl font-black font-heading leading-tight ${theme.accent} dark:text-slate-100`}>
+                                            {lang === 'KN' ? seva.name_kan : seva.name_eng}
+                                        </h3>
+                                    </div>
+
+                                    <div className="flex items-end justify-between mt-4 border-t border-slate-400/10 pt-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Dakshina</span>
+                                            <div className="flex items-center text-emerald-600 dark:text-emerald-400 font-black text-2xl">
+                                                <IndianRupee size={20} strokeWidth={3} />
+                                                {seva.price}
+                                            </div>
+                                        </div>
+
+                                        <button className="bg-slate-900 text-white p-3 rounded-xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg">
+                                            <Plus size={20} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="col-span-full h-64 flex flex-col items-center justify-center text-slate-400">
+                        <Search size={48} className="mb-4 opacity-50" />
+                        <p className="text-lg font-medium">No sevas found matching your search.</p>
                     </div>
-                </div>
+                )}
+
             </div>
 
+            {/* MODAL INJECTION */}
+            {selectedSevaForBooking && (
+                <BookingModal
+                    isOpen={!!selectedSevaForBooking}
+                    onClose={() => setSelectedSevaForBooking(null)}
+                    seva={selectedSevaForBooking}
+                    lang={lang}
+                />
+            )}
         </div>
     );
 };
-
 
 export default Dashboard;

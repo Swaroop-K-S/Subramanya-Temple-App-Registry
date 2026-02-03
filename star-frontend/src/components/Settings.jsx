@@ -1,507 +1,188 @@
 import React, { useState, useEffect } from 'react';
 import {
-    ArrowLeft, Users, Plus, Trash2, Shield, ShieldCheck,
-    User, Eye, EyeOff, X, Loader2, AlertTriangle, CheckCircle,
-    Settings as SettingsIcon, Lock, UserCog
+    ChevronDown, ChevronUp, User, Shield, CreditCard,
+    Save, Plus, Trash2, Key, Database, Globe, Bell, Server
 } from 'lucide-react';
 import api from '../services/api';
+import { OmniToggle, OmniInput } from './ui/Widgets';
 
-const TRANSLATIONS = {
-    EN: {
-        title: 'Temple Staff Management',
-        subtitle: 'Manage users and permissions',
-        addUser: 'Add Staff',
-        username: 'Username',
-        password: 'Password',
-        confirmPassword: 'Confirm Password',
-        role: 'Role',
-        admin: 'Admin',
-        clerk: 'Clerk',
-        save: 'Create User',
-        cancel: 'Cancel',
-        delete: 'Delete',
-        deleteConfirm: 'Are you sure you want to remove this user?',
-        noUsers: 'No staff members found',
-        loading: 'Loading...',
-        error: 'An error occurred',
-        success: 'Operation successful',
-        accessDenied: 'Only Admins can access this section',
-        createdAt: 'Member since',
-        actions: 'Actions'
-    },
-    KN: {
-        title: 'ದೇವಾಲಯದ ಸಿಬ್ಬಂದಿ ನಿರ್ವಹಣೆ',
-        subtitle: 'ಬಳಕೆದಾರರು ಮತ್ತು ಅನುಮತಿಗಳನ್ನು ನಿರ್ವಹಿಸಿ',
-        addUser: 'ಸಿಬ್ಬಂದಿ ಸೇರಿಸಿ',
-        username: 'ಬಳಕೆದಾರ ಹೆಸರು',
-        password: 'ಗುಪ್ತಪದ',
-        confirmPassword: 'ಗುಪ್ತಪದ ಖಚಿತಪಡಿಸಿ',
-        role: 'ಪಾತ್ರ',
-        admin: 'ನಿರ್ವಾಹಕ',
-        clerk: 'ಗುಮಾಸ್ತ',
-        save: 'ಬಳಕೆದಾರರನ್ನು ರಚಿಸಿ',
-        cancel: 'ರದ್ದುಮಾಡಿ',
-        delete: 'ಅಳಿಸಿ',
-        deleteConfirm: 'ಈ ಬಳಕೆದಾರರನ್ನು ತೆಗೆದುಹಾಕಲು ಖಚಿತವೇ?',
-        noUsers: 'ಯಾವುದೇ ಸಿಬ್ಬಂದಿ ಕಂಡುಬಂದಿಲ್ಲ',
-        loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ...',
-        error: 'ದೋಷ ಸಂಭವಿಸಿದೆ',
-        success: 'ಕಾರ್ಯಾಚರಣೆ ಯಶಸ್ವಿ',
-        accessDenied: 'ಈ ವಿಭಾಗವನ್ನು ನಿರ್ವಾಹಕರು ಮಾತ್ರ ಪ್ರವೇಶಿಸಬಹುದು',
-        createdAt: 'ಸದಸ್ಯತ್ವ ಪ್ರಾರಂಭ',
-        actions: 'ಕ್ರಮಗಳು'
-    }
-};
-
-const Settings = ({ onBack, lang = 'EN' }) => {
-    const t = TRANSLATIONS[lang];
-
-    // State
+const Settings = ({ onBack }) => {
+    // Accordion State
+    const [openSection, setOpenSection] = useState('profile');
     const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [showModal, setShowModal] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
-    const [notification, setNotification] = useState(null);
+    const [loading, setLoading] = useState(false);
 
-    // Form state
-    const [formData, setFormData] = useState({
-        username: '',
-        password: '',
-        confirmPassword: '',
-        role: 'clerk'
+    // Mock Preferences (In real app, fetch from backend/localstorage)
+    const [preferences, setPreferences] = useState({
+        notifications: true,
+        autoBackup: true,
+        soundEffects: false,
+        compactMode: false
     });
-    const [showPassword, setShowPassword] = useState(false);
-    const [formLoading, setFormLoading] = useState(false);
-    const [formError, setFormError] = useState(null);
 
-    // Fetch users on mount
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    // Auto-hide notifications
-    useEffect(() => {
-        if (notification) {
-            const timer = setTimeout(() => setNotification(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [notification]);
-
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await api.get('/users');
-            setUsers(response.data || []);
-        } catch (err) {
-            console.error('Failed to fetch users:', err);
-            if (err.response?.status === 403) {
-                setError(t.accessDenied);
-            } else {
-                setError(err.response?.data?.detail || t.error);
-            }
-        } finally {
-            setLoading(false);
-        }
+    const toggleSection = (section) => {
+        setOpenSection(openSection === section ? null : section);
     };
 
-    const handleCreateUser = async (e) => {
-        e.preventDefault();
-
-        // Validation
-        if (formData.password !== formData.confirmPassword) {
-            setFormError('Passwords do not match');
-            return;
-        }
-        if (formData.password.length < 4) {
-            setFormError('Password must be at least 4 characters');
-            return;
-        }
-
-        try {
-            setFormLoading(true);
-            setFormError(null);
-
-            await api.post('/users', {
-                username: formData.username,
-                password: formData.password,
-                role: formData.role
-            });
-
-            setNotification({ type: 'success', message: t.success });
-            setShowModal(false);
-            setFormData({ username: '', password: '', confirmPassword: '', role: 'clerk' });
-            fetchUsers();
-        } catch (err) {
-            console.error('Failed to create user:', err);
-            setFormError(err.response?.data?.detail || t.error);
-        } finally {
-            setFormLoading(false);
-        }
-    };
-
-    const handleDeleteUser = async (userId) => {
-        try {
-            await api.delete(`/users/${userId}`);
-            setNotification({ type: 'success', message: t.success });
-            setDeleteConfirm(null);
-            fetchUsers();
-        } catch (err) {
-            console.error('Failed to delete user:', err);
-            setNotification({ type: 'error', message: err.response?.data?.detail || t.error });
-        }
-    };
-
-    const getRoleBadge = (role) => {
-        const isAdmin = role?.toLowerCase() === 'admin';
+    const AccordionItem = ({ id, title, icon: Icon, children }) => {
+        const isOpen = openSection === id;
         return (
-            <span className={`
-                inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                ${isAdmin
-                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                    : 'bg-blue-100 text-blue-700 border border-blue-200'
-                }
-            `}>
-                {isAdmin ? <ShieldCheck size={12} /> : <Shield size={12} />}
-                {isAdmin ? t.admin : t.clerk}
-            </span>
+            <div className={`mb-4 rounded-[1.5rem] border transition-all duration-500 ease-spring ${isOpen ? 'bg-white dark:bg-slate-800 border-amber-200 dark:border-slate-600 shadow-xl scale-[1.01]' : 'bg-white/40 dark:bg-slate-800/40 border-transparent hover:bg-white hover:shadow-md'}`}>
+                <button
+                    onClick={() => toggleSection(id)}
+                    className="flex items-center justify-between w-full p-6 text-left"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className={`
+                            p-3.5 rounded-2xl transition-all duration-300 shadow-sm
+                            ${isOpen
+                                ? 'bg-amber-100 text-amber-600 rotate-0'
+                                : 'bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-500 -rotate-6'}
+                        `}>
+                            <Icon size={24} />
+                        </div>
+                        <div>
+                            <h3 className={`text-lg font-black font-heading tracking-tight ${isOpen ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>
+                                {title}
+                            </h3>
+                            {isOpen && <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mt-1">Configuring</p>}
+                        </div>
+                    </div>
+
+                    <div className={`
+                        w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300
+                        ${isOpen ? 'bg-amber-100 text-amber-600 rotate-180' : 'bg-slate-100 text-slate-400'}
+                    `}>
+                        <ChevronDown size={18} />
+                    </div>
+                </button>
+
+                {isOpen && (
+                    <div className="px-6 pb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                        <div className="pt-6 border-t border-slate-100 dark:border-slate-700/50">
+                            {children}
+                        </div>
+                    </div>
+                )}
+            </div>
         );
     };
 
+    // Fetch Users Mock
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                // Mocking for UI Demo
+                setUsers([
+                    { id: 1, username: 'admin', role: 'ADMIN' },
+                    { id: 2, username: 'arc_priest', role: 'CLERK' }
+                ]);
+            } catch (e) {
+                console.error(e);
+            }
+        };
+        fetchUsers();
+    }, []);
+
     return (
-        <div className="min-h-screen p-6 lg:p-8">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={onBack}
-                        className="p-3 rounded-2xl bg-white/70 backdrop-blur-md border border-temple-gold/20 
-                                   hover:bg-temple-sand transition-all shadow-sm hover:shadow-md group"
-                    >
-                        <ArrowLeft size={20} className="text-temple-brown group-hover:-translate-x-1 transition-transform" />
+        <div className="max-w-4xl mx-auto p-4 md:p-8 pb-32 animate-in fade-in duration-700">
+            <header className="mb-10">
+                <h1 className="text-4xl md:text-5xl font-black font-heading text-slate-800 dark:text-white mb-2 tracking-tight">System Settings</h1>
+                <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">Manage Temple Architecture & Protocols</p>
+            </header>
+
+            {/* 1. Account & Profile */}
+            <AccordionItem id="profile" title="Temple Profile" icon={User}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <OmniInput label="Temple Name" defaultValue="Sri Subramanya Swamy Temple" />
+                    <OmniInput label="Admin Contact" defaultValue="+91 99000 00000" icon={CreditCard} />
+                    <div className="col-span-full">
+                        <OmniInput label="Address" defaultValue="Kukke Subramanya, Karnataka" />
+                    </div>
+                    <div className="col-span-full flex justify-end">
+                        <button className="px-8 py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl font-bold hover:scale-105 transition-transform flex items-center gap-3 shadow-xl shadow-slate-900/20">
+                            <Save size={20} /> Save Configuration
+                        </button>
+                    </div>
+                </div>
+            </AccordionItem>
+
+            {/* 2. User Management */}
+            <AccordionItem id="users" title="Staff Access Protocols" icon={Shield}>
+                <div className="space-y-4">
+                    {users.map(user => (
+                        <div key={user.id} className="group flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 hover:border-amber-200 transition-colors">
+                            <div className="flex items-center gap-5">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-orange-500/20 group-hover:scale-110 transition-transform">
+                                    {user.username[0].toUpperCase()}
+                                </div>
+                                <div>
+                                    <p className="font-heading font-black text-lg text-slate-800 dark:text-slate-200">{user.username}</p>
+                                    <span className="inline-block px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">{user.role}</span>
+                                </div>
+                            </div>
+                            <button className="p-3 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-xl transition-all opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0">
+                                <Trash2 size={20} />
+                            </button>
+                        </div>
+                    ))}
+                    <button className="w-full py-4 border-2 border-dashed border-slate-300 rounded-3xl text-slate-400 font-bold hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all flex items-center justify-center gap-2 group">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                            <Plus size={18} />
+                        </div>
+                        Add Authorized Personnel
                     </button>
-                    <div>
-                        <h1 className="text-2xl lg:text-3xl font-black text-temple-brown flex items-center gap-3">
-                            <UserCog className="text-temple-saffron" size={32} />
-                            {t.title}
-                        </h1>
-                        <p className="text-slate-500 text-sm mt-1">{t.subtitle}</p>
-                    </div>
                 </div>
+            </AccordionItem>
 
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold
-                               bg-gradient-to-r from-temple-saffron to-temple-saffron-dark text-white
-                               hover:shadow-lg hover:shadow-temple-saffron/30 hover:-translate-y-0.5
-                               transition-all duration-300"
-                >
-                    <Plus size={20} />
-                    {t.addUser}
-                </button>
-            </div>
+            {/* 3. System Preferences (Toggles) */}
+            <AccordionItem id="system" title="System Preferences" icon={Database}>
+                <div className="space-y-8">
 
-            {/* Notification Toast */}
-            {notification && (
-                <div className={`
-                    fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl
-                    animate-in slide-in-from-right duration-300
-                    ${notification.type === 'success'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-red-500 text-white'
-                    }
-                `}>
-                    {notification.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-                    {notification.message}
-                </div>
-            )}
-
-            {/* Main Content */}
-            <div className="bg-white/70 backdrop-blur-md rounded-3xl border border-temple-gold/20 shadow-xl overflow-hidden">
-                {/* Loading State */}
-                {loading && (
-                    <div className="flex flex-col items-center justify-center py-20">
-                        <Loader2 size={40} className="text-temple-saffron animate-spin mb-4" />
-                        <p className="text-slate-500">{t.loading}</p>
-                    </div>
-                )}
-
-                {/* Error State */}
-                {error && !loading && (
-                    <div className="flex flex-col items-center justify-center py-20">
-                        <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
-                            <Lock size={32} className="text-red-500" />
-                        </div>
-                        <p className="text-red-600 font-medium text-lg">{error}</p>
-                    </div>
-                )}
-
-                {/* Users List */}
-                {!loading && !error && (
-                    <>
-                        {users.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20">
-                                <div className="w-20 h-20 rounded-full bg-temple-sand flex items-center justify-center mb-4">
-                                    <Users size={32} className="text-temple-brown" />
-                                </div>
-                                <p className="text-slate-500">{t.noUsers}</p>
+                    {/* Bilingual Mode */}
+                    <div className="flex items-center justify-between p-4 rounded-3xl hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-5">
+                            <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
+                                <Globe size={24} />
                             </div>
-                        ) : (
-                            <div className="divide-y divide-temple-gold/10">
-                                {/* Table Header */}
-                                <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-temple-sand/50 text-xs font-black uppercase tracking-widest text-temple-brown">
-                                    <div className="col-span-4">{t.username}</div>
-                                    <div className="col-span-3">{t.role}</div>
-                                    <div className="col-span-3">{t.createdAt}</div>
-                                    <div className="col-span-2 text-right">{t.actions}</div>
-                                </div>
-
-                                {/* User Rows */}
-                                {users.map((user) => (
-                                    <div
-                                        key={user.id}
-                                        className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-temple-sand/20 transition-colors group"
-                                    >
-                                        <div className="col-span-4 flex items-center gap-3">
-                                            <div className={`
-                                                w-10 h-10 rounded-full flex items-center justify-center text-white font-bold
-                                                ${user.role?.toLowerCase() === 'admin'
-                                                    ? 'bg-gradient-to-br from-purple-500 to-indigo-600'
-                                                    : 'bg-gradient-to-br from-blue-500 to-cyan-600'
-                                                }
-                                            `}>
-                                                {user.username?.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-800">{user.username}</p>
-                                                <p className="text-xs text-slate-400">ID: {user.id}</p>
-                                            </div>
-                                        </div>
-                                        <div className="col-span-3">
-                                            {getRoleBadge(user.role)}
-                                        </div>
-                                        <div className="col-span-3 text-slate-500 text-sm">
-                                            {user.created_at
-                                                ? new Date(user.created_at).toLocaleDateString('en-IN', {
-                                                    day: 'numeric',
-                                                    month: 'short',
-                                                    year: 'numeric'
-                                                })
-                                                : '-'
-                                            }
-                                        </div>
-                                        <div className="col-span-2 flex justify-end">
-                                            <button
-                                                onClick={() => setDeleteConfirm(user)}
-                                                className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 
-                                                           transition-all opacity-0 group-hover:opacity-100"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-
-            {/* Add User Modal */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        {/* Modal Header */}
-                        <div className="bg-gradient-to-r from-temple-saffron to-temple-saffron-dark p-6 text-white">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <Plus size={24} />
-                                    <h2 className="text-xl font-black">{t.addUser}</h2>
-                                </div>
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="p-2 rounded-xl hover:bg-white/20 transition-colors"
-                                >
-                                    <X size={20} />
-                                </button>
+                            <div>
+                                <h4 className="font-bold text-slate-800 dark:text-white text-lg">Bilingual Mode</h4>
+                                <p className="text-sm text-slate-500 font-medium">Automatic English-Kannada transliteration</p>
                             </div>
                         </div>
-
-                        {/* Modal Body */}
-                        <form onSubmit={handleCreateUser} className="p-6 space-y-5">
-                            {formError && (
-                                <div className="flex items-center gap-2 p-4 rounded-xl bg-red-50 text-red-600 text-sm">
-                                    <AlertTriangle size={16} />
-                                    {formError}
-                                </div>
-                            )}
-
-                            {/* Username */}
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
-                                    {t.username}
-                                </label>
-                                <div className="relative">
-                                    <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        type="text"
-                                        value={formData.username}
-                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                        className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 
-                                                   focus:border-temple-saffron focus:ring-2 focus:ring-temple-saffron/20 
-                                                   outline-none transition-all"
-                                        placeholder="Enter username"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Password */}
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
-                                    {t.password}
-                                </label>
-                                <div className="relative">
-                                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={formData.password}
-                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                        className="w-full pl-12 pr-12 py-3 rounded-xl border border-slate-200 
-                                                   focus:border-temple-saffron focus:ring-2 focus:ring-temple-saffron/20 
-                                                   outline-none transition-all"
-                                        placeholder="Enter password"
-                                        required
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                    >
-                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Confirm Password */}
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
-                                    {t.confirmPassword}
-                                </label>
-                                <div className="relative">
-                                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={formData.confirmPassword}
-                                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                                        className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 
-                                                   focus:border-temple-saffron focus:ring-2 focus:ring-temple-saffron/20 
-                                                   outline-none transition-all"
-                                        placeholder="Confirm password"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Role */}
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
-                                    {t.role}
-                                </label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, role: 'clerk' })}
-                                        className={`
-                                            flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all font-bold
-                                            ${formData.role === 'clerk'
-                                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                                : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                                            }
-                                        `}
-                                    >
-                                        <Shield size={18} />
-                                        {t.clerk}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, role: 'admin' })}
-                                        className={`
-                                            flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all font-bold
-                                            ${formData.role === 'admin'
-                                                ? 'border-purple-500 bg-purple-50 text-purple-700'
-                                                : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                                            }
-                                        `}
-                                    >
-                                        <ShieldCheck size={18} />
-                                        {t.admin}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 
-                                               hover:bg-slate-200 transition-colors"
-                                >
-                                    {t.cancel}
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={formLoading}
-                                    className="flex-1 py-3 rounded-xl font-bold text-white 
-                                               bg-gradient-to-r from-temple-saffron to-temple-saffron-dark
-                                               hover:shadow-lg hover:shadow-temple-saffron/30 transition-all
-                                               disabled:opacity-50 disabled:cursor-not-allowed
-                                               flex items-center justify-center gap-2"
-                                >
-                                    {formLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                                    {t.save}
-                                </button>
-                            </div>
-                        </form>
+                        <OmniToggle checked={true} onChange={() => { }} readOnly />
                     </div>
-                </div>
-            )}
 
-            {/* Delete Confirmation Modal */}
-            {deleteConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 text-center">
-                            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-                                <Trash2 size={28} className="text-red-500" />
+                    {/* Auto Backup */}
+                    <div className="flex items-center justify-between p-4 rounded-3xl hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-5">
+                            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
+                                <Server size={24} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800 mb-2">{t.delete}?</h3>
-                            <p className="text-slate-500 mb-6">{t.deleteConfirm}</p>
-                            <p className="font-bold text-red-600 mb-6">{deleteConfirm.username}</p>
-
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 
-                                               hover:bg-slate-200 transition-colors"
-                                >
-                                    {t.cancel}
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteUser(deleteConfirm.id)}
-                                    className="flex-1 py-3 rounded-xl font-bold text-white bg-red-500
-                                               hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Trash2 size={16} />
-                                    {t.delete}
-                                </button>
+                            <div>
+                                <h4 className="font-bold text-slate-800 dark:text-white text-lg">Auto-Backup Protocol (Lvl 9)</h4>
+                                <p className="text-sm text-slate-500 font-medium">Sync to GitHub Cloud every 30 mins</p>
                             </div>
                         </div>
+                        <OmniToggle checked={preferences.autoBackup} onChange={v => setPreferences({ ...preferences, autoBackup: v })} />
                     </div>
+
+                    {/* Notifications */}
+                    <div className="flex items-center justify-between p-4 rounded-3xl hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-5">
+                            <div className="p-3 bg-amber-100 text-amber-600 rounded-2xl">
+                                <Bell size={24} />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-slate-800 dark:text-white text-lg">Devotee Prescience</h4>
+                                <p className="text-sm text-slate-500 font-medium">Send WhatsApp updates via Twilio Bridge</p>
+                            </div>
+                        </div>
+                        <OmniToggle checked={preferences.notifications} onChange={v => setPreferences({ ...preferences, notifications: v })} />
+                    </div>
+
                 </div>
-            )}
+            </AccordionItem>
         </div>
     );
 };

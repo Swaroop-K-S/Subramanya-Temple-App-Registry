@@ -24,6 +24,7 @@ from crud import (
     get_financial_report
 )
 from panchang import PanchangCalculator
+import daiva_setu  # Genesis Protocol (Level 15)
 
 # Authentication Imports
 from passlib.context import CryptContext
@@ -48,6 +49,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register Genesis Protocol Router (AI Engine)
+app.include_router(daiva_setu.router)
 
 # =============================================================================
 # Authentication Configuration & Helpers
@@ -259,6 +263,9 @@ def get_reports(start_date: str, end_date: str, db: Session = Depends(get_db)):
 
 @app.post("/book-seva", response_model=TransactionResponse, tags=["Booking"])
 def book_seva(transaction: TransactionCreate, db: Session = Depends(get_db)):
+    # Security Scan (SQL Sentinel & XSS)
+    validate_transaction_payload(transaction)
+    
     try:
         return create_transaction(db=db, transaction=transaction)
     except ValueError as e:
@@ -298,11 +305,55 @@ def get_devotee_details(phone: str, db: Session = Depends(get_db)):
     }
 
 # =============================================================================
+# Security Helpers (SQL Sentinel & XSS Filter)
+# =============================================================================
+import re
+
+def validate_safe_input(text: str, field_name: str):
+    """
+    rejects payloads containing potential XSS or SQL Injection vectors.
+    """
+    if not text:
+        return
+    
+    # 1. XSS / Malicious Script Check
+    # Triggers on <script>, javascript:, variables with on<event> (onload, onerror), iframes
+    xss_pattern = r"<script|javascript:|onload=|onerror=|<iframe>|<object>|data:text/html"
+    if re.search(xss_pattern, text, re.IGNORECASE):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Security Alert: Malicious content detected in '{field_name}'"
+        )
+        
+    # 2. SQL Injection Sentinel (Basic Pattern Match)
+    # Strict checks for specific fields like Gothra/Nakshatra where code shouldn't be present
+    # Blocking semi-colons and SQL comment dashes
+    if field_name.lower() in ["gothra", "nakshatra", "rashi"]:
+        sql_pattern = r"[;']|--"
+        if re.search(sql_pattern, text):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Security Alert: Invalid characters detected in '{field_name}'"
+            )
+
+def validate_transaction_payload(data):
+    """Scan all string fields in the payload"""
+    if hasattr(data, "dict"):
+        data = data.dict()
+    
+    for key, value in data.items():
+        if isinstance(value, str):
+            validate_safe_input(value, key)
+
+# =============================================================================
 # API Routes - Shaswata (Perpetual Puja)
 # =============================================================================
 
 @app.post("/shaswata/subscribe", response_model=ShaswataSubscriptionResponse, tags=["Shaswata"])
 def subscribe_shaswata(subscription: ShaswataCreate, db: Session = Depends(get_db)):
+    # Security Scan
+    validate_transaction_payload(subscription)
+    
     try:
         return create_shaswata_subscription(db=db, subscription=subscription)
     except Exception as e:
@@ -480,12 +531,46 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
         ORDER BY t.transaction_date DESC
     """), {"start": start, "end": end}).fetchall()
     
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Receipt No', 'Date', 'Devotee', 'Seva', 'Amount', 'Mode'])
-    for row in transactions:
-        writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5]])
-    
     output.seek(0)
     filename = f"report_{start}_{end}.csv"
     return StreamingResponse(io.StringIO(output.getvalue()), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+# =============================================================================
+# Level 13: The Legacy Eraser Endpoint
+# =============================================================================
+from fastapi import UploadFile, File
+import shutil
+import os
+from legacy_migrator import migrate_legacy_data
+
+@app.post("/admin/migrate", tags=["Admin Operations"])
+def migrate_legacy_database(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Drag & Drop Portal for Legacy Data (CSV).
+    Migrates 2010-era records into the modern Transaction table.
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(status_code=403, detail="Only Admins can rewrite history.")
+
+    # Save temp file
+    temp_filename = f"temp_{file.filename}"
+    with open(temp_filename, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    try:
+        # Invoke the heuristic engine
+        # Note: migrate_legacy_data currently handles its own DB session, 
+        # but we should ideally pass the 'db' session. 
+        # For now, running it as a separate process logic or function call is fine.
+        migrate_legacy_data(temp_filename)
+        
+        return {"message": "Legacy Data Absorbed. The timeline has been corrected."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)

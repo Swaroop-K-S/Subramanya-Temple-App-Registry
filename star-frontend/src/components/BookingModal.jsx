@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User, Phone, Sparkles, Star, Moon, Loader2, Calendar, Printer } from 'lucide-react';
+import { X, User, Phone, Sparkles, Star, Moon, Loader2, Calendar, Printer, CheckCircle2, ArrowRight, IndianRupee } from 'lucide-react';
 import { ReactTransliterate } from 'react-transliterate';
 import 'react-transliterate/dist/index.css';
 import { bookSeva } from '../services/api';
@@ -26,10 +26,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
     const [transaction, setTransaction] = useState(null);
     const t = TRANSLATIONS[lang];
 
-    // Common input CSS classes
-    const inputClasses = "w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500 text-sm";
-
-    // Ref for printing
+    // Printer
     const receiptRef = useRef();
     const handlePrint = useReactToPrint({
         content: () => receiptRef.current,
@@ -49,21 +46,18 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                 seva_date: todayStr, payment_mode: 'CASH'
             });
         }
-
         const checkPhone = async () => {
             if (formData.phone_number.length === 10) {
                 setSearching(true);
                 try {
                     const response = await api.get(`/devotees/${formData.phone_number}`);
                     if (response.data) {
-                        // Use Kannada name if in KN mode, otherwise English
                         const name = lang === 'KN'
                             ? (response.data.full_name_kn || response.data.full_name_en || response.data.full_name || '')
                             : (response.data.full_name_en || response.data.full_name || '');
                         const gothra = lang === 'KN'
                             ? (response.data.gothra_kn || response.data.gothra_en || response.data.gothra || '')
                             : (response.data.gothra_en || response.data.gothra || '');
-
                         setFormData(prev => ({
                             ...prev,
                             devotee_name: name,
@@ -71,7 +65,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                             nakshatra: response.data.nakshatra || '',
                             rashi: response.data.rashi || '',
                         }));
-                        setSuccessMsg("✨ Devotee details found!");
+                        setSuccessMsg("✨ Found!");
                         setTimeout(() => setSuccessMsg(''), 3000);
                     }
                 } catch (err) { } finally { setSearching(false); }
@@ -91,7 +85,6 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
         try {
             const bookingData = {
                 ...formData,
-                // For backward compatibility with backend
                 devotee_name: formData.devotee_name,
                 devotee_name_en: lang === 'EN' ? formData.devotee_name : '',
                 devotee_name_kn: lang === 'KN' ? formData.devotee_name : '',
@@ -103,219 +96,258 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
             };
             const response = await bookSeva(bookingData);
             setTransaction(response);
+
+            // Level 11: Auto-Print
+            import('../utils/thermalPrinter').then(module => {
+                module.printToThermal(response, seva, lang)
+                    .catch(err => console.warn("Printer Error", err));
+            });
         } catch (err) {
             console.error(err);
-            alert('Booking failed. Please check the console.');
+            alert('Booking failed.');
         } finally {
             setLoading(false);
         }
     };
 
-    // --- RECEIPT VIEW ---
+    // --- RECEIPT VIEW (Unchanged Logic, just container style tweak) ---
     if (transaction) {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" />
-                <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-
-                    {/* Actions Bar */}
-                    <div className="bg-gray-100 px-6 py-3 flex justify-between items-center border-b">
+                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300" />
+                <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
+                    <div className="bg-gray-50 px-8 py-4 flex justify-between items-center border-b">
                         <h2 className="font-bold text-gray-700 flex items-center gap-2">
-                            <Sparkles className="text-orange-500" size={18} />
+                            <CheckCircle2 className="text-green-500" size={24} />
                             {t?.bookingSuccessful || "Booking Successful"}
                         </h2>
                         <div className="flex gap-2">
-                            <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm">
-                                <Printer size={18} /> Print
+                            <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+                                <Printer size={18} /> Print Invoice
                             </button>
                             <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                                <X size={20} className="text-gray-500" />
+                                <X size={24} className="text-gray-500" />
                             </button>
                         </div>
                     </div>
-
-                    {/* Printable Area */}
-                    <div className="p-8 bg-gray-50 overflow-y-auto max-h-[80vh]">
+                    <div className="p-8 bg-gray-100/50 max-h-[80vh] overflow-y-auto">
                         <div ref={receiptRef}>
                             <Receipt transaction={transaction} seva={seva} lang={lang} />
                         </div>
                     </div>
-
                 </div>
             </div>
         );
     }
 
-    // --- BOOKING FORM VIEW ---
+    // --- OMNI-UI BOOKING FORM ---
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-amber-600 px-6 py-4 flex justify-between items-center">
-                    <div>
-                        <h2 className="text-xl font-bold text-white">{t?.bookNow || "Book Seva"}</h2>
-                        <p className="text-orange-100 text-sm">{lang === 'KN' && seva.name_kan ? seva.name_kan : seva.name_eng}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 isolate">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose} />
+
+            {/* Modal Card */}
+            <div className="relative w-full max-w-4xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col md:flex-row h-[85vh] md:h-auto">
+
+                {/* Left Column: Seva Details (Visual Anchor) */}
+                <div className="w-full md:w-1/3 bg-gradient-to-br from-amber-50 to-orange-100/50 p-8 flex flex-col justify-between border-r border-orange-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-orange-400/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+
+                    <div className="relative z-10">
+                        <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center mb-6">
+                            <Sparkles className="text-orange-500 w-8 h-8" />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-800 font-heading leading-tight mb-2">
+                            {lang === 'KN' && seva.name_kan ? seva.name_kan : seva.name_eng}
+                        </h2>
+                        <span className="inline-block px-3 py-1 bg-orange-200/50 text-orange-800 text-xs font-bold rounded-lg uppercase tracking-wider mb-6">
+                            Verified Seva
+                        </span>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3 text-gray-600">
+                                <Calendar className="w-5 h-5 text-orange-400" />
+                                <span className="font-medium text-sm">Valid for {formData.seva_date}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-gray-600">
+                                <User className="w-5 h-5 text-orange-400" />
+                                <span className="font-medium text-sm">Single Devotee</span>
+                            </div>
+                        </div>
                     </div>
-                    <button onClick={onClose}><X className="text-white" size={24} /></button>
+
+                    <div className="relative z-10 mt-8">
+                        <p className="text-gray-500 text-xs uppercase font-bold tracking-widest mb-1">Total Amount</p>
+                        <div className="flex items-center gap-1 text-emerald-600">
+                            <IndianRupee className="w-6 h-6" />
+                            <span className="text-4xl font-black tracking-tight">{seva.price}</span>
+                        </div>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                    {/* Phone & Date Row */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.phone || "Phone Number"}</label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
+                {/* Right Column: Input Form */}
+                <div className="w-full md:w-2/3 p-8 flex flex-col h-full overflow-hidden">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-bold text-gray-700">Devotee Details</h3>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                            <X className="w-6 h-6 text-gray-400 hover:text-red-500" />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-2 space-y-6">
+
+                        {/* Phone & Date */}
+                        <div className="grid grid-cols-2 gap-5">
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Phone className="h-5 w-5 text-gray-400 group-focus-within:text-orange-500" />
+                                </div>
                                 <input
                                     type="tel"
                                     name="phone_number"
                                     value={formData.phone_number}
                                     onChange={handleInputChange}
-                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
-                                    placeholder="9876543210"
+                                    className="peer w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all placeholder-transparent"
+                                    placeholder="Phone"
                                     maxLength={10}
                                     required
                                 />
-                                {searching && <Loader2 className="absolute right-3 top-3 animate-spin text-orange-500" size={18} />}
-                                {!searching && successMsg && <Sparkles className="absolute right-3 top-3 text-green-500" size={18} />}
+                                <label className="absolute left-10 top-3 text-gray-400 text-xs transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[10px] peer-focus:text-orange-500">Phone Number</label>
+                                {searching && <Loader2 className="absolute right-3 top-3.5 animate-spin text-orange-500 w-4 h-4" />}
+                                {!searching && successMsg && <CheckCircle2 className="absolute right-3 top-3.5 text-green-500 w-4 h-4" />}
                             </div>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.date || "Seva Date"}</label>
-                            <div className="relative">
-                                <Calendar className="absolute left-3 top-3 text-gray-400" size={18} />
+
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Calendar className="h-5 w-5 text-gray-400 group-focus-within:text-orange-500" />
+                                </div>
                                 <input
                                     type="date"
                                     name="seva_date"
                                     value={formData.seva_date}
                                     onChange={handleInputChange}
                                     min={todayStr}
-                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
+                                    className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                                     required
                                 />
                             </div>
                         </div>
-                    </div>
 
-                    {/* Smart Devotee Name Input */}
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">
-                            {t?.name || "Devotee Name"}
-                            <span className="ml-2 text-orange-400 text-[10px]">
-                                {lang === 'KN' ? '(ಟೈಪ್ ಮಾಡಿ → ಕನ್ನಡ)' : '(English)'}
-                            </span>
-                        </label>
-                        <div className="relative">
-                            <User className="absolute left-3 top-3 text-gray-400 z-10" size={18} />
-                            {lang === 'KN' ? (
-                                <ReactTransliterate
-                                    renderComponent={(props) => (
-                                        <input {...props} className={inputClasses} required />
-                                    )}
-                                    value={formData.devotee_name}
-                                    onChangeText={(text) => setFormData(prev => ({ ...prev, devotee_name: text }))}
-                                    lang="kn"
-                                    placeholder="Type in English → ಕನ್ನಡ"
-                                    enabled={true}
-                                    containerStyles={{ position: 'relative' }}
-                                    activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
-                                />
-                            ) : (
-                                <input
-                                    type="text"
-                                    name="devotee_name"
-                                    value={formData.devotee_name}
-                                    onChange={handleInputChange}
-                                    className={inputClasses}
-                                    placeholder="Enter devotee name"
-                                    required
-                                />
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Smart Gothra Input */}
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">
-                            {t?.gothra || "Gothra"}
-                            <span className="ml-2 text-orange-400 text-[10px]">
-                                {lang === 'KN' ? '(ಟೈಪ್ ಮಾಡಿ → ಕನ್ನಡ)' : '(English)'}
-                            </span>
-                        </label>
-                        <div className="relative">
-                            <Sparkles className="absolute left-3 top-3 text-gray-400 z-10" size={18} />
-                            {lang === 'KN' ? (
-                                <ReactTransliterate
-                                    renderComponent={(props) => (
-                                        <input {...props} className={inputClasses} />
-                                    )}
-                                    value={formData.gothra}
-                                    onChangeText={(text) => setFormData(prev => ({ ...prev, gothra: text }))}
-                                    lang="kn"
-                                    placeholder="Type in English → ಕನ್ನಡ"
-                                    enabled={true}
-                                    containerStyles={{ position: 'relative' }}
-                                    activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
-                                />
-                            ) : (
-                                <input
-                                    type="text"
-                                    name="gothra"
-                                    value={formData.gothra}
-                                    onChange={handleInputChange}
-                                    className={inputClasses}
-                                    placeholder="Enter gothra"
-                                />
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Nakshatra & Rashi */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.nakshatra || "Nakshatra"}</label>
+                        {/* Name (Transliterate) */}
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                                <span>{t?.name || "Devotee Name"}</span>
+                                <span className="text-orange-500">{lang === 'KN' ? 'English → Kannada' : 'English'}</span>
+                            </label>
                             <div className="relative">
-                                <Star className="absolute left-3 top-3 text-gray-400" size={18} />
-                                <select name="nakshatra" value={formData.nakshatra} onChange={handleInputChange} className="w-full pl-10 py-2.5 border border-gray-300 rounded-lg outline-none bg-white">
-                                    <option value="">{lang === 'KN' ? 'ನಕ್ಷತ್ರ ಆಯ್ಕೆಮಾಡಿ' : 'Select Star'}</option>
-                                    {NAKSHATRAS && NAKSHATRAS.map(n => (
-                                        <option key={n.en} value={n.en}>
-                                            {lang === 'KN' ? n.kn : n.en}
-                                        </option>
-                                    ))}
+                                <User className="absolute left-3 top-3.5 text-gray-400 z-10 w-5 h-5" />
+                                {lang === 'KN' ? (
+                                    <ReactTransliterate
+                                        renderComponent={(props) => (
+                                            <input {...props} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all" required />
+                                        )}
+                                        value={formData.devotee_name}
+                                        onChangeText={(text) => setFormData(prev => ({ ...prev, devotee_name: text }))}
+                                        lang="kn"
+                                        placeholder="Type Name..."
+                                        containerStyles={{ position: 'relative' }}
+                                        activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
+                                    />
+                                ) : (
+                                    <input
+                                        name="devotee_name"
+                                        value={formData.devotee_name}
+                                        onChange={handleInputChange}
+                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                        placeholder="Enter Name"
+                                        required
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Gothra */}
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                {t?.gothra || "Gothra"}
+                            </label>
+                            <div className="relative">
+                                <Sparkles className="absolute left-3 top-3.5 text-gray-400 z-10 w-5 h-5" />
+                                {lang === 'KN' ? (
+                                    <ReactTransliterate
+                                        renderComponent={(props) => (
+                                            <input {...props} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all" />
+                                        )}
+                                        value={formData.gothra}
+                                        onChangeText={(text) => setFormData(prev => ({ ...prev, gothra: text }))}
+                                        lang="kn"
+                                        placeholder="Type Gothra..."
+                                        containerStyles={{ position: 'relative' }}
+                                        activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
+                                    />
+                                ) : (
+                                    <input
+                                        name="gothra"
+                                        value={formData.gothra}
+                                        onChange={handleInputChange}
+                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                        placeholder="Enter Gothra"
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Nakshatra / Rashi Grid */}
+                        <div className="grid grid-cols-2 gap-5">
+                            <div className="relative">
+                                <Star className="absolute left-3 top-3.5 text-gray-400 w-5 h-5 pointer-events-none" />
+                                <select name="nakshatra" value={formData.nakshatra} onChange={handleInputChange} className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none">
+                                    <option value="">{lang === 'KN' ? 'ನಕ್ಷತ್ರ' : 'Nakshatra'}</option>
+                                    {NAKSHATRAS.map(n => <option key={n.en} value={n.en}>{lang === 'KN' ? n.kn : n.en}</option>)}
+                                </select>
+                            </div>
+                            <div className="relative">
+                                <Moon className="absolute left-3 top-3.5 text-gray-400 w-5 h-5 pointer-events-none" />
+                                <select name="rashi" value={formData.rashi} onChange={handleInputChange} className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none">
+                                    <option value="">{lang === 'KN' ? 'ರಾಶಿ' : 'Rashi'}</option>
+                                    {RASHIS.map(r => <option key={r.en} value={r.en}>{lang === 'KN' ? r.kn : r.en}</option>)}
                                 </select>
                             </div>
                         </div>
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">{t?.rashi || "Rashi"}</label>
-                            <div className="relative">
-                                <Moon className="absolute left-3 top-3 text-gray-400" size={18} />
-                                <select name="rashi" value={formData.rashi} onChange={handleInputChange} className="w-full pl-10 py-2.5 border border-gray-300 rounded-lg outline-none bg-white">
-                                    <option value="">{lang === 'KN' ? 'ರಾಶಿ ಆಯ್ಕೆಮಾಡಿ' : 'Select Zodiac'}</option>
-                                    {RASHIS && RASHIS.map(r => (
-                                        <option key={r.en} value={r.en}>
-                                            {lang === 'KN' ? r.kn : r.en}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
 
-                    {/* Payment Mode */}
-                    <div className="flex gap-3 pt-2">
-                        {['CASH', 'UPI'].map(mode => (
-                            <button key={mode} type="button" onClick={() => setFormData(p => ({ ...p, payment_mode: mode }))} className={`flex-1 py-2 rounded-lg font-bold border-2 transition-all ${formData.payment_mode === mode ? (mode === 'CASH' ? 'border-green-500 bg-green-50 text-green-700' : 'border-blue-500 bg-blue-50 text-blue-700') : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                                {t && t[mode.toLowerCase()] ? t[mode.toLowerCase()] : mode}
+                        {/* Payment Mode toggles */}
+                        <div className="flex bg-gray-100 p-1 rounded-xl">
+                            {['CASH', 'UPI'].map(mode => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setFormData(p => ({ ...p, payment_mode: mode }))}
+                                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all shadow-sm ${formData.payment_mode === mode ? 'bg-white text-gray-800 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Omni Action Button */}
+                        <div className="pt-2 sticky bottom-0 bg-white/50 backdrop-blur-sm -mx-2 px-2 pb-2">
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className={`w-full py-4 rounded-xl font-black tracking-wide text-white shadow-xl flex justify-center items-center gap-2 transform active:scale-95 transition-all
+                                    ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-gradient-to-r from-orange-500 to-red-500 hover:shadow-orange-500/30 hover:scale-[1.01]"}
+                                `}
+                            >
+                                {loading ? <Loader2 className="animate-spin" /> : (
+                                    <>
+                                        <span>CONFIRM BOOKING</span>
+                                        <ArrowRight className="w-5 h-5" />
+                                    </>
+                                )}
                             </button>
-                        ))}
-                    </div>
-
-                    <button type="submit" disabled={loading} className="w-full py-3 mt-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-lg shadow-lg hover:shadow-orange-200 transition-all flex justify-center items-center gap-2">
-                        {loading ? <Loader2 className="animate-spin" /> : (t?.bookNow || 'Confirm Booking')}
-                    </button>
-                </form>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     );
