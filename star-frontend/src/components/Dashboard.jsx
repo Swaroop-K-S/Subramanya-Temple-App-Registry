@@ -95,9 +95,9 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
             ${showContent ? 'opacity-100' : 'opacity-0'}
         `}>
 
-            {/* Header Section */}
-            <header className="max-w-7xl mx-auto mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-20">
-                <div className="flex items-center gap-6">
+            {/* Header Section - Golden Ratio Spacing */}
+            <header className="max-w-7xl mx-auto mb-16 flex flex-col md:flex-row md:items-end justify-between gap-10 relative z-20 px-4 md:px-0">
+                <div className="flex items-center gap-8">
                     {!isHome && (
                         <button
                             onClick={onBack}
@@ -239,7 +239,7 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                                                 <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-1">
                                                     Dakshina
                                                 </span>
-                                                <div className="flex items-center gap-1 font-display font-bold text-2xl text-emerald-600 dark:text-emerald-400">
+                                                <div className="flex items-center gap-1 font-display font-bold text-2xl text-temple-green dark:text-temple-green">
                                                     <span className="text-lg">₹</span>
                                                     {seva.price}
                                                 </div>

@@ -143,11 +143,11 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
     // --- OMNI-UI BOOKING FORM ---
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 isolate">
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose} />
+            {/* Backdrop with Neural Blur */}
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-500" onClick={onClose} />
 
-            {/* Modal Card */}
-            <div className="relative w-full max-w-4xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col md:flex-row h-[85vh] md:h-auto">
+            {/* Modal Card - Deep Glass Physics */}
+            <div className="relative w-full max-w-4xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-3xl rounded-[2.5rem] shadow-2xl border border-white/20 dark:border-white/10 ring-1 ring-white/20 overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col md:flex-row h-[85vh] md:h-auto">
 
                 {/* Left Column: Seva Details (Visual Anchor) */}
                 <div className="w-full md:w-1/3 bg-gradient-to-br from-amber-50 to-orange-100/50 p-8 flex flex-col justify-between border-r border-orange-100 relative overflow-hidden">

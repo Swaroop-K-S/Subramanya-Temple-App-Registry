@@ -17,6 +17,8 @@
   --color-temple-sand: #FDF6E9;
   --color-temple-red: #C0392B;
   --color-temple-stone: #2C3E50;
+  --color-temple-green: #27AE60;
+  --color-temple-rose: #E91E63;
   --color-temple-brown: #6D4C41;
 
   /* Cosmic Palette */
@@ -37,6 +39,8 @@
   --animate-shimmer: shimmer 2s linear infinite;
   --animate-pulse-golden: pulse-golden 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-reveals: reveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  --animate-liquid: liquid 8s ease-in-out infinite;
+  --animate-ember: ember 4s ease-out infinite;
 
   @keyframes float {
 
@@ -94,6 +98,30 @@
       transform: translateY(0);
     }
   }
+
+  @keyframes liquid {
+
+    0%,
+    100% {
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+    }
+
+    50% {
+      border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
+    }
+  }
+
+  @keyframes ember {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateY(-20px) scale(0);
+    }
+  }
 }
 
 /* 2. Theme Variables (Source of Truth) */
@@ -119,95 +147,168 @@
   --glow-color: rgba(243, 156, 18, 0.3);
 }
 
-/* Dark (Mystic) Theme Override */
-.dark {
-  color-scheme: dark;
+/* --- VEDIC COLOR SCIENCE (60-30-10) --- */
+:root {
+  /* Neutral Glass (60%) */
+  --bg-page: #F8FAFC;
+  --bg-card: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.4);
 
-  /* Dark (Mystic) Theme */
-  --bg-primary: #020617;
-  /* Deepest Slate/Void */
-  --bg-card: rgba(15, 23, 42, 0.60);
-  --bg-glass: rgba(2, 6, 23, 0.60);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  /* Sacred Branding (30%) - Gold/Sand */
+  --color-temple-gold: #F59E0B;
+  --color-temple-saffron: #D97706;
+  --color-temple-sand: #FFFBEB;
 
-  --text-primary: #F8FAFC;
-  /* Crisp White */
-  --text-secondary: #94A3B8;
-  --text-accent: #FCA5A5;
-  /* Rose Gold/Pinkish for contrast */
+  /* Semantic Accents (10%) */
+  --color-temple-green: #10B981;
+  /* Emerald-500: Wealth/Success */
+  --color-temple-rose: #F43F5E;
+  /* Rose-500: Urgent/Action */
+  --color-temple-indigo: #6366F1;
+  /* Indigo-500: Trust/Info */
+  --color-temple-stone: #334155;
+  /* Slate-700: Text Primary */
 
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
-  --glow-color: rgba(243, 156, 18, 0.15);
+  /* Cosmic Palette (Dark Mode) - Desaturated for Eye Comfort */
+  --bg-page-dark: #0F172A;
+  --bg-card-dark: rgba(15, 23, 42, 0.60);
+  --color-temple-gold-dark: #FCD34D;
+  /* Amber-300 */
+  --color-temple-green-dark: #34D399;
+  /* Emerald-400 */
+  --color-temple-rose-dark: #FB7185;
+  /* Rose-400 */
 
-  /* Variable Re-mapping for Temple Colors in Dark Mode */
-  --color-temple-brown: #E2E8F0;
-  --color-temple-sand: #0F172A;
+  /* --- PHYSICS & DEPTH --- */
+  --shadow-ambient: 0 20px 60px -15px rgba(0, 0, 0, 0.05);
+  /* Soft Global Light */
+  --shadow-direct: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  /* Sharp Object Shadow */
+  --glow-gold: 0 0 20px rgba(245, 158, 11, 0.3);
 }
 
-/* 3. Base Resets & Global Styles */
+/* NOISE TEXTURE - Dithering */
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* Base Styles */
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-
-  /* Smooth transitions for theme switching */
-  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-    color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Noise Texture for that 'Grainy' Premium Feel */
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
-
-  overflow-x: hidden;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  /* Body: Clean Sans */
+  background-color: var(--bg-page);
+  color: var(--color-temple-stone);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.5s ease;
 }
 
-/* Typography Rules */
 h1,
 h2,
 h3,
-h4,
-h5,
-h6 {
-  font-family: var(--font-heading);
+h4 {
+  font-family: 'Playfair Display', serif;
+  /* Headings: Sacred Serif */
+  font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-/* Sanskrit/Kannada Readability Rule */
-.lang-kn,
-.lang-sa {
-  line-height: 1.6;
-  /* leading-relaxed */
-}
-
-/* 4. Utility Classes - Divine Glass */
+/* --- DEEP GLASS COMPONENT --- */
 .glass-card {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-top: 1px solid var(--glass-border);
-  border-radius: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(24px);
+  /* Deep Blur */
+  -webkit-backdrop-filter: blur(24px);
 
-  /* GPU Acceleration */
+  /* Specular Highlight (Inner Border) */
+  border: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.8);
+  /* Top Edge Light Catch */
+  border-bottom: 2px solid rgba(245, 158, 11, 0.05);
+  /* Subtle Gold Reflection */
+
+  border-radius: 1.5rem;
+  /* Soft Curves */
+  box-shadow: var(--shadow-ambient), var(--shadow-direct);
+  transition: all 0.4s cubic-bezier(0.25, 0.4, 0.25, 1);
   will-change: transform, box-shadow;
-  transform: translate3d(0, 0, 0);
 }
 
 .glass-card:hover {
-  transform: translate3d(0, -5px, 0) scale(1.01);
-  box-shadow: var(--shadow-lg),
-    0 0 20px var(--glow-color);
-  border-color: var(--text-accent);
-  z-index: 10;
+  transform: translateY(-4px) scale(1.005);
+  box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.12), var(--glow-gold);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+/* DARK MODE OVERRIDES */
+.dark body {
+  background-color: var(--bg-page-dark);
+  color: #E2E8F0;
+}
+
+.dark .glass-card {
+  background: var(--bg-card-dark);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.3);
+}
+
+/* GOLDEN RATIO TYPOGRAPHY */
+.text-hero {
+  font-size: 3rem;
+  line-height: 1.1;
+}
+
+/* ~48px */
+.text-h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+/* ~32px */
+.text-h2 {
+  font-size: 1.25rem;
+  line-height: 1.309;
+}
+
+/* ~20px */
+.text-body {
+  font-size: 1rem;
+  line-height: 1.618;
+}
+
+/* 16px */
+.text-caption {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* 12px */
+
+/* CUSTOM SCROLLBAR (Minimalist) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Utilities */
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--color-temple-saffron), var(--color-temple-gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -215,25 +316,10 @@ h6 {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--text-secondary);
-  border-radius: 20px;
-  background-clip: content-box;
-  opacity: 0.5;
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-accent);
-}
-
-/* Utility: Text Gradients */
-.text-gradient-gold {
-  background: linear-gradient(135deg, #F39C12 0%, #D35400 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.dark .text-gradient-gold {
-  background: linear-gradient(135deg, #FDEBD0 0%, #F39C12 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: rgba(148, 163, 184, 0.5);
 }
