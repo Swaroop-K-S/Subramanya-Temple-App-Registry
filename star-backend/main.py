@@ -285,7 +285,7 @@ def get_today_transactions(db: Session = Depends(get_db)):
 def get_devotee_details(phone: str, db: Session = Depends(get_db)):
     """Fetch devotee details by phone number for Auto-Fill (bilingual)."""
     query = text("""
-        SELECT full_name_en, full_name_kn, gothra_en, gothra_kn, nakshatra, rashi 
+        SELECT full_name_en, full_name_kn, gothra_en, gothra_kn, nakshatra, rashi, area, pincode
         FROM devotees WHERE phone_number = :phone
     """)
     result = db.execute(query, {"phone": phone}).fetchone()
@@ -301,7 +301,9 @@ def get_devotee_details(phone: str, db: Session = Depends(get_db)):
         "gothra_en": result[2],
         "gothra_kn": result[3],
         "nakshatra": result[4],
-        "rashi": result[5]
+        "rashi": result[5],
+        "area": result[6] if len(result) > 6 else None,
+        "pincode": result[7] if len(result) > 7 else None
     }
 
 # =============================================================================
@@ -395,7 +397,8 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     
     # 1. Lunar Query - Find subscriptions matching TODAY's Tithi
     lunar_query = text("""
-        SELECT ss.id, d.full_name_en, d.phone_number, d.gothra_en, sc.name_eng, ss.maasa, ss.paksha, ss.tithi, ss.notes, d.address, d.nakshatra, d.rashi
+        SELECT ss.id, d.full_name_en, d.phone_number, d.gothra_en, sc.name_eng, 
+               ss.maasa, ss.paksha, ss.tithi, ss.notes, d.address, d.nakshatra, d.rashi, ss.occasion
         FROM shaswata_subscriptions ss
         JOIN devotees d ON ss.devotee_id = d.id
         JOIN seva_catalog sc ON ss.seva_id = sc.id
@@ -415,12 +418,13 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     lunar_pujas = [{
         "id": row[0], "name": row[1], "phone": row[2], "gothra": row[3],
         "seva": row[4], "date_info": f"{row[5]} {row[6]} {row[7]}", "notes": row[8], "address": row[9],
-        "nakshatra": row[10], "rashi": row[11], "type": "LUNAR"
+        "nakshatra": row[10], "rashi": row[11], "type": "LUNAR", "occasion": row[12]
     } for row in lunar_result]
     
     # 2. Gregorian Query (Dynamic based on selected date)
     gregorian_query = text("""
-        SELECT ss.id, d.full_name_en, d.phone_number, d.gothra_en, sc.name_eng, ss.event_day, ss.event_month, ss.notes, d.address, d.nakshatra, d.rashi
+        SELECT ss.id, d.full_name_en, d.phone_number, d.gothra_en, sc.name_eng, 
+               ss.event_day, ss.event_month, ss.notes, d.address, d.nakshatra, d.rashi, ss.occasion
         FROM shaswata_subscriptions ss
         JOIN devotees d ON ss.devotee_id = d.id
         JOIN seva_catalog sc ON ss.seva_id = sc.id
@@ -432,7 +436,7 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     gregorian_pujas = [{
         "id": row[0], "name": row[1], "phone": row[2], "gothra": row[3],
         "seva": row[4], "date_info": f"{row[5]}/{row[6]}", "notes": row[7], "address": row[8],
-        "nakshatra": row[9], "rashi": row[10], "type": "GREGORIAN"
+        "nakshatra": row[9], "rashi": row[10], "type": "GREGORIAN", "occasion": row[11]
     } for row in gregorian_result]
 
     # 3. One-Time Transactions (Check BOTH seva_date AND transaction_date)

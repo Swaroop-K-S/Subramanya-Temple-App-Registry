@@ -89,6 +89,10 @@ class TransactionCreate(BaseModel):
     
     phone_number: str = Field(..., min_length=10, max_length=15, description="Contact phone number")
     
+    # Address Details
+    area: Optional[str] = Field(None, max_length=100, description="Area/Locality")
+    pincode: Optional[str] = Field(None, max_length=10, description="Pincode")
+    
     # Bilingual Gothra Fields
     gothra: Optional[str] = Field(None, max_length=50, description="Gotra (backward compat)")
     gothra_en: Optional[str] = Field(None, max_length=50, description="English Gothra")
@@ -129,6 +133,8 @@ class DevoteeCreate(BaseModel):
     nakshatra: Optional[str] = None
     rashi: Optional[str] = None
     address: Optional[str] = None
+    area: Optional[str] = None
+    pincode: Optional[str] = None
 
 
 class ShaswataCreate(BaseModel):
@@ -146,6 +152,8 @@ class ShaswataCreate(BaseModel):
     nakshatra: Optional[str] = Field(None, max_length=30, description="Birth star")
     rashi: Optional[str] = Field(None, max_length=30, description="Zodiac sign")
     address: Optional[str] = Field(None, description="Postal address")
+    area: Optional[str] = Field(None, max_length=100, description="Area/Locality")
+    pincode: Optional[str] = Field(None, max_length=10, description="Pincode")
     
     # Seva Information
     seva_id: Optional[int] = Field(None, description="ID of the Shaswata seva")
@@ -164,6 +172,9 @@ class ShaswataCreate(BaseModel):
     maasa: Optional[Maasa] = Field(None, description="Hindu lunar month")
     paksha: Optional[Paksha] = Field(None, description="Shukla or Krishna paksha")
     tithi: Optional[Tithi] = Field(None, description="Lunar day/tithi")
+    
+    # Occasion Field (NEW: Birthday, Anniversary, etc.)
+    occasion: Optional[str] = Field(None, max_length=100, description="Purpose: Birthday, Anniversary, etc.")
     
     # Additional Info
     notes: Optional[str] = Field(None, max_length=500, description="Additional notes")
@@ -267,6 +278,8 @@ class DevoteeResponse(BaseModel):
     gothra_kn: Optional[str] = None
     nakshatra: Optional[str] = None
     rashi: Optional[str] = None
+    area: Optional[str] = None
+    pincode: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTempleTime } from '../context/TimeContext';
-import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sparkles, Plus } from 'lucide-react';
+import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sparkles, Plus, Check, Package, Send, X } from 'lucide-react';
 import { OmniInput, OmniToggle } from './ui/Widgets';
 import api from '../services/api';
 import ShaswataForm from './ShaswataForm'; // [NEW] Embedded Booking Wizard
@@ -24,6 +24,17 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
     const [filters, setFilters] = useState({
         onlyShashwata: true,
         searchQuery: ''
+    });
+
+    // === ACTION STATUS TRACKING ===
+    // Stores { [pujaId]: { poojaPerformed: boolean, dispatched: boolean } }
+    const [actionStatus, setActionStatus] = useState({});
+
+    // === CONFIRMATION MODAL STATE ===
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: null, // 'pooja' or 'dispatch'
+        puja: null
     });
 
     // --- FETCH DATA ---
@@ -73,6 +84,33 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
     const handlePrint = () => {
         window.print();
     };
+
+    // === ACTION HANDLERS (Temple OS Compliant) ===
+    const openConfirmModal = (type, puja) => {
+        setConfirmModal({ isOpen: true, type, puja });
+    };
+
+    const closeConfirmModal = () => {
+        setConfirmModal({ isOpen: false, type: null, puja: null });
+    };
+
+    const handleConfirmAction = () => {
+        const { type, puja } = confirmModal;
+        if (!puja) return;
+
+        setActionStatus(prev => ({
+            ...prev,
+            [puja.id]: {
+                ...prev[puja.id],
+                ...(type === 'pooja' ? { poojaPerformed: true } : { dispatched: true })
+            }
+        }));
+        closeConfirmModal();
+    };
+
+    // Check status helpers
+    const isPoojaPerformed = (pujaId) => actionStatus[pujaId]?.poojaPerformed || false;
+    const isDispatched = (pujaId) => actionStatus[pujaId]?.dispatched || false;
 
     return (
         <div className="min-h-screen p-6 animate-in fade-in zoom-in duration-300">
@@ -230,6 +268,33 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                         <p className="text-xs font-bold text-slate-400 mt-1 flex items-center gap-1">
                                             {puja.phone || 'No Phone'}
                                         </p>
+                                        {/* === OCCASION & BOOKING TYPE BADGES === */}
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {/* Occasion Badge */}
+                                            {puja.occasion && (
+                                                <span className="
+                                                    inline-flex items-center gap-1 px-2 py-1 
+                                                    bg-violet-100 dark:bg-violet-900/30 
+                                                    text-violet-700 dark:text-violet-300 
+                                                    text-xs font-bold rounded-lg
+                                                ">
+                                                    🎉 {puja.occasion}
+                                                </span>
+                                            )}
+                                            {/* Subscription Type Badge */}
+                                            {puja.type !== 'BOOKING' && (
+                                                <span className={`
+                                                    inline-flex items-center gap-1 px-2 py-1 
+                                                    text-xs font-bold rounded-lg
+                                                    ${puja.type === 'LUNAR'
+                                                        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                                        : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                                    }
+                                                `}>
+                                                    {puja.type === 'LUNAR' ? '🌙 Panchangam' : '📅 Calendar'}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-xl text-orange-600 dark:text-orange-400">
                                         <MapPin size={20} />
@@ -277,7 +342,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                 </div>
 
                                 {/* Footer */}
-                                <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/5 pt-4">
+                                <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/5 pt-4 mb-4">
                                     <div>
                                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Seva</p>
                                         <p className="text-sm font-bold text-temple-brown dark:text-amber-100 truncate max-w-[150px]" title={puja.seva}>
@@ -298,6 +363,47 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                                     'One-Time'}
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* === ACTION BUTTONS (Temple OS Compliant) === */}
+                                {/* 8-Point Grid: gap-4 = 16px, p-3 = 12px */}
+                                {/* Affordance Theory: Shadows + Gradients for clickability */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* Pooja Performed Button */}
+                                    <button
+                                        onClick={() => openConfirmModal('pooja', puja)}
+                                        disabled={isPoojaPerformed(puja.id)}
+                                        className={`
+                                            flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm
+                                            transition-all duration-300 active:scale-95
+                                            ${isPoojaPerformed(puja.id)
+                                                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 cursor-default'
+                                                : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5'
+                                            }
+                                        `}
+                                    >
+                                        <Check size={16} className={isPoojaPerformed(puja.id) ? '' : 'animate-pulse'} />
+                                        <span>{isPoojaPerformed(puja.id) ? 'Pooja Done' : 'Mark Complete'}</span>
+                                    </button>
+
+                                    {/* Dispatch Prasadam Button */}
+                                    <button
+                                        onClick={() => openConfirmModal('dispatch', puja)}
+                                        disabled={!isPoojaPerformed(puja.id) || isDispatched(puja.id)}
+                                        className={`
+                                            flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm
+                                            transition-all duration-300 active:scale-95
+                                            ${isDispatched(puja.id)
+                                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 cursor-default'
+                                                : !isPoojaPerformed(puja.id)
+                                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-temple-gold to-temple-saffron text-white shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:-translate-y-0.5'
+                                            }
+                                        `}
+                                    >
+                                        <Package size={16} />
+                                        <span>{isDispatched(puja.id) ? 'Dispatched' : 'Dispatch'}</span>
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -328,6 +434,112 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                     }
                 }
             `}</style>
+
+            {/* === CONFIRMATION MODAL (Temple OS Deep Glass) === */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                        onClick={closeConfirmModal}
+                    />
+
+                    {/* Modal Card - Deep Glass Physics */}
+                    <div className="
+                        relative z-10 w-full max-w-md
+                        bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl
+                        rounded-3xl p-8
+                        border border-white/20 dark:border-white/10
+                        shadow-2xl
+                        animate-in zoom-in-95 slide-in-from-bottom-4 duration-300
+                    ">
+                        {/* Close Button */}
+                        <button
+                            onClick={closeConfirmModal}
+                            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        {/* Icon Header */}
+                        <div className={`
+                            w-16 h-16 rounded-2xl mx-auto mb-6 flex items-center justify-center
+                            ${confirmModal.type === 'pooja'
+                                ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/30'
+                                : 'bg-gradient-to-br from-temple-gold to-temple-saffron shadow-lg shadow-amber-500/30'
+                            }
+                        `}>
+                            {confirmModal.type === 'pooja'
+                                ? <Check size={32} className="text-white" />
+                                : <Package size={32} className="text-white" />
+                            }
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-2xl font-black font-heading text-center text-slate-800 dark:text-white mb-2">
+                            {confirmModal.type === 'pooja'
+                                ? 'Confirm Pooja Performed'
+                                : 'Dispatch Prasadam'
+                            }
+                        </h3>
+
+                        {/* Devotee Name */}
+                        <p className="text-center text-slate-500 dark:text-slate-400 mb-6">
+                            For <span className="font-bold text-slate-700 dark:text-slate-200">{confirmModal.puja?.name}</span>
+                        </p>
+
+                        {/* Message */}
+                        <div className={`
+                            p-4 rounded-2xl mb-6 text-center
+                            ${confirmModal.type === 'pooja'
+                                ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30'
+                                : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30'
+                            }
+                        `}>
+                            {confirmModal.type === 'pooja' ? (
+                                <p className="text-emerald-700 dark:text-emerald-300 font-medium">
+                                    ✨ The sacred pooja has been performed successfully.
+                                    <br />A notification will be sent to the devotee.
+                                </p>
+                            ) : (
+                                <p className="text-amber-700 dark:text-amber-300 font-medium">
+                                    📦 Prasadam will be shipped to the devotee's address.
+                                    <br />
+                                    <span className="font-bold">Expected delivery: 3-5 days</span>
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Action Buttons - 8pt Grid */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                onClick={closeConfirmModal}
+                                className="
+                                    py-3 px-6 rounded-xl font-bold
+                                    bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300
+                                    hover:bg-slate-200 dark:hover:bg-slate-700 transition-all
+                                    active:scale-95
+                                "
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmAction}
+                                className={`
+                                    py-3 px-6 rounded-xl font-bold text-white
+                                    transition-all active:scale-95
+                                    ${confirmModal.type === 'pooja'
+                                        ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50'
+                                        : 'bg-gradient-to-r from-temple-gold to-temple-saffron shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50'
+                                    }
+                                `}
+                            >
+                                {confirmModal.type === 'pooja' ? 'Confirm' : 'Send Prasadam'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- BOOKING WIZARD OVERLAY --- */}
             <ShaswataForm

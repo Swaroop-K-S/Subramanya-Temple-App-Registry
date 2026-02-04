@@ -16,7 +16,7 @@ import DOMPurify from 'dompurify';
 import confetti from 'canvas-confetti';
 import api from '../services/api';
 // import './ShaswataWizard.css'; // Swarm Animations - Removed (Missing)
-import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS, GOTRAS } from './constants';
+import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS, GOTRAS, OCCASIONS } from './constants';
 import { TRANSLATIONS } from './translations';
 import { useTheme } from '../context/ThemeContext'; // Assuming context exists, if not fallback to props
 
@@ -52,7 +52,10 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
         devotee_name: '',
         gothra: '',
         phone: '',
-        address: ''
+        address: '',
+        area: '',      // NEW
+        pincode: '',   // NEW
+        occasion: ''  // NEW: For Birthday, Anniversary, etc.
     });
 
     const [sevaDetails, setSevaDetails] = useState({
@@ -96,7 +99,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
             // Reset on Close
             setTimeout(() => {
                 setStep(1);
-                setFormData({ devotee_name: '', gothra: '', phone: '', address: '' });
+                setFormData({ devotee_name: '', gothra: '', phone: '', address: '', occasion: '' });
                 setSevaDetails({ type: 'GENERAL', calendar: 'GREGORIAN', date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' } });
                 setErrors({});
             }, 300); // Wait for exit animation
@@ -144,6 +147,8 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
             if (!formData.devotee_name) newErrors.devotee_name = true;
             if (!formData.phone || !validatePhone(formData.phone)) newErrors.phone = true;
             if (!formData.address) newErrors.address = true;
+            if (!formData.area) newErrors.area = true;        // Validation
+            if (!formData.pincode) newErrors.pincode = true;  // Validation
         }
 
         if (Object.keys(newErrors).length > 0) {
@@ -197,6 +202,9 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                 phone_number: formData.phone,
                 gothra: formData.gothra,
                 address: formData.address,
+                area: formData.area,       // Mapping
+                pincode: formData.pincode, // Mapping
+                occasion: formData.occasion || null,  // NEW: Birthday, Anniversary, etc.
 
                 // Mapped Fields
                 seva_id: isGeneral ? 7 : 8, // 7: Shashwata, 8: Brahmachari
@@ -346,17 +354,93 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 </div>
                             </div>
 
-                            {/* Address */}
-                            <div>
-                                <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">Address</label>
-                                <div className={`relative bg-white/5 focus-within:bg-white/10 rounded-xl ${errors.address ? VARIANTS.INPUT_ERROR : ''}`}>
-                                    <textarea
-                                        value={formData.address}
-                                        onChange={(e) => handleInputChange('address', e.target.value)}
-                                        className="w-full p-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium h-24 resize-none"
-                                        placeholder="Full postal address..."
-                                    />
+                            {/* Address Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="md:col-span-2">
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ವಿಳಾಸ (Address)' : 'Street Address'}
+                                    </label>
+                                    <div className={`relative bg-white/5 focus-within:bg-white/10 rounded-xl ${errors.address ? VARIANTS.INPUT_ERROR : ''}`}>
+                                        <textarea
+                                            value={formData.address}
+                                            onChange={(e) => handleInputChange('address', e.target.value)}
+                                            className="w-full p-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium h-24 resize-none"
+                                            placeholder="#123, Temple Street..."
+                                        />
+                                    </div>
                                 </div>
+
+                                {/* Area */}
+                                <div>
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ಬಡಾವಣೆ (Area)' : 'Area / Locality'}
+                                    </label>
+                                    <div className={`relative group rounded-xl ${errors.area ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
+                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
+                                        <input
+                                            value={formData.area}
+                                            onChange={(e) => handleInputChange('area', e.target.value)}
+                                            className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg"
+                                            placeholder="Basavanagudi"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Pincode */}
+                                <div>
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ಪಿನ್ ಕೋಡ್ (Pincode)' : 'Pincode'}
+                                    </label>
+                                    <div className={`relative group rounded-xl ${errors.pincode ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-mono text-sm">#</div>
+                                        <input
+                                            value={formData.pincode}
+                                            onChange={(e) => handleInputChange('pincode', e.target.value)}
+                                            maxLength={6}
+                                            className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg font-mono"
+                                            placeholder="560004"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* === OCCASION FIELD (Temple OS Compliant) === */}
+                            {/* 8-Point Grid: p-4, gap-6 | Deep Glass: bg-white/5 */}
+                            <div>
+                                <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                    {lang === 'KN' ? 'ಸಂದರ್ಭ (Occasion)' : 'Purpose / Occasion'}
+                                </label>
+                                <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl pointer-events-none">
+                                        {formData.occasion
+                                            ? OCCASIONS.find(o => o.en === formData.occasion)?.icon || '🎉'
+                                            : '🎉'}
+                                    </span>
+                                    <select
+                                        value={formData.occasion}
+                                        onChange={(e) => handleInputChange('occasion', e.target.value)}
+                                        className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
+                                    >
+                                        <option value="" className="bg-slate-800 text-white">
+                                            {lang === 'KN' ? 'ಸಂದರ್ಭ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Occasion...'}
+                                        </option>
+                                        {OCCASIONS.map(o => (
+                                            <option key={o.en} value={o.en} className="bg-slate-800 text-white">
+                                                {lang === 'KN' ? `${o.icon} ${o.kn} (${o.en})` : `${o.icon} ${o.en}`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {/* Custom Chevron (Affordance - 3.5 Theory) */}
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                {/* Helper Text */}
+                                <p className="text-xs text-white/40 mt-2 pl-1">
+                                    {lang === 'KN' ? 'ಯಾವ ಸಂದರ್ಭಕ್ಕಾಗಿ ಈ ಪೂಜೆ?' : 'Why is this pooja being performed?'}
+                                </p>
                             </div>
                         </div>
                     )}

@@ -263,3 +263,20 @@ export const GOTRAS = [
     // Special Entry for Unknown/Other
     { en: "Other", kn: "ಇತರ" },
 ];
+
+// =============================================================================
+// OCCASIONS (For Shashwata Seva Booking - Why they are performing pooja)
+// =============================================================================
+export const OCCASIONS = [
+    { en: "Birthday", kn: "ಜನ್ಮದಿನ", icon: "🎂", description: "Annual birthday blessing" },
+    { en: "Wedding Anniversary", kn: "ಮದುವೆ ವಾರ್ಷಿಕೋತ್ಸವ", icon: "💍", description: "Marriage celebration" },
+    { en: "Shradha (Death Anniversary)", kn: "ಶ್ರಾದ್ಧ", icon: "🕯️", description: "Remembrance of ancestors" },
+    { en: "Baby Naming (Namakarana)", kn: "ನಾಮಕರಣ", icon: "👶", description: "Naming ceremony" },
+    { en: "Thread Ceremony (Upanayana)", kn: "ಉಪನಯನ", icon: "🪔", description: "Sacred thread ceremony" },
+    { en: "House Warming (Griha Pravesh)", kn: "ಗೃಹ ಪ್ರವೇಶ", icon: "🏠", description: "New home blessing" },
+    { en: "New Business", kn: "ಹೊಸ ವ್ಯಾಪಾರ", icon: "💼", description: "Business inauguration" },
+    { en: "Health & Wellbeing", kn: "ಆರೋಗ್ಯ ಮತ್ತು ಕ್ಷೇಮ", icon: "🙏", description: "Prayers for health" },
+    { en: "Education & Success", kn: "ಶಿಕ್ಷಣ ಮತ್ತು ಯಶಸ್ಸು", icon: "📚", description: "Academic blessings" },
+    { en: "General Blessing", kn: "ಸಾಮಾನ್ಯ ಆಶೀರ್ವಾದ", icon: "✨", description: "General prayer request" },
+    { en: "Other", kn: "ಇತರೆ", icon: "📿", description: "Other occasion" },
+];

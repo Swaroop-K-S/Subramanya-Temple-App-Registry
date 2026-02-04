@@ -26,7 +26,8 @@ def generate_receipt_number() -> str:
 
 def get_or_create_devotee(db: Session, name_en: str, phone: str, 
                           name_kn: str = None, gothra_en: str = None, gothra_kn: str = None,
-                          nakshatra: str = None, rashi: str = None, address: str = None) -> int:
+                          nakshatra: str = None, rashi: str = None, address: str = None,
+                          area: str = None, pincode: str = None) -> int:
     """
     Find an existing devotee by phone number, or create a new one.
     Supports bilingual names (English + Kannada).
@@ -64,28 +65,30 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
                     nakshatra = COALESCE(:nakshatra, nakshatra),
                     rashi = COALESCE(:rashi, rashi),
                     address = COALESCE(:address, address),
+                    area = COALESCE(:area, area),
+                    pincode = COALESCE(:pincode, pincode),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
             {"name_en": name_en, "name_kn": name_kn, "gothra_en": gothra_en, 
              "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi, 
-             "address": address, "id": devotee_id}
+             "address": address, "area": area, "pincode": pincode, "id": devotee_id}
         )
-        db.commit()
+        db.flush() # Keep transaction open
         return devotee_id
     else:
         # Create new devotee
         result = db.execute(
             text("""
-                INSERT INTO devotees (full_name_en, full_name_kn, phone_number, gothra_en, gothra_kn, nakshatra, rashi, address)
-                VALUES (:name_en, :name_kn, :phone, :gothra_en, :gothra_kn, :nakshatra, :rashi, :address)
+                INSERT INTO devotees (full_name_en, full_name_kn, phone_number, gothra_en, gothra_kn, nakshatra, rashi, address, area, pincode)
+                VALUES (:name_en, :name_kn, :phone, :gothra_en, :gothra_kn, :nakshatra, :rashi, :address, :area, :pincode)
                 RETURNING id
             """),
             {"name_en": name_en, "name_kn": name_kn, "phone": phone, 
              "gothra_en": gothra_en, "gothra_kn": gothra_kn, "nakshatra": nakshatra, 
-             "rashi": rashi, "address": address}
+             "rashi": rashi, "address": address, "area": area, "pincode": pincode}
         )
-        db.commit()
+        db.flush() # Keep transaction open
         new_id = result.fetchone()[0]
         return new_id
 
@@ -123,7 +126,9 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
             gothra_en=gothra_en,
             gothra_kn=gothra_kn,
             nakshatra=transaction.nakshatra,
-            rashi=transaction.rashi
+            rashi=transaction.rashi,
+            area=transaction.area,
+            pincode=transaction.pincode
         )
         
         # Step 2: Generate receipt number
@@ -285,7 +290,9 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
             gothra_en=subscription.gothra,
             nakshatra=subscription.nakshatra,
             rashi=subscription.rashi,
-            address=subscription.address
+            address=subscription.address,
+            area=subscription.area,
+            pincode=subscription.pincode
         )
         
         # Step 2: Get seva name (optional - may be null for quick subscriptions)
@@ -325,12 +332,12 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
                 (devotee_id, seva_id, subscription_type, seva_type,
                  event_day, event_month, 
                  maasa, paksha, tithi, 
-                 notes, is_active)
+                 occasion, notes, is_active)
                 VALUES 
                 (:devotee_id, :seva_id, :sub_type, :seva_type,
                  :event_day, :event_month,
                  :maasa, :paksha, :tithi,
-                 :notes, TRUE)
+                 :occasion, :notes, TRUE)
                 RETURNING id
             """),
             {
@@ -343,6 +350,7 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
                 "maasa": maasa,
                 "paksha": paksha,
                 "tithi": tithi,
+                "occasion": getattr(subscription, 'occasion', None),
                 "notes": subscription.notes
             }
         )

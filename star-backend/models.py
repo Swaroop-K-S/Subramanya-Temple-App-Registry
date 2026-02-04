@@ -137,6 +137,8 @@ class Devotee(Base):
     nakshatra = Column(String(30), nullable=True)
     rashi = Column(String(30), nullable=True)
     address = Column(Text, nullable=True)
+    area = Column(String(100), nullable=True)           # NEW
+    pincode = Column(String(10), nullable=True)         # NEW
     
     # Audit columns
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -190,6 +192,7 @@ class ShaswataSubscription(Base):
     # TRACKING & METADATA
     # =========================================================================
     last_performed_year = Column(Integer, nullable=True)  # Year when last performed
+    occasion = Column(String(100), nullable=True)          # NEW: Birthday, Anniversary, etc.
     notes = Column(Text, nullable=True)                   # Additional notes
     
     # Audit columns

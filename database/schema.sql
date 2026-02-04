@@ -100,6 +100,8 @@ CREATE TABLE devotees (
     nakshatra       VARCHAR(30),            -- Birth star
     rashi           VARCHAR(30),            -- Zodiac sign (Mesha to Meena)
     address         TEXT,
+    area            VARCHAR(100),            -- NEW: Locality/Area
+    pincode         VARCHAR(10),             -- NEW: Postal Code
     
     -- Audit columns
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
