@@ -4,7 +4,7 @@ import { ReactTransliterate } from 'react-transliterate';
 import 'react-transliterate/dist/index.css';
 import { bookSeva } from '../services/api';
 import api from '../services/api';
-import { NAKSHATRAS, RASHIS } from './constants';
+import { NAKSHATRAS, RASHIS, GOTRAS } from './constants';
 import Receipt from './Receipt';
 import { useReactToPrint } from 'react-to-print';
 import { TRANSLATIONS } from './translations';
@@ -266,34 +266,32 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                             </div>
                         </div>
 
-                        {/* Gothra */}
+                        {/* Gothra Dropdown - Deep Glass Style */}
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 {t?.gothra || "Gothra"}
                             </label>
                             <div className="relative">
-                                <Sparkles className="absolute left-3 top-3.5 text-gray-400 z-10 w-5 h-5" />
-                                {lang === 'KN' ? (
-                                    <ReactTransliterate
-                                        renderComponent={(props) => (
-                                            <input {...props} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all" />
-                                        )}
-                                        value={formData.gothra}
-                                        onChangeText={(text) => setFormData(prev => ({ ...prev, gothra: text }))}
-                                        lang="kn"
-                                        placeholder="Type Gothra..."
-                                        containerStyles={{ position: 'relative' }}
-                                        activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
-                                    />
-                                ) : (
-                                    <input
-                                        name="gothra"
-                                        value={formData.gothra}
-                                        onChange={handleInputChange}
-                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                                        placeholder="Enter Gothra"
-                                    />
-                                )}
+                                <Sparkles className="absolute left-3 top-3.5 text-gray-400 w-5 h-5 pointer-events-none z-10" />
+                                <select
+                                    name="gothra"
+                                    value={formData.gothra}
+                                    onChange={handleInputChange}
+                                    className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none transition-all text-gray-700 font-medium cursor-pointer hover:bg-gray-100"
+                                >
+                                    <option value="">{lang === 'KN' ? 'ಗೋತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ...' : 'Select Gothra...'}</option>
+                                    {GOTRAS.map(g => (
+                                        <option key={g.en} value={g.en}>
+                                            {lang === 'KN' ? `${g.kn} (${g.en})` : g.en}
+                                        </option>
+                                    ))}
+                                </select>
+                                {/* Custom Chevron (Affordance) */}
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
 

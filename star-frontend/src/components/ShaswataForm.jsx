@@ -16,7 +16,7 @@ import DOMPurify from 'dompurify';
 import confetti from 'canvas-confetti';
 import api from '../services/api';
 // import './ShaswataWizard.css'; // Swarm Animations - Removed (Missing)
-import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS } from './constants';
+import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS, GOTRAS } from './constants';
 import { TRANSLATIONS } from './translations';
 import { useTheme } from '../context/ThemeContext'; // Assuming context exists, if not fallback to props
 
@@ -323,24 +323,25 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                         {lang === 'KN' ? 'ಗೋತ್ರ (Gothra)' : 'Gothra'}
                                     </label>
                                     <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
-                                        <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
-                                        {lang === 'KN' ? (
-                                            <ReactTransliterate
-                                                value={formData.gothra}
-                                                onChangeText={(t) => handleInputChange('gothra', t)}
-                                                lang="kn"
-                                                placeholder="..."
-                                                containerClassName="w-full"
-                                                className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg vedic-input param-font"
-                                            />
-                                        ) : (
-                                            <input
-                                                value={formData.gothra}
-                                                onChange={(e) => handleInputChange('gothra', e.target.value)}
-                                                className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg"
-                                                placeholder="Enter Gothra"
-                                            />
-                                        )}
+                                        <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 pointer-events-none z-10" size={20} />
+                                        <select
+                                            value={formData.gothra}
+                                            onChange={(e) => handleInputChange('gothra', e.target.value)}
+                                            className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
+                                        >
+                                            <option value="" className="bg-slate-800 text-white">{lang === 'KN' ? 'ಗೋತ್ರ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Gothra...'}</option>
+                                            {GOTRAS.map(g => (
+                                                <option key={g.en} value={g.en} className="bg-slate-800 text-white">
+                                                    {lang === 'KN' ? `${g.kn} (${g.en})` : g.en}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {/* Custom Chevron (Affordance) */}
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
