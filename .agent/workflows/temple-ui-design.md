@@ -124,6 +124,181 @@ Background (Darkest) → Cards (Lighter) → Modals (Lightest/Brightest)
 
 ---
 
+## The Temple OS Visual Constitution (MANDATORY)
+
+> ⚠️ **These rules are NON-NEGOTIABLE. Summon them for EVERY UI element.**
+
+### The "Deep Glass" Formula (4 Layers)
+**Rule:** Never use simple opacity. All glass elements MUST combine 4 layers:
+
+```css
+.glass-card {
+  /* Layer 1: Background Blur - MINIMUM 12px */
+  @apply backdrop-blur-xl;           /* 12px blur */
+  
+  /* Layer 2: Fill */
+  @apply bg-white/70;                /* Light Mode */
+  /* @apply bg-slate-900/60;         /* Dark Mode */
+  
+  /* Layer 3: Specular Border (Light catching edge) */
+  @apply border border-white/20;     /* 1px @ 20% opacity */
+  
+  /* Layer 4: Shadow (Separation from background) */
+  @apply shadow-lg;
+}
+```
+
+---
+
+### The "Breathing Room" (Whitespace = Luxury)
+**Rule:** Dense data looks cheap. Luxury is defined by space.
+
+**Implementation:** Internal padding = **2× font size**
+```css
+/* If font is 16px, padding must be 32px */
+.premium-card {
+  @apply text-base p-8;   /* 16px text → 32px (p-8) padding */
+}
+
+/* If font is 14px, padding must be 28px (round to 32px) */
+.compact-card {
+  @apply text-sm p-6;     /* 14px text → 24px (p-6) padding */
+}
+```
+
+---
+
+### Elevation via Shadow Physics
+**Rule:** Distance determines shadow softness.
+
+| Element | Distance | Shadow Class | Effect |
+|---------|----------|--------------|--------|
+| Buttons | Close | `shadow-sm` | Small, sharp |
+| Cards | Medium | `shadow-lg` | Medium, soft |
+| Modals | Far (Floating) | `shadow-2xl` | Large, very soft |
+| Dropdowns | Hovering | `shadow-xl` | Large, defined |
+
+```css
+/* Buttons - Close to surface */
+.btn { @apply shadow-sm hover:shadow-md; }
+
+/* Cards - Mid elevation */
+.card { @apply shadow-lg; }
+
+/* Modals - Maximum elevation */
+.modal { @apply shadow-2xl; }
+```
+
+---
+
+### Corner Radius Consistency
+**Rule:** The app must NOT have an identity crisis. Pick ONE radius and use it everywhere.
+
+```css
+/* ✅ CORRECT: Consistent rounded-2xl */
+.card { @apply rounded-2xl; }
+.modal { @apply rounded-2xl; }
+.button { @apply rounded-xl; }     /* Slightly smaller is OK */
+.input { @apply rounded-xl; }
+
+/* ❌ WRONG: Mixed radii */
+.card { @apply rounded-3xl; }      /* Round */
+.modal { @apply rounded-lg; }      /* Less round */
+.button { @apply rounded-md; }     /* Almost square */
+```
+
+**Temple OS Standard:**
+- Containers (Cards, Modals): `rounded-2xl` (16px) or `rounded-3xl` (24px)
+- Interactive (Buttons, Inputs): `rounded-xl` (12px)
+- Small elements (Tags, Pills): `rounded-full`
+
+---
+
+### Contrast for Accessibility (WCAG AA)
+**Rule:** Text on glass MUST be legible for elderly clerks.
+
+```css
+/* ❌ NEVER use light grey on glass */
+.bad { @apply text-gray-400; }
+
+/* ✅ Use high-contrast colors */
+.good { @apply text-slate-900; }           /* Dark text on light glass */
+.good-dark { @apply text-white; }          /* White on dark glass */
+
+/* For dynamic backgrounds, add drop shadow */
+.text-on-image {
+  @apply text-white drop-shadow-sm;        /* Shadow for readability */
+}
+```
+
+**Minimum Contrast Ratios:**
+- Normal text: **4.5:1**
+- Large text (18px+): **3:1**
+
+---
+
+### Semantic Motion Physics
+**Rule:** Nothing appears instantly. Everything must obey physics.
+
+| Motion Type | Animation | Timing |
+|-------------|-----------|--------|
+| **Entering** | Spring (overshoot, settle) | `cubic-bezier(0.34, 1.56, 0.64, 1)` |
+| **Exiting** | Ease-in (slow start, fast end) | `ease-in` |
+| **Hover** | Ease-out (fast start, slow end) | `ease-out` |
+
+```css
+/* Modal Enter - Spring */
+@keyframes modal-enter {
+  0% { transform: scale(0.95); opacity: 0; }
+  60% { transform: scale(1.02); }  /* Overshoot */
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Modal Exit - Ease-in */
+@keyframes modal-exit {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+
+.modal-enter { animation: modal-enter 300ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-exit { animation: modal-exit 200ms ease-in; }
+```
+
+---
+
+### Visual Hierarchy (The "Squint Test")
+**Rule:** The most important element must be visually heaviest.
+
+**Test:** Blur your eyes. Can you still see the primary CTA?
+
+**Implementation Checklist:**
+```css
+/* Primary CTA - Maximum Visual Weight */
+.btn-primary {
+  @apply bg-gradient-to-r from-orange-500 to-red-500;  /* Color */
+  @apply text-white font-bold text-lg;                  /* Contrast */
+  @apply py-4 px-8;                                     /* Size */
+  @apply shadow-xl shadow-orange-500/30;                /* Glow */
+}
+
+/* Secondary - Reduced Weight */
+.btn-secondary {
+  @apply bg-white/10 border border-white/20;
+  @apply text-slate-700 font-medium;
+  @apply py-3 px-6;
+  @apply shadow-sm;
+}
+
+/* Tertiary - Minimal Weight */
+.btn-tertiary {
+  @apply bg-transparent;
+  @apply text-slate-500 font-normal;
+  @apply py-2 px-4;
+}
+```
+
+---
+
 ## Category 2: Cognitive Psychology (Brain-Friendly)
 
 ### 2.1 Hick's Law (The "Seva" Rule)
