@@ -216,9 +216,8 @@ h4 {
 /* --- DEEP GLASS COMPONENT --- */
 .glass-card {
   background: var(--bg-card);
-  backdrop-filter: blur(24px);
-  /* Deep Blur */
   -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
 
   /* Specular Highlight (Inner Border) */
   border: 1px solid var(--glass-border);
@@ -243,7 +242,13 @@ h4 {
 /* DARK MODE OVERRIDES */
 .dark body {
   background-color: var(--bg-page-dark);
+  background-color: var(--bg-page-dark);
   color: #E2E8F0;
+
+  /* Fix: Override semantic variables for Dark Mode */
+  --bg-primary: var(--bg-page-dark);
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
 }
 
 .dark .glass-card {

@@ -148,6 +148,8 @@ CREATE TABLE shaswata_subscriptions (
     -- TRACKING
     -- =========================================================================
     last_performed_year INTEGER,                -- Year when seva was last performed
+    last_dispatch_date  DATE,                   -- Date prasadam was dispatched
+    last_feedback_date  DATE,                   -- Date feedback message was sent
     
     -- Audit columns
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

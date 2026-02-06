@@ -21,7 +21,8 @@ from schemas import (
 from crud import (
     create_transaction, get_daily_transactions,
     create_shaswata_subscription, get_shaswata_subscriptions,
-    get_financial_report
+    get_financial_report,
+    log_dispatch, log_feedback_sent, get_pending_feedback_subscriptions
 )
 from panchang import PanchangCalculator
 import daiva_setu  # Genesis Protocol (Level 15)
@@ -372,6 +373,49 @@ def list_shaswata_alias(active_only: bool = True, db: Session = Depends(get_db))
 
 
 # =============================================================================
+# API Routes - Dispatch & Feedback Automation (Stage 2)
+# =============================================================================
+
+@app.patch("/subscriptions/{subscription_id}/dispatch", tags=["Shaswata Automation"])
+def mark_subscription_dispatched(subscription_id: int, db: Session = Depends(get_db)):
+    """
+    Log that prasadam has been dispatched for this subscription.
+    Sets last_dispatch_date to today.
+    """
+    try:
+        return log_dispatch(db, subscription_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dispatch logging failed: {str(e)}")
+
+
+@app.patch("/subscriptions/{subscription_id}/feedback", tags=["Shaswata Automation"])
+def mark_feedback_sent(subscription_id: int, db: Session = Depends(get_db)):
+    """
+    Log that feedback message has been sent for this subscription.
+    Sets last_feedback_date to today.
+    """
+    try:
+        return log_feedback_sent(db, subscription_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feedback logging failed: {str(e)}")
+
+
+@app.get("/subscriptions/pending-feedback", tags=["Shaswata Automation"])
+def get_subscriptions_pending_feedback(db: Session = Depends(get_db)):
+    """
+    Get all subscriptions that need feedback (5+ days after dispatch).
+    Returns list of devotees who should be contacted for prasadam confirmation.
+    """
+    try:
+        return get_pending_feedback_subscriptions(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+# =============================================================================
 # API Routes - Priest Dashboard
 # =============================================================================
 
@@ -433,11 +477,19 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     """)
     gregorian_result = db.execute(gregorian_query, {"day": target_date.day, "month": target_date.month}).fetchall()
     
-    gregorian_pujas = [{
-        "id": row[0], "name": row[1], "phone": row[2], "gothra": row[3],
-        "seva": row[4], "date_info": f"{row[5]}/{row[6]}", "notes": row[7], "address": row[8],
-        "nakshatra": row[9], "rashi": row[10], "type": "GREGORIAN", "occasion": row[11]
-    } for row in gregorian_result]
+    gregorian_pujas = []
+    month_names = ["", "January", "February", "March", "April", "May", "June", 
+                  "July", "August", "September", "October", "November", "December"]
+
+    for row in gregorian_result:
+        month_idx = row[6]
+        month_str = month_names[month_idx] if 0 < month_idx <= 12 else str(month_idx)
+        
+        gregorian_pujas.append({
+            "id": row[0], "name": row[1], "phone": row[2], "gothra": row[3],
+            "seva": row[4], "date_info": f"{month_str} {row[5]}", "notes": row[7], "address": row[8],
+            "nakshatra": row[9], "rashi": row[10], "type": "GREGORIAN", "occasion": row[11]
+        })
 
     # 3. One-Time Transactions (Check BOTH seva_date AND transaction_date)
     transaction_query = text("""

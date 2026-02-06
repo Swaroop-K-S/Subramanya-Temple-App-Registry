@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTempleTime } from '../context/TimeContext';
-import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sparkles, Plus, Check, Package, Send, X } from 'lucide-react';
+import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sparkles, Plus, Check, Package, Send, X, MessageCircle } from 'lucide-react';
 import { OmniInput, OmniToggle } from './ui/Widgets';
 import api from '../services/api';
 import ShaswataForm from './ShaswataForm'; // [NEW] Embedded Booking Wizard
@@ -37,10 +37,26 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
         puja: null
     });
 
+    // === PENDING FEEDBACK COUNT (Automation Badge) ===
+    const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
+
     // --- FETCH DATA ---
     useEffect(() => {
         fetchDispatchList();
     }, [selectedDate]);
+
+    // Fetch pending feedback count on mount
+    useEffect(() => {
+        const fetchPendingFeedback = async () => {
+            try {
+                const response = await api.get('/subscriptions/pending-feedback');
+                setPendingFeedbackCount(response.data?.length || 0);
+            } catch (error) {
+                console.error("Failed to fetch pending feedback:", error);
+            }
+        };
+        fetchPendingFeedback();
+    }, []);
 
     const fetchDispatchList = async () => {
         setLoading(true);
@@ -112,6 +128,57 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
     const isPoojaPerformed = (pujaId) => actionStatus[pujaId]?.poojaPerformed || false;
     const isDispatched = (pujaId) => actionStatus[pujaId]?.dispatched || false;
 
+    // === MESSAGING UTILS (Temple OS Communication Hub) ===
+    const generateMessage = (type, devotee, seva, dateInfo) => {
+        const phone = "9448066755"; // Temple Admin/Contact
+        const greeting = `Namaste ${devotee},`;
+
+        switch (type) {
+            case 'REMINDER':
+                return `${greeting} today (${dateInfo}) your Shaswata Seva (${seva}) will be performed at Kukke Subramanya Temple. May the Lord bless you.`;
+            case 'DISPATCH':
+                return `${greeting} your ${seva} has been performed successfully. The Prasadam has been dispatched to your address. It will arrive within 3-5 days. For queries, contact ${phone}.`;
+            case 'FEEDBACK':
+                return `${greeting} checking if you received the Prasadam for your ${seva}. May Subramanya Swamy's blessings be with you.`;
+            default:
+                return '';
+        }
+    };
+
+    const handleSendMessage = (type, puja) => {
+        const msg = generateMessage(type, puja.name, puja.seva, puja.date_info);
+        const url = `https://wa.me/91${puja.phone}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
+    };
+
+    // === AUTOMATION API CALLS (Stage 3) ===
+    const handleLogDispatch = async (puja) => {
+        try {
+            await api.patch(`/subscriptions/${puja.id}/dispatch`);
+            // Update local state
+            setActionStatus(prev => ({
+                ...prev,
+                [puja.id]: { ...prev[puja.id], dispatched: true }
+            }));
+            // Open WhatsApp with dispatch message
+            handleSendMessage('DISPATCH', puja);
+        } catch (error) {
+            console.error("Failed to log dispatch:", error);
+            alert("Failed to log dispatch. Please try again.");
+        }
+    };
+
+    const handleLogFeedback = async (puja) => {
+        try {
+            await api.patch(`/subscriptions/${puja.id}/feedback`);
+            // Open WhatsApp with feedback message
+            handleSendMessage('FEEDBACK', puja);
+        } catch (error) {
+            console.error("Failed to log feedback:", error);
+            alert("Failed to log feedback. Please try again.");
+        }
+    };
+
     return (
         <div className="min-h-screen p-6 animate-in fade-in zoom-in duration-300">
 
@@ -126,9 +193,18 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                         <h1 className="text-4xl font-black font-heading text-slate-800 dark:text-amber-100 mb-2">
                             Prasadam Dispatch
                         </h1>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">
-                            Shashwata Seva Fulfillment & Logistics
-                        </p>
+                        <div className="flex items-center gap-3">
+                            <p className="text-slate-500 dark:text-slate-400 font-medium">
+                                Shashwata Seva Fulfillment & Logistics
+                            </p>
+                            {/* Pending Feedback Badge */}
+                            {pendingFeedbackCount > 0 && (
+                                <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-full animate-pulse">
+                                    <MessageCircle size={12} />
+                                    {pendingFeedbackCount} Pending Feedback
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -350,7 +426,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Matching Logic</p>
+                                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Scheduled Date</p>
                                         <div className={`flex items-center justify-end gap-1.5 text-xs font-bold ${puja.type === 'LUNAR' ? 'text-indigo-500 dark:text-indigo-400' :
                                             puja.type === 'GREGORIAN' ? 'text-emerald-600 dark:text-emerald-400' :
                                                 'text-slate-500'
@@ -358,10 +434,51 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                             {puja.type === 'LUNAR' && <Moon size={12} />}
                                             {puja.type === 'GREGORIAN' && <Calendar size={12} />}
 
-                                            {puja.type === 'LUNAR' ? 'Vedic (Tithi)' :
-                                                puja.type === 'GREGORIAN' ? 'Fixed Date' :
-                                                    'One-Time'}
+                                            <span className="truncate max-w-[120px]" title={puja.date_info}>
+                                                {puja.date_info || (puja.type === 'LUNAR' ? 'Vedic (Tithi)' : 'Fixed Date')}
+                                            </span>
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* === COMMUNICATION HUB (Stage 1, 2, 3) === */}
+                                <div className="mb-4 bg-slate-50 dark:bg-slate-800/30 rounded-xl p-3 border border-slate-100 dark:border-white/5">
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">Devotee Communication</p>
+                                    <div className="flex gap-2">
+                                        {/* Stage 1: Reminder (Before/On Seva Day) */}
+                                        {!isPoojaPerformed(puja.id) && (
+                                            <button
+                                                onClick={() => handleSendMessage('REMINDER', puja)}
+                                                className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300 text-xs font-bold rounded-lg hover:bg-blue-100 transition-colors"
+                                            >
+                                                <MessageCircle size={14} /> Send Reminder
+                                            </button>
+                                        )}
+
+                                        {/* Stage 2 & 3: Dispatch & Feedback (After Seva) */}
+                                        {isPoojaPerformed(puja.id) && (
+                                            <>
+                                                {/* Stage 2: Dispatch Update - Uses API + WhatsApp */}
+                                                {!isDispatched(puja.id) && (
+                                                    <button
+                                                        onClick={() => handleLogDispatch(puja)}
+                                                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors"
+                                                    >
+                                                        <Send size={14} /> Dispatch & Notify
+                                                    </button>
+                                                )}
+
+                                                {/* Stage 3: Feedback (Only shown if Dispatched) - Uses API + WhatsApp */}
+                                                {isDispatched(puja.id) && (
+                                                    <button
+                                                        onClick={() => handleLogFeedback(puja)}
+                                                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300 text-xs font-bold rounded-lg hover:bg-purple-100 transition-colors"
+                                                    >
+                                                        <MessageCircle size={14} /> Ask Feedback
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 

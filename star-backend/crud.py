@@ -476,6 +476,109 @@ def get_shaswata_subscriptions(db: Session, active_only: bool = True) -> list:
     
     return subscriptions
 
+
+# =============================================================================
+# DISPATCH & FEEDBACK AUTOMATION (Stage 2)
+# =============================================================================
+
+def log_dispatch(db: Session, subscription_id: int) -> dict:
+    """
+    Mark subscription as dispatched (today's date).
+    Following DB Integrity: ACID transaction wrapping.
+    """
+    try:
+        result = db.execute(
+            text("""
+                UPDATE shaswata_subscriptions 
+                SET last_dispatch_date = CURRENT_DATE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :sub_id
+                RETURNING id, last_dispatch_date
+            """),
+            {"sub_id": subscription_id}
+        )
+        row = result.fetchone()
+        if not row:
+            raise ValueError(f"Subscription {subscription_id} not found")
+        
+        db.commit()
+        return {
+            "subscription_id": row[0],
+            "dispatch_date": str(row[1]),
+            "message": "Dispatch logged successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def log_feedback_sent(db: Session, subscription_id: int) -> dict:
+    """
+    Mark feedback as sent (today's date).
+    Following DB Integrity: ACID transaction wrapping.
+    """
+    try:
+        result = db.execute(
+            text("""
+                UPDATE shaswata_subscriptions 
+                SET last_feedback_date = CURRENT_DATE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :sub_id
+                RETURNING id, last_feedback_date
+            """),
+            {"sub_id": subscription_id}
+        )
+        row = result.fetchone()
+        if not row:
+            raise ValueError(f"Subscription {subscription_id} not found")
+        
+        db.commit()
+        return {
+            "subscription_id": row[0],
+            "feedback_date": str(row[1]),
+            "message": "Feedback logged successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def get_pending_feedback_subscriptions(db: Session) -> list:
+    """
+    Get subscriptions where:
+    1. dispatch_date + 5 days <= today
+    2. feedback not sent this year (or never sent)
+    
+    Following DB Integrity: N+1 Prevention with JOIN.
+    """
+    query = text("""
+        SELECT 
+            ss.id, d.full_name_en, d.phone_number, d.gothra_en,
+            COALESCE(sc.name_eng, 'Shaswata Seva') as seva_name,
+            ss.last_dispatch_date, ss.last_feedback_date
+        FROM shaswata_subscriptions ss
+        JOIN devotees d ON ss.devotee_id = d.id
+        LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
+        WHERE ss.is_active = TRUE
+          AND ss.last_dispatch_date IS NOT NULL
+          AND ss.last_dispatch_date <= CURRENT_DATE - INTERVAL '5 days'
+          AND (ss.last_feedback_date IS NULL 
+               OR EXTRACT(YEAR FROM ss.last_feedback_date) < EXTRACT(YEAR FROM CURRENT_DATE))
+        ORDER BY ss.last_dispatch_date ASC
+    """)
+    
+    result = db.execute(query).fetchall()
+    
+    return [{
+        "id": row[0],
+        "devotee_name": row[1],
+        "phone": row[2],
+        "gothra": row[3],
+        "seva_name": row[4],
+        "dispatch_date": str(row[5]) if row[5] else None,
+        "last_feedback_date": str(row[6]) if row[6] else None
+    } for row in result]
+
 def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
     """
     Aggregate financial data for reports within a date range.

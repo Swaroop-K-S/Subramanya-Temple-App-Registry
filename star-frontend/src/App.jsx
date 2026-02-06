@@ -65,7 +65,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-500 bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen transition-colors duration-500 bg-slate-50 dark:!bg-slate-950">
 
       {/* 1. CELESTIAL NAVBAR (Top) */}
       <Navbar lang={lang} setLang={setLang} />

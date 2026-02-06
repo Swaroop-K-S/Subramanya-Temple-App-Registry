@@ -16,7 +16,7 @@ const Navbar = ({ lang, setLang }) => {
     }, [isDark]);
 
     return (
-        <nav className="fixed top-0 left-0 right-0 z-40 h-28 px-8 flex items-center justify-between pointer-events-none md:pl-40 bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl border-b border-white/20 dark:border-white/5 shadow-sm transition-all duration-500">
+        <nav className="fixed top-0 left-0 right-0 z-40 h-28 px-8 flex items-center justify-between pointer-events-none md:pl-40 bg-white/60 dark:bg-slate-950/80 backdrop-blur-3xl border-b border-white/20 dark:border-white/5 shadow-sm transition-all duration-500">
 
             {/* Left: Breadcrumb / Greeting */}
             <div className="pointer-events-auto mt-2">

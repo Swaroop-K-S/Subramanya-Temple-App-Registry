@@ -96,8 +96,8 @@ const CelestialCycle = ({ sunrise, sunset, dateDisplay }) => {
     } : {
         // Day Theme
         containerClass: "bg-gradient-to-b from-orange-50 to-white border-white/60 shadow-xl",
-        textColor: "text-temple-brown",
-        subTextColor: "text-temple-stone/50",
+        textColor: "text-stone-800",
+        subTextColor: "text-stone-500",
         iconColor: "#fef3c7", // Sun
         glowColor: "#f59e0b",
         arcStroke: "url(#sunGradient)",
@@ -124,7 +124,7 @@ const CelestialCycle = ({ sunrise, sunset, dateDisplay }) => {
     const celestialY = cy - radius * Math.sin(angleRad);
 
     return (
-        <div className={`relative overflow-hidden rounded-3xl p-8 border group glass-card transition-colors duration-1000 ${theme.containerClass}`}>
+        <div className={`relative overflow-hidden rounded-3xl p-8 border group transition-colors duration-1000 ${theme.containerClass}`}>
 
             {/* Background Decorations */}
             {theme.bgDecor}
