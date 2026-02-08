@@ -57,7 +57,7 @@ from app.models import User
 app = FastAPI(
     title="S.T.A.R. API",
     description="Subramanya Temple App & Registry - Backend API",
-    version="1.0.0"
+    version="1.0.1"
 )
 
 app.add_middleware(
@@ -804,7 +804,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
 from fastapi import UploadFile, File
 import shutil
 import os
-from legacy_migrator import migrate_legacy_data
+from app.legacy_migrator import migrate_legacy_data
 
 @app.post("/admin/migrate", tags=["Admin Operations"])
 def migrate_legacy_database(
@@ -895,7 +895,7 @@ def find_date_by_panchangam(
 # =============================================================================
 # Level 17: The Divine Scroll (Thermal Printer Integration)
 # =============================================================================
-from printer_service import generate_receipt_image, print_receipt_image
+from app.printer_service import generate_receipt_image, print_receipt_image
 
 from fastapi.responses import FileResponse
 import os
