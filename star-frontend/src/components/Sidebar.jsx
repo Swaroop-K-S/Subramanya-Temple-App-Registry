@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
 import { Home, Calendar, BarChart3, IndianRupee, Settings, LogOut, Flower, Truck, ScrollText } from 'lucide-react';
 
-const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
+const Sidebar = ({ activePage, setActivePage, handleLogout, user }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     const menuItems = [
-        { id: 'home', icon: Home, label: 'Home' },
-        { id: 'panchangam', icon: Calendar, label: 'Panchangam' },
-        { id: 'daily', icon: ScrollText, label: 'Daily Txns' },
-        { id: 'reports', icon: IndianRupee, label: 'Reports' },
-        { id: 'dispatch', icon: Truck, label: 'Shaswata Pooja' },
-        { id: 'settings', icon: Settings, label: 'Settings' }
+        { id: 'home', icon: Home, label: 'Home', allowed: ['admin', 'clerk'] },
+        { id: 'panchangam', icon: Calendar, label: 'Panchangam', allowed: ['admin', 'clerk'] },
+        { id: 'daily', icon: ScrollText, label: 'Daily Txns', allowed: ['admin'] },
+        { id: 'reports', icon: IndianRupee, label: 'Reports', allowed: ['admin'] },
+        { id: 'dispatch', icon: Truck, label: 'Shaswata Pooja', allowed: ['admin', 'clerk'] }, // Assuming clerks can book
+        { id: 'settings', icon: Settings, label: 'Settings', allowed: ['admin'] }
     ];
+
+    // Filter items based on user role
+    const filteredItems = menuItems.filter(item => {
+        if (!user) return false;
+        return item.allowed.includes(user.role);
+    });
 
     return (
         <aside className="fixed left-6 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-6 items-center">
@@ -38,7 +44,7 @@ const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
 
                 {/* Navigation Items - Magnification Physics */}
                 <nav className="flex flex-col gap-3">
-                    {menuItems.map((item) => {
+                    {filteredItems.map((item) => {
                         const isActive = activePage === item.id;
                         return (
                             <button

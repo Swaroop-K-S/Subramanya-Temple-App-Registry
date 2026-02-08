@@ -617,6 +617,19 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
         ORDER BY revenue DESC
     """)
     
+    # Get Daily Trends (For Area Chart)
+    trends_query = text("""
+        SELECT 
+            CAST(transaction_date AS DATE) as date,
+            COALESCE(SUM(amount_paid), 0) as revenue,
+            COUNT(id) as count
+        FROM transactions
+        WHERE CAST(transaction_date AS DATE) >= CAST(:start_date AS DATE) 
+          AND CAST(transaction_date AS DATE) <= CAST(:end_date AS DATE)
+        GROUP BY CAST(transaction_date AS DATE)
+        ORDER BY date ASC
+    """)
+    
     try:
         financials_result = db.execute(financials_query, {"start_date": start_date, "end_date": end_date}).fetchone()
         # Fallback for empty results
@@ -625,6 +638,7 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
         upi = float(financials_result[2] or 0)
 
         seva_results = db.execute(seva_query, {"start_date": start_date, "end_date": end_date}).fetchall()
+        trends_results = db.execute(trends_query, {"start_date": start_date, "end_date": end_date}).fetchall()
         
         return {
             "financials": {
@@ -635,6 +649,10 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
             "seva_stats": [
                 {"name": row[0], "count": row[1], "revenue": float(row[2] or 0)}
                 for row in seva_results
+            ],
+            "daily_trends": [
+                {"date": str(row[0]), "revenue": float(row[1] or 0), "count": int(row[2])}
+                for row in trends_results
             ]
         }
     except Exception as e:

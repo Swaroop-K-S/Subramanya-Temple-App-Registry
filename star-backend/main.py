@@ -151,6 +151,11 @@ def login_for_access_token(form_data: UserLogin, db: Session = Depends(get_db)):
 # API Routes - User Management
 # =============================================================================
 
+@app.get("/users/me", response_model=UserResponse, tags=["User Management"])
+def read_users_me(current_user: User = Depends(get_current_user)):
+    """Get current user details"""
+    return current_user
+
 @app.get("/users", response_model=List[UserResponse], tags=["User Management"])
 def list_users(
     current_user: User = Depends(get_current_user),
@@ -587,21 +592,183 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
         # Standardize on YYYY-MM-DD from frontend
         start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else date.today()
         end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else start
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Export Failed: {str(e)}")
 
-    transactions = db.execute(text("""
-        SELECT t.receipt_no, t.transaction_date, d.full_name_en, sc.name_eng, t.amount_paid, t.payment_mode
+    # Create Excel Workbook
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    
+    # --- SHEET 1: SUMMARY ---
+    ws_summary = wb.active
+    ws_summary.title = "Financial Summary"
+    
+    # Styles
+    header_font = Font(bold=True, size=12, color="FFFFFF")
+    header_fill = PatternFill(start_color="F97316", end_color="F97316", fill_type="solid") # Saffron
+    subheader_fill = PatternFill(start_color="475569", end_color="475569", fill_type="solid") # Slate
+    center_align = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    # Title
+    ws_summary.merge_cells('A1:D2')
+    cell = ws_summary['A1']
+    cell.value = "SHREE SUBRAMANYA TEMPLE - FINANCIAL REPORT"
+    cell.font = Font(bold=True, size=16, color="F97316")
+    cell.alignment = center_align
+
+    ws_summary['A3'] = f"Period: {start} to {end}"
+    ws_summary['A3'].font = Font(italic=True)
+
+    # 1. Totals Table
+    ws_summary['A5'] = "FINANCIAL OVERVIEW"
+    ws_summary['A5'].font = Font(bold=True)
+    
+    headers = ["Category", "Amount"]
+    ws_summary.append([]) # Gap
+    ws_summary.append(headers)
+    
+    # Style Headers
+    for col_num, header in enumerate(headers, 1):
+        cell = ws_summary.cell(row=6, column=col_num)
+        cell.fill = subheader_fill
+        cell.font = header_font
+        cell.alignment = center_align
+
+    # Calculate Data
+    stmt = text("""
+        SELECT 
+            COALESCE(SUM(amount_paid), 0),
+            COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0)
+        FROM transactions
+        WHERE CAST(transaction_date AS DATE) >= :start AND CAST(transaction_date AS DATE) <= :end
+    """)
+    totals = db.execute(stmt, {"start": start, "end": end}).fetchone()
+    total_val, cash_val, upi_val = totals[0], totals[1], totals[2]
+
+    ws_summary.append(["Total Collection", total_val])
+    ws_summary.append(["Cash", cash_val])
+    ws_summary.append(["UPI", upi_val])
+
+    # 2. Seva Breakdown
+    ws_summary['D5'] = "TOP SEVAS"
+    ws_summary['D5'].font = Font(bold=True)
+    
+    headers_seva = ["Seva Name", "Count", "Revenue"]
+    # Manually place headers at D6
+    for i, h in enumerate(headers_seva):
+        cell = ws_summary.cell(row=6, column=4+i)
+        cell.value = h
+        cell.fill = subheader_fill
+        cell.font = header_font
+        cell.alignment = center_align
+
+    seva_stmt = text("""
+        SELECT s.name_eng, COUNT(t.id), SUM(t.amount_paid)
+        FROM transactions t
+        JOIN seva_catalog s ON t.seva_id = s.id
+        WHERE CAST(t.transaction_date AS DATE) >= :start AND CAST(t.transaction_date AS DATE) <= :end
+        GROUP BY s.name_eng
+        ORDER BY SUM(t.amount_paid) DESC
+        LIMIT 10
+    """)
+    sevas = db.execute(seva_stmt, {"start": start, "end": end}).fetchall()
+    
+    for idx, row in enumerate(sevas, 7):
+        ws_summary.cell(row=idx, column=4).value = row[0]
+        ws_summary.cell(row=idx, column=5).value = row[1]
+        ws_summary.cell(row=idx, column=6).value = row[2]
+
+    # Adjust Column Widths
+    ws_summary.column_dimensions['A'].width = 25
+    ws_summary.column_dimensions['B'].width = 20
+    ws_summary.column_dimensions['D'].width = 30
+    ws_summary.column_dimensions['E'].width = 15
+    ws_summary.column_dimensions['F'].width = 20
+
+    # --- SHEET 2: DETAILED TRANSACTIONS ---
+    ws_detail = wb.create_sheet(title="Detailed Transactions")
+    
+    headers_detail = ["Receipt No", "Date", "Devotee Name", "Seva Name", "Mode", "Amount", "Notes"]
+    ws_detail.append(headers_detail)
+    
+    # Style Header
+    for col_num, _ in enumerate(headers_detail, 1):
+        cell = ws_detail.cell(row=1, column=col_num)
+        cell.fill = header_fill # Saffron
+        cell.font = header_font
+        cell.alignment = center_align
+
+    # Fetch Data
+    tx_stmt = text("""
+        SELECT t.receipt_no, TO_CHAR(t.transaction_date, 'DD-MM-YYYY HH12:MI PM'), 
+               d.full_name_en, sc.name_eng, t.payment_mode, t.amount_paid, t.notes
         FROM transactions t
         JOIN devotees d ON t.devotee_id = d.id
         JOIN seva_catalog sc ON t.seva_id = sc.id
         WHERE CAST(t.transaction_date AS DATE) >= :start AND CAST(t.transaction_date AS DATE) <= :end
         ORDER BY t.transaction_date DESC
-    """), {"start": start, "end": end}).fetchall()
+    """)
+    transactions = db.execute(tx_stmt, {"start": start, "end": end}).fetchall()
     
+    current_date_str = None
+    date_header_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid") # Blue
+    
+    for row in transactions:
+        # Extract Date info (DD-MM-YYYY)
+        # row[1] is "DD-MM-YYYY HH:MM PM"
+        # We want just the date part for grouping
+        date_part = row[1].split(' ')[0] if row[1] else "Unknown Date"
+        
+        # Check for Group Change
+        if date_part != current_date_str:
+            current_date_str = date_part
+            # Insert Group Header
+            ws_detail.append([f"Date: {current_date_str}"])
+            # Merge Cells for Header
+            current_row = ws_detail.max_row
+            ws_detail.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=7)
+            # Style Header
+            header_cell = ws_detail.cell(row=current_row, column=1)
+            header_cell.font = Font(bold=True, color="FFFFFF")
+            header_cell.fill = date_header_fill
+            header_cell.alignment = Alignment(horizontal='left')
+
+        # Insert Data Row
+        ws_detail.append([
+            row[0], row[1], row[2], row[3], row[4], row[5], row[6]
+        ])
+
+    # Auto-width
+    for col in ws_detail.columns:
+        max_length = 0
+        column = col[0].column_letter # Get the column name
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws_detail.column_dimensions[column].width = adjusted_width
+
+    # Save to IO
+    output = io.BytesIO()
+    wb.save(output)
     output.seek(0)
-    filename = f"report_{start}_{end}.csv"
-    return StreamingResponse(io.StringIO(output.getvalue()), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
+    
+    filename = f"Temple_Report_{start}_{end}.xlsx"
+    return StreamingResponse(
+        iter([output.getvalue()]), 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 # =============================================================================
 # Level 13: The Legacy Eraser Endpoint
@@ -618,8 +785,11 @@ def migrate_legacy_database(
     db: Session = Depends(get_db)
 ):
     """
-    Drag & Drop Portal for Legacy Data (CSV).
+    Drag & Drop Portal for Legacy Data (CSV/PDF).
     Migrates 2010-era records into the modern Transaction table.
+    Supports:
+    - CSV: Standard headers
+    - PDF: Tables extracted automatically
     """
     if current_user.role.lower() != "admin":
         raise HTTPException(status_code=403, detail="Only Admins can rewrite history.")

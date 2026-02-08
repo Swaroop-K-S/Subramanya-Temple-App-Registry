@@ -24,9 +24,12 @@ import GenesisChat from './components/GenesisChat'; // [NEW] Daiva-Setu AI Inter
 import PrasadamDispatch from './components/PrasadamDispatch'; // [NEW] Logistics
 import DailyTransactions from './components/DailyTransactions'; // [NEW] Phase 3
 
+import api from './services/api'; // [NEW] API Service
+
 function App() {
   // [AUTH] Security State
   const [token, setToken] = useState(localStorage.getItem('access_token'));
+  const [user, setUser] = useState(null); // [NEW] User Profile
 
   // [I18N] Language State
   const [lang, setLang] = useState('EN');
@@ -38,6 +41,27 @@ function App() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSeva, setSelectedSeva] = useState(null);
+
+  // [AUTH] Fetch User Profile
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (!token) {
+        setUser(null);
+        return;
+      }
+      try {
+        const response = await api.get('/users/me');
+        setUser(response.data);
+      } catch (err) {
+        console.error("Auth Error", err);
+        // Optional: Logout on 401?
+        if (err.response && err.response.status === 401) {
+          handleLogout();
+        }
+      }
+    };
+    fetchUser();
+  }, [token]);
 
   // Theme State (Persist Dark Mode preference if needed, handled in Navbar)
 
@@ -53,6 +77,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     setToken(null);
+    setUser(null);
     setActivePage('home');
   };
 
@@ -65,17 +90,38 @@ function App() {
     }
   };
 
+  // [RBAC] Access Control Helper
+  const canAccess = (role, page) => {
+    if (!role) return false;
+    if (role === 'admin') return true;
+    // Clerk access
+    if (['home', 'panchangam', 'shaswata'].includes(page)) return true;
+    return false;
+  };
+
+  // Redirect if trying to access restricted page
+  useEffect(() => {
+    if (user && !canAccess(user.role, activePage)) {
+      setActivePage('home'); // Fallback
+    }
+  }, [user, activePage]);
+
+  if (!token) {
+    return <Login setToken={setToken} />;
+  }
+
   return (
     <div className="min-h-screen transition-colors duration-500 bg-slate-50 dark:!bg-slate-950">
 
       {/* 1. CELESTIAL NAVBAR (Top) */}
-      <Navbar lang={lang} setLang={setLang} />
+      <Navbar lang={lang} setLang={setLang} user={user} />
 
       {/* 2. FLOATING SIDEBAR (Left) */}
       <Sidebar
         activePage={activePage}
         setActivePage={setActivePage}
         handleLogout={handleLogout}
+        user={user}
       />
 
       {/* 3. MAIN CONTENT AREA (Padded for Sidebar) */}
@@ -95,13 +141,13 @@ function App() {
         )}
 
         {/* B. OTHER PAGES */}
-        {activePage === 'daily' && <DailyTransactions lang={lang} />}
+        {activePage === 'daily' && canAccess(user?.role, 'daily') && <DailyTransactions lang={lang} />}
         {activePage === 'shaswata' && <ShaswataForm onBack={() => setActivePage('home')} />}
 
-        {activePage === 'reports' && <ReportsDashboard onBack={() => setActivePage('home')} />}
+        {activePage === 'reports' && canAccess(user?.role, 'reports') && <ReportsDashboard onBack={() => setActivePage('home')} />}
         {activePage === 'dispatch' && <PrasadamDispatch onBack={() => setActivePage('home')} lang={lang} />}
         {activePage === 'panchangam' && <Panchangam />}
-        {activePage === 'settings' && <Settings onBack={() => setActivePage('home')} />}
+        {activePage === 'settings' && canAccess(user?.role, 'settings') && <Settings onBack={() => setActivePage('home')} />}
 
       </main>
 

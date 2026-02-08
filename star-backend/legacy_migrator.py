@@ -34,57 +34,93 @@ def map_header(header, choices):
             return field
     return None
 
-def migrate_legacy_data(csv_file_path):
-    logger.info(f"Opening Portal to 2010... Reading {csv_file_path}")
+import pdfplumber
+
+def extract_pdf_table(pdf_path):
+    """Extracts tables from PDF and flattens them into list of lists"""
+    all_rows = []
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    for row in table:
+                        # Clean row: remove None and strip strings
+                        cleaned_row = [str(cell).strip() if cell else "" for cell in row]
+                        # Skip empty rows
+                        if any(cleaned_row):
+                            all_rows.append(cleaned_row)
+        return all_rows
+    except Exception as e:
+        logger.error(f"Failed to parse PDF {pdf_path}: {e}")
+        return []
+
+def migrate_legacy_data(file_path):
+    logger.info(f"Opening Portal to 2010... Reading {file_path}")
     
     db = SessionLocal()
     success_count = 0
     fail_count = 0
 
     try:
-        with open(csv_file_path, 'r') as f:
-            reader = csv.reader(f)
-            headers = next(reader)
-            
-            # 1. Inspect Headers and Build Map
-            col_map = {} # index -> target_field
-            logger.info("Analyzing Ancient Headers...")
-            for idx, h in enumerate(headers):
-                target = map_header(h, TARGET_FIELDS)
-                if target:
-                    col_map[idx] = target
-                    logger.info(f"  >> Mapped '{h}' -> '{target}'")
-            
-            # 2. Ingest Rows
-            for row in reader:
-                data = {}
-                for idx, val in enumerate(row):
-                    if idx in col_map:
-                        data[col_map[idx]] = val
+        rows = []
+        headers = []
+        
+        # DETECT FILE TYPE
+        if file_path.lower().endswith('.pdf'):
+            logger.info("Detected Ancient Scroll (PDF)... Extracting Tables.")
+            raw_data = extract_pdf_table(file_path)
+            if not raw_data:
+                logger.error("No data found in PDF.")
+                return
+            headers = raw_data[0]
+            rows = raw_data[1:]
+        else:
+            # Assume CSV
+            with open(file_path, 'r') as f:
+                reader = csv.reader(f)
+                headers = next(reader)
+                rows = list(reader)
                 
-                # Default Logic / Cleaning
-                if "devotee_name" not in data or not data["devotee_name"]:
-                    continue
+        # 1. Inspect Headers and Build Map
+        col_map = {} # index -> target_field
+        logger.info("Analyzing Ancient Headers...")
+        for idx, h in enumerate(headers):
+            target = map_header(h, TARGET_FIELDS)
+            if target:
+                col_map[idx] = target
+                logger.info(f"  >> Mapped '{h}' -> '{target}'")
+        
+        # 2. Ingest Rows
+        for row in rows:
+            data = {}
+            for idx, val in enumerate(row):
+                if idx in col_map:
+                    data[col_map[idx]] = val
+            
+            # Default Logic / Cleaning
+            if "devotee_name" not in data or not data["devotee_name"]:
+                continue
+            
+            try:
+                # Construct Payload
+                tx = TransactionCreate(
+                    devotee_name=data["devotee_name"],
+                    phone_number=data.get("phone_number", "0000000000"),
+                    gothra=data.get("gothra"),
+                    nakshatra=data.get("nakshatra"),
+                    seva_id=1, # Default to Archana (1) for legacy
+                    amount=float(data.get("amount", 0)),
+                    payment_mode="CASH", # Assumptions
+                    # Date handling skipped for minimal example, uses today
+                )
                 
-                try:
-                    # Construct Payload
-                    tx = TransactionCreate(
-                        devotee_name=data["devotee_name"],
-                        phone_number=data.get("phone_number", "0000000000"),
-                        gothra=data.get("gothra"),
-                        nakshatra=data.get("nakshatra"),
-                        seva_id=1, # Default to Archana (1) for legacy
-                        amount=float(data.get("amount", 0)),
-                        payment_mode="CASH", # Assumptions
-                        # Date handling skipped for minimal example, uses today
-                    )
-                    
-                    create_transaction(db, tx)
-                    success_count += 1
-                    # logger.info(f"Restored record: {tx.devotee_name}")
-                except Exception as e:
-                    logger.error(f"Failed to migrate row {row}: {e}")
-                    fail_count += 1
+                create_transaction(db, tx)
+                success_count += 1
+                # logger.info(f"Restored record: {tx.devotee_name}")
+            except Exception as e:
+                logger.error(f"Failed to migrate row {row}: {e}")
+                fail_count += 1
 
         logger.info(f"MIGRATION COMPLETE. Restored {success_count} souls. Lost {fail_count}.")
 
