@@ -57,7 +57,7 @@ from app.models import User
 app = FastAPI(
     title="S.T.A.R. API",
     description="Subramanya Temple App & Registry - Backend API",
-    version="1.0.2"
+    version="1.0.3"
 )
 
 app.add_middleware(

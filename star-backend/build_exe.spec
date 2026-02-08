@@ -3,14 +3,19 @@
 
 block_cipher = None
 
+from PyInstaller.utils.hooks import collect_data_files
+
+datas = [
+    ('../star-frontend/dist', 'static'),
+    ('app/printer_config.json', 'app'),
+]
+datas += collect_data_files('jaraco.text')
+
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('../star-frontend/dist', 'static'),  # Bundle frontend build into 'static' folder
-        ('app/printer_config.json', 'app'),   # Bundle printer config
-    ],
+    datas=datas,
     hiddenimports=[
         'uvicorn.logging',
         'uvicorn.loops',
@@ -27,6 +32,9 @@ a = Analysis(
         'passlib.handlers.pbkdf2',
         'passlib.handlers.bcrypt',
         'multipart',
+        'jaraco.text',
+        'jaraco.functools',
+        'jaraco.context',
     ],
     hookspath=[],
     hooksconfig={},
