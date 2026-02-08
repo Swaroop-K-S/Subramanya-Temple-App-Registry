@@ -1,5 +1,6 @@
-
 # -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
 
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
