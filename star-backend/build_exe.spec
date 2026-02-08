@@ -1,5 +1,4 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Temple Backend PyInstaller Spec
 
 block_cipher = None
 
@@ -8,12 +7,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('panchang.py', '.'),
-        ('database.py', '.'),
-        ('models.py', '.'),
-        ('schemas.py', '.'),
-        ('crud.py', '.'),
-        ('daiva_setu.py', '.'),
+        ('../star-frontend/dist', 'static'),  # Bundle frontend build into 'static' folder
     ],
     hiddenimports=[
         'uvicorn.logging',
@@ -26,8 +20,8 @@ a = Analysis(
         'uvicorn.protocols.websockets.auto',
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
-        'psycopg2',
-        'sqlalchemy.dialects.postgresql',
+        'sqlalchemy.sql.default_comparator',
+        'engineio.async_drivers.asgi',  # Often needed for socketio if used, or uvicorn
     ],
     hookspath=[],
     hooksconfig={},
@@ -38,28 +32,33 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
-
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
-    name='temple-backend',
+    exclude_binaries=True,
+    name='subramanya_temple_app',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
+    console=False,  # Hidden - runs in background, browser opens automatically
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='../resources/temple-icon.ico' if __import__('os').path.exists('../resources/temple-icon.ico') else None,
+    icon='app_icon.ico' if 'app_icon.ico' in a.datas else None # Optional icon
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='subramanya_temple_app',
 )

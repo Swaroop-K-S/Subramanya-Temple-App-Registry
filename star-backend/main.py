@@ -1,8 +1,12 @@
 # S.T.A.R. Backend - FastAPI Main Application
 import multiprocessing
-from fastapi import FastAPI, Depends, HTTPException, status
+import sys
+import webbrowser
+import threading
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -957,3 +961,60 @@ def print_uploaded_image(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Print Image Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# Level 99: The Publishing Ritual (Static Files & SPA)
+# =============================================================================
+
+# Determine if running as PyInstaller Bundle
+if getattr(sys, 'frozen', False):
+    # Running as compiled .exe
+    base_dir = sys._MEIPASS
+    static_dir = os.path.join(base_dir, 'static')
+else:
+    # Running from source (dev mode)
+    # Assume 'star-frontend/dist' is sibling to 'star-backend'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    static_dir = os.path.join(base_dir, '..', 'star-frontend', 'dist')
+
+# Mount Static Files (if they exist)
+if os.path.exists(static_dir):
+    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
+    
+    # Catch-All Route for SPA (must be last)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # Check if file exists in static root (e.g. vite.svg, favicon.ico)
+        static_file = os.path.join(static_dir, full_path)
+        if os.path.isfile(static_file):
+            return FileResponse(static_file)
+            
+        # Otherwise serve index.html for React Router
+        return FileResponse(os.path.join(static_dir, "index.html"))
+else:
+    print(f"INFO: Static files not found at {static_dir}. Run 'npm run build' first for production mode.")
+
+# =============================================================================
+# Level 100: The Launch Sequence (Auto-Start for EXE)
+# =============================================================================
+
+def open_browser():
+    """Open the browser after a short delay to let the server start."""
+    import time
+    time.sleep(2)  # Wait for server to start
+    webbrowser.open("http://127.0.0.1:8000")
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    # Open browser in a separate thread
+    threading.Thread(target=open_browser, daemon=True).start()
+    
+    # Run the server
+    print("=" * 60)
+    print("  S.T.A.R. - Subramanya Temple App & Registry")
+    print("  Server starting at http://127.0.0.1:8000")
+    print("  Press Ctrl+C to stop the server")
+    print("=" * 60)
+    
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
