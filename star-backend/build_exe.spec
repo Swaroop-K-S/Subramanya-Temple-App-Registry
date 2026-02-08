@@ -1,20 +1,22 @@
 
 # -*- mode: python ; coding: utf-8 -*-
 
-block_cipher = None
-
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 datas = [
     ('../star-frontend/dist', 'static'),
     ('app/printer_config.json', 'app'),
 ]
-datas += collect_data_files('jaraco.text')
+
+# Radical Fix: Collect everything for jaraco.text
+tmp_datas, tmp_binaries, tmp_hiddenimports = collect_all('jaraco.text')
+datas += tmp_datas
+datas += collect_data_files('jaraco.text') # Ensure data is picked up even if collect_all checks package
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
+    binaries=tmp_binaries,
     datas=datas,
     hiddenimports=[
         'uvicorn.logging',
@@ -35,7 +37,7 @@ a = Analysis(
         'jaraco.text',
         'jaraco.functools',
         'jaraco.context',
-    ],
+    ] + tmp_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
