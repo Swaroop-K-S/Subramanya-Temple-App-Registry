@@ -1,0 +1,12 @@
+{
+    "printer_name": "RP 3200 Plus_Champ RP Star(U) 1",
+    "driver_name": "RP 3200 Plus_Champ RP Star(A)",
+    "port_name": "USB_RP 3200 Plus_Champ RP Star_1",
+    "pnp_device_id": "USB\\VID_154F&PID_154F\\WAYOOA007268",
+    "description": "Thermal POS Printer",
+    "status": "Online",
+    "capabilities": {
+        "type": "Thermal",
+        "interface": "USB"
+    }
+}

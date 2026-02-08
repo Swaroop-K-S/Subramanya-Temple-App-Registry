@@ -19,9 +19,15 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Build Output
 dist/
+**/dist/
 build/
+**/build/
 .next/
+**/release/
+**/win-unpacked/
+*.exe
 
 # IDEs
 .vscode/

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTempleTime } from '../context/TimeContext';
-import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sparkles, Plus, Check, Package, Send, X, MessageCircle } from 'lucide-react';
+import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sun, Sparkles, Plus, Check, Package, Send, X, MessageCircle } from 'lucide-react';
 import { OmniInput, OmniToggle } from './ui/Widgets';
 import api from '../services/api';
 import ShaswataForm from './ShaswataForm'; // [NEW] Embedded Booking Wizard
+import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL } from './constants'; // [NEW] For Panchangam Selector
 
 /* 
-  PRASADAM DISPATCH DASHBOARD 
+  SHASWATA POOJA DASHBOARD 
   Theme: Divine Glass 3.0 (Logistics)
 */
 
@@ -19,12 +20,22 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
 
     const [loading, setLoading] = useState(false);
     const [pujas, setPujas] = useState([]);
+    const [allSubscriptions, setAllSubscriptions] = useState([]); // [NEW] All subscriptions for global search
+    const [searchLoading, setSearchLoading] = useState(false); // [NEW] Search loading state
     const [panchangam, setPanchangam] = useState(null); // [NEW] Panchang State
     const [isBookingOpen, setIsBookingOpen] = useState(false); // [NEW] Modal State
     const [filters, setFilters] = useState({
-        onlyShashwata: true,
         searchQuery: ''
     });
+
+    // === [NEW] SELECTOR MODE: CALENDAR (Gregorian) or PANCHANGAM (Lunar) ===
+    const [selectorMode, setSelectorMode] = useState('CALENDAR'); // 'CALENDAR' | 'PANCHANGAM'
+    const [lunarFilter, setLunarFilter] = useState({
+        masa: '',
+        paksha: '',
+        tithi: ''
+    });
+    const [panchangamDropdownOpen, setPanchangamDropdownOpen] = useState(false); // [NEW] Controls panchangam popup
 
     // === ACTION STATUS TRACKING ===
     // Stores { [pujaId]: { poojaPerformed: boolean, dispatched: boolean } }
@@ -71,6 +82,16 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
             if (response.data) {
                 setPujas(response.data.pujas || []);
                 setPanchangam(response.data.panchangam);
+
+                // [NEW] Sync Dropdowns with Calendar Date
+                // If the user picked a date, pre-fill the dropdowns with that date's panchangam
+                if (response.data.panchangam && selectorMode === 'CALENDAR') {
+                    setLunarFilter({
+                        masa: response.data.panchangam.attributes.maasa,
+                        paksha: response.data.panchangam.attributes.paksha,
+                        tithi: response.data.panchangam.attributes.tithi
+                    });
+                }
             }
         } catch (error) {
             console.error("Failed to fetch dispatch list", error);
@@ -79,19 +100,159 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
         }
     };
 
-    // --- LOGIC ---
-    const filteredPujas = pujas.filter(puja => {
-        // 1. Shashwata Filter
-        if (filters.onlyShashwata && puja.type === 'BOOKING') return false;
+    // [NEW] Fetch ALL subscriptions for global search
+    const fetchAllSubscriptions = async () => {
+        setSearchLoading(true);
+        try {
+            const response = await api.get('/shaswata/list', { params: { active_only: true } });
+            setAllSubscriptions(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch all subscriptions", error);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
 
-        // 2. Search Filter
+    // Fetch all subscriptions on mount for search
+    useEffect(() => {
+        fetchAllSubscriptions();
+    }, []);
+
+    // [NEW] Normalize subscription data from /shaswata/list to match card display fields
+    const normalizeSubscription = (sub) => ({
+        ...sub,
+        // Map shaswata/list fields to card-expected fields
+        name: sub.name || sub.devotee_name || sub.full_name_en || 'Unknown',
+        phone: sub.phone || sub.phone_number || null,
+        seva: sub.seva || sub.seva_name || 'Shaswata Seva',
+        type: sub.type || sub.subscription_type || 'LUNAR',
+        // Derive scheduled_date from lunar_date or gregorian_date
+        scheduled_date: sub.scheduled_date || sub.lunar_date || sub.gregorian_date || null
+    });
+
+    // [NEW] Reverse Sync: Panchangam Selection -> Calendar Date
+    // [NEW] Reverse Sync: Panchangam Selection -> Calendar Date
+    useEffect(() => {
+        const syncDate = async () => {
+            // Only run if strict panchangam selection is active
+            if (selectorMode === 'PANCHANGAM' && lunarFilter.masa && lunarFilter.paksha && lunarFilter.tithi) {
+                console.log("Attempting reverse sync for:", lunarFilter);
+
+                // Fuzzy match helper
+                const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                // 1. Try to find a subscription with a matching lunar date string
+                const match = allSubscriptions.find(sub => {
+                    const subLunar = normalize(sub.lunar_date);
+                    const m = normalize(lunarFilter.masa);
+                    const p = normalize(lunarFilter.paksha);
+                    let t = normalize(lunarFilter.tithi);
+
+                    if (t === 'shashthi') t = 'shasti'; // Alias handling
+                    const tVariant = t === 'shasti' ? 'shashthi' : t;
+
+                    const hasMasa = subLunar.includes(m);
+                    const hasPaksha = subLunar.includes(p);
+                    const hasTithi = subLunar.includes(t) || subLunar.includes(tVariant);
+
+                    return hasMasa && hasPaksha && hasTithi && (sub.scheduled_date || sub.gregorian_date);
+                });
+
+                if (match) {
+                    const rawDate = match.scheduled_date || match.gregorian_date;
+                    console.log("Found subscription match:", rawDate);
+
+                    // Simple Parse for Match
+                    let newDate = null;
+                    if (rawDate.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                        const [d, m, y] = rawDate.split('-');
+                        newDate = `${y}-${m}-${d}`;
+                    } else if (rawDate.match(/^[a-zA-Z]{3,}\s\d{1,2}$/)) {
+                        // Parse "Feb 7"
+                        const [monStr, dayStr] = rawDate.split(/\s+/);
+                        const months = { 'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12' };
+                        const m = months[monStr.toLowerCase().substring(0, 3)];
+                        const d = dayStr.padStart(2, '0');
+                        if (m) newDate = `${new Date().getFullYear()}-${m}-${d}`;
+                    }
+
+                    if (newDate && newDate !== selectedDate) setSelectedDate(newDate);
+                    return;
+                }
+
+                // 2. API Fallback: If no subscription found, ask the Oracle
+                console.log("No subscription match. Asking backend Oracle...");
+                try {
+                    const response = await api.get('/panchangam/find', {
+                        params: {
+                            masa: lunarFilter.masa,
+                            paksha: lunarFilter.paksha,
+                            tithi: lunarFilter.tithi,
+                            year: new Date().getFullYear()
+                        }
+                    });
+
+                    if (response.data && response.data.date) {
+                        console.log("Oracle returned date:", response.data.date);
+                        if (response.data.date !== selectedDate) {
+                            setSelectedDate(response.data.date);
+                        }
+                    }
+                } catch (error) {
+                    console.warn("Oracle could not find date:", error);
+                }
+            }
+        };
+
+        syncDate();
+    }, [lunarFilter, selectorMode, allSubscriptions]);
+
+    // --- LOGIC ---
+    // Determine data source based on mode and search
+    const getDataSource = () => {
+        if (filters.searchQuery.length > 0) {
+            return allSubscriptions; // Global search uses all subscriptions
+        }
+        if (selectorMode === 'PANCHANGAM' && (lunarFilter.masa || lunarFilter.paksha || lunarFilter.tithi)) {
+            return allSubscriptions; // Panchangam mode uses all subscriptions with lunar filter
+        }
+        return pujas; // Calendar mode uses date-filtered pujas
+    };
+
+    const rawDisplayData = getDataSource();
+    const displayData = rawDisplayData.map(normalizeSubscription);
+
+    const filteredPujas = displayData.filter(puja => {
+        // 1. Only show Shaswata subscriptions (exclude regular bookings)
+        if (puja.type === 'BOOKING') return false;
+
+        // 2. Search Filter (takes priority)
         if (filters.searchQuery) {
             const q = filters.searchQuery.toLowerCase();
             return (
                 puja.name?.toLowerCase().includes(q) ||
+                puja.devotee_name?.toLowerCase().includes(q) ||
+                puja.full_name?.toLowerCase().includes(q) ||
                 puja.address?.toLowerCase().includes(q) ||
-                puja.seva?.toLowerCase().includes(q)
+                puja.phone?.toLowerCase().includes(q) ||
+                puja.seva?.toLowerCase().includes(q) ||
+                puja.gothra?.toLowerCase().includes(q)
             );
+        }
+
+        // 3. PANCHANGAM Mode: Filter by Lunar Date (Masa/Paksha/Tithi)
+        if (selectorMode === 'PANCHANGAM') {
+            // Only filter LUNAR subscriptions
+            if (puja.type !== 'LUNAR' && puja.subscription_type !== 'LUNAR') return false;
+
+            const lunarDate = puja.lunar_date?.toLowerCase() || '';
+
+            // Match against each filter component
+            if (lunarFilter.masa && !lunarDate.includes(lunarFilter.masa.toLowerCase())) return false;
+            if (lunarFilter.paksha && !lunarDate.includes(lunarFilter.paksha.toLowerCase())) return false;
+            if (lunarFilter.tithi && !lunarDate.includes(lunarFilter.tithi.toLowerCase())) return false;
+
+            return true;
         }
 
         return true;
@@ -191,7 +352,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div>
                         <h1 className="text-4xl font-black font-heading text-slate-800 dark:text-amber-100 mb-2">
-                            Prasadam Dispatch
+                            Shaswata Pooja
                         </h1>
                         <div className="flex items-center gap-3">
                             <p className="text-slate-500 dark:text-slate-400 font-medium">
@@ -207,7 +368,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                         {/* Date Picker (Glass Style) */}
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -226,6 +387,115 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                     cursor-pointer
                                 "
                             />
+                        </div>
+
+                        {/* Panchangam Display (Same style as Date Picker) */}
+                        <div className="relative group">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                <Moon className="h-5 w-5 text-indigo-500" />
+                            </div>
+                            <button
+                                onClick={() => setPanchangamDropdownOpen(!panchangamDropdownOpen)}
+                                className={`
+                                    pl-10 pr-4 py-3 min-w-[200px]
+                                    bg-white/50 dark:bg-slate-800/50 backdrop-blur-md
+                                    border ${panchangamDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500' : 'border-slate-200 dark:border-slate-700'}
+                                    rounded-2xl font-bold text-slate-700 dark:text-slate-200
+                                    hover:border-indigo-400 transition-all cursor-pointer
+                                    text-left flex items-center justify-between gap-2
+                                `}
+                            >
+                                <span className="truncate text-sm">
+                                    {lunarFilter.masa && lunarFilter.paksha && lunarFilter.tithi
+                                        ? `${lunarFilter.masa} • ${lunarFilter.paksha} • ${lunarFilter.tithi}`
+                                        : panchangam
+                                            ? `${panchangam.attributes.maasa} • ${panchangam.attributes.paksha} • ${panchangam.attributes.tithi}`
+                                            : 'Select Panchangam...'}
+                                </span>
+                                <svg className={`w-4 h-4 flex-shrink-0 transition-transform ${panchangamDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {/* Panchangam Dropdown Popup */}
+                            {panchangamDropdownOpen && (
+                                <div className="absolute top-full mt-2 left-0 z-50 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2 duration-200">
+                                    <p className="text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest text-xs mb-4">Select Panchangam</p>
+
+                                    {/* Masa */}
+                                    <div className="mb-3">
+                                        <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mb-1 block">Masa (Month)</label>
+                                        <select
+                                            value={lunarFilter.masa}
+                                            onChange={(e) => {
+                                                setLunarFilter(prev => ({ ...prev, masa: e.target.value }));
+                                                if (e.target.value) setSelectorMode('PANCHANGAM');
+                                            }}
+                                            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        >
+                                            <option value="">All Masas</option>
+                                            {MASAS.map(m => (
+                                                <option key={m.en} value={m.en}>{m.en} ({m.kn})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Paksha */}
+                                    <div className="mb-3">
+                                        <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mb-1 block">Paksha (Fortnight)</label>
+                                        <select
+                                            value={lunarFilter.paksha}
+                                            onChange={(e) => {
+                                                setLunarFilter(prev => ({ ...prev, paksha: e.target.value }));
+                                                if (e.target.value) setSelectorMode('PANCHANGAM');
+                                            }}
+                                            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        >
+                                            <option value="">All Pakshas</option>
+                                            {PAKSHAS_BILINGUAL.map(p => (
+                                                <option key={p.en} value={p.en}>{p.en} ({p.kn})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Tithi */}
+                                    <div className="mb-4">
+                                        <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mb-1 block">Tithi (Lunar Day)</label>
+                                        <select
+                                            value={lunarFilter.tithi}
+                                            onChange={(e) => {
+                                                setLunarFilter(prev => ({ ...prev, tithi: e.target.value }));
+                                                if (e.target.value) setSelectorMode('PANCHANGAM');
+                                            }}
+                                            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        >
+                                            <option value="">All Tithis</option>
+                                            {TITHIS_BILINGUAL.map(t => (
+                                                <option key={t.en} value={t.en}>{t.en} ({t.kn})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setPanchangamDropdownOpen(false)}
+                                            className="flex-1 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold transition-all"
+                                        >
+                                            Done
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setLunarFilter({ masa: '', paksha: '', tithi: '' });
+                                                setSelectorMode('CALENDAR');
+                                            }}
+                                            className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* NEW: Booking Button */}
@@ -248,62 +518,36 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                 </div>
             </header>
 
-            {/* --- CONTROLS --- */}
-            <div className="max-w-7xl mx-auto mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                {/* Search */}
-                <OmniInput
-                    icon={Search}
-                    placeholder="Search devotee or address..."
-                    value={filters.searchQuery}
-                    onChange={(e) => setFilters(prev => ({ ...prev, searchQuery: e.target.value }))}
-                />
-
-                {/* Filters */}
-                <div className="flex items-center gap-6 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-4 rounded-2xl border border-white/20">
-                    <Filter className="text-slate-400" size={20} />
-                    <OmniToggle
-                        label="Only Shashwata Sevas"
-                        checked={filters.onlyShashwata}
-                        onChange={(checked) => setFilters(prev => ({ ...prev, onlyShashwata: checked }))}
+            {/* --- CONTROLS (Search Only) --- */}
+            <div className="max-w-7xl mx-auto mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <OmniInput
+                        icon={Search}
+                        placeholder="Search devotee or address..."
+                        value={filters.searchQuery}
+                        onChange={(e) => setFilters(prev => ({ ...prev, searchQuery: e.target.value }))}
                     />
+
+                    {/* Active Filter Indicator */}
+                    {selectorMode === 'PANCHANGAM' && (lunarFilter.masa || lunarFilter.paksha || lunarFilter.tithi) && (
+                        <div className="flex items-center gap-2 bg-indigo-100 dark:bg-indigo-900/30 px-4 py-3 rounded-2xl">
+                            <Moon size={16} className="text-indigo-600 dark:text-indigo-400" />
+                            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
+                                Panchangam Filter: {lunarFilter.masa || '•'} • {lunarFilter.paksha || '•'} • {lunarFilter.tithi || '•'}
+                            </span>
+                            <button
+                                onClick={() => {
+                                    setLunarFilter({ masa: '', paksha: '', tithi: '' });
+                                    setSelectorMode('CALENDAR');
+                                }}
+                                className="ml-auto text-indigo-500 hover:text-indigo-700"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
-
-            {/* --- PANCHANGAM BANNER --- */}
-            {panchangam && (
-                <div className="max-w-7xl mx-auto mb-8 animate-in slide-in-from-top-4 duration-500">
-                    <div className="bg-gradient-to-r from-indigo-900 to-slate-900 rounded-[2rem] p-6 text-white shadow-xl border border-white/10 relative overflow-hidden">
-                        {/* Background Decoration */}
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                            <Calendar size={120} />
-                        </div>
-
-                        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                            <div className="text-center md:text-left">
-                                <p className="text-amber-400 font-bold uppercase tracking-widest text-xs mb-1">Daily Panchangam</p>
-                                <h2 className="text-3xl font-black font-heading text-white">
-                                    {panchangam.attributes.tithi}
-                                </h2>
-                                <p className="text-slate-300 font-medium text-lg mt-1">
-                                    {panchangam.attributes.maasa} Maasa • {panchangam.attributes.paksha} Paksha
-                                </p>
-                            </div>
-
-                            <div className="flex gap-4">
-                                <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 text-center min-w-[100px] border border-white/10">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Nakshatra</p>
-                                    <p className="font-bold text-amber-200 truncate">{panchangam.attributes.nakshatra}</p>
-                                </div>
-                                <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 text-center min-w-[100px] border border-white/10">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Yoga</p>
-                                    <p className="font-bold text-amber-200 truncate">{panchangam.attributes.yoga}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* --- LIST --- */}
             <div className="max-w-7xl mx-auto">

@@ -16,9 +16,10 @@ import DOMPurify from 'dompurify';
 import confetti from 'canvas-confetti';
 import api from '../services/api';
 // import './ShaswataWizard.css'; // Swarm Animations - Removed (Missing)
-import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS, GOTRAS, OCCASIONS } from './constants';
+import { MASAS, PAKSHAS_BILINGUAL, TITHIS_BILINGUAL, ENGLISH_MONTHS, GOTRAS, OCCASIONS, RASHIS, NAKSHATRAS } from './constants';
 import { TRANSLATIONS } from './translations';
 import { useTheme } from '../context/ThemeContext'; // Assuming context exists, if not fallback to props
+import ShaswataCertificate from './ShaswataCertificate';
 
 // =============================================================================
 // AGENT UTILS
@@ -46,11 +47,15 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
     const [direction, setDirection] = useState('forward');
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
+    const [receiptId, setReceiptId] = useState(null);
+    const [showCertificate, setShowCertificate] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
         devotee_name: '',
         gothra: '',
+        rashi: '',      // NEW: Zodiac Sign
+        nakshatra: '',  // NEW: Birth Star
         phone: '',
         address: '',
         area: '',      // NEW
@@ -59,9 +64,11 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
     });
 
     const [sevaDetails, setSevaDetails] = useState({
-        type: 'GENERAL', // GENERAL | BRAHMACHARI
+        type: 'GENERAL', // Only GENERAL now
         calendar: 'GREGORIAN', // GREGORIAN | LUNAR
-        date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' }
+        date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' },
+        payment_mode: 'CASH', // CASH | UPI | CHEQUE | NEFT | RTGS
+        upi_transaction_id: ''
     });
 
     // Reset or Pre-fill on Open
@@ -100,7 +107,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
             setTimeout(() => {
                 setStep(1);
                 setFormData({ devotee_name: '', gothra: '', phone: '', address: '', occasion: '' });
-                setSevaDetails({ type: 'GENERAL', calendar: 'GREGORIAN', date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' } });
+                setSevaDetails({ type: 'GENERAL', calendar: 'GREGORIAN', date: { day: 1, month: 1, masa: '', paksha: '', tithi: '' }, payment_mode: 'CASH', upi_transaction_id: '' });
                 setErrors({});
             }, 300); // Wait for exit animation
         }
@@ -190,41 +197,45 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
     const handleSubmit = async () => {
         setLoading(true);
         try {
-            const isGeneral = sevaDetails.type === 'GENERAL';
-
-            let subscriptionType = 'RATHOTSAVA';
-            if (isGeneral) {
-                subscriptionType = sevaDetails.calendar;
+            // Validate UPI Transaction ID if UPI is selected
+            if (sevaDetails.payment_mode === 'UPI' && !sevaDetails.upi_transaction_id?.trim()) {
+                alert('UPI Transaction ID is required for UPI payments');
+                setLoading(false);
+                return;
             }
 
             const payload = {
                 devotee_name: formData.devotee_name,
                 phone_number: formData.phone,
                 gothra: formData.gothra,
+                rashi: formData.rashi,         // NEW: Zodiac Sign
+                nakshatra: formData.nakshatra, // NEW: Birth Star
                 address: formData.address,
                 area: formData.area,       // Mapping
                 pincode: formData.pincode, // Mapping
                 occasion: formData.occasion || null,  // NEW: Birthday, Anniversary, etc.
 
                 // Mapped Fields
-                seva_id: isGeneral ? 7 : 8, // 7: Shashwata, 8: Brahmachari
-                amount: isGeneral ? 5000.0 : 2500.0,
-                payment_mode: 'CASH', // Default for now
+                seva_id: 7, // Always General Seva now
+                amount: 5000.0,
+                payment_mode: sevaDetails.payment_mode,
+                upi_transaction_id: sevaDetails.payment_mode === 'UPI' ? sevaDetails.upi_transaction_id : null,
 
-                seva_type: sevaDetails.type,
-                subscription_type: subscriptionType,
-                ...(isGeneral && sevaDetails.calendar === 'GREGORIAN' && {
+                seva_type: 'GENERAL',
+                subscription_type: sevaDetails.calendar,
+                ...(sevaDetails.calendar === 'GREGORIAN' && {
                     event_day: parseInt(sevaDetails.date.day),
                     event_month: parseInt(sevaDetails.date.month),
                 }),
-                ...(isGeneral && sevaDetails.calendar === 'LUNAR' && {
+                ...(sevaDetails.calendar === 'LUNAR' && {
                     maasa: sevaDetails.date.masa,
                     paksha: sevaDetails.date.paksha,
                     tithi: sevaDetails.date.tithi,
                 }),
             };
 
-            await api.post('/shaswata/subscribe', payload);
+            const response = await api.post('/shaswata/subscribe', payload);
+            setReceiptId(response?.data?.receipt_no || response?.data?.id || Math.floor(Math.random() * 9000) + 1000);
             triggerConfetti();
             setStep(3); // Success Step
         } catch (err) {
@@ -354,6 +365,62 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 </div>
                             </div>
 
+                            {/* Rashi & Nakshatra Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Rashi (Zodiac) */}
+                                <div>
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ರಾಶಿ (Rashi)' : 'Rashi / Zodiac'}
+                                    </label>
+                                    <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
+                                        <Moon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 pointer-events-none z-10" size={20} />
+                                        <select
+                                            value={formData.rashi}
+                                            onChange={(e) => handleInputChange('rashi', e.target.value)}
+                                            className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
+                                        >
+                                            <option value="" className="bg-slate-800 text-white">{lang === 'KN' ? 'ರಾಶಿ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Rashi...'}</option>
+                                            {RASHIS.map(r => (
+                                                <option key={r.en} value={r.en} className="bg-slate-800 text-white">
+                                                    {lang === 'KN' ? `${r.kn} (${r.en})` : r.en}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Nakshatra (Birth Star) */}
+                                <div>
+                                    <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                        {lang === 'KN' ? 'ನಕ್ಷತ್ರ (Nakshatra)' : 'Nakshatra / Birth Star'}
+                                    </label>
+                                    <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
+                                        <Star className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 pointer-events-none z-10" size={20} />
+                                        <select
+                                            value={formData.nakshatra}
+                                            onChange={(e) => handleInputChange('nakshatra', e.target.value)}
+                                            className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
+                                        >
+                                            <option value="" className="bg-slate-800 text-white">{lang === 'KN' ? 'ನಕ್ಷತ್ರ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Nakshatra...'}</option>
+                                            {NAKSHATRAS.map(n => (
+                                                <option key={n.en} value={n.en} className="bg-slate-800 text-white">
+                                                    {lang === 'KN' ? `${n.kn} (${n.en})` : n.en}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Address Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="md:col-span-2">
@@ -448,31 +515,16 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                     {/* STEP 2: SEVA SELECTION */}
                     {step === 2 && (
                         <div className="space-y-8 animate-in slide-in-from-right-8 duration-500">
-                            {/* Type Cards */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <button
-                                    onClick={() => handleSevaChange('type', 'GENERAL')}
-                                    className={`p-6 rounded-2xl border transition-all text-left group ${sevaDetails.type === 'GENERAL'
-                                        ? 'bg-amber-500/20 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.2)]'
-                                        : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                            {/* General Seva Card (Only option now - Full width) */}
+                            <div className="grid grid-cols-1 gap-4">
+                                <div
+                                    className="p-6 rounded-2xl border transition-all text-left bg-amber-500/20 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.2)]"
                                 >
-                                    <Star className={`mb-3 ${sevaDetails.type === 'GENERAL' ? 'text-amber-400 fill-amber-400' : 'text-white/40'}`} size={32} />
+                                    <Star className="mb-3 text-amber-400 fill-amber-400" size={32} />
                                     <h3 className="text-white font-bold text-lg mb-1">General Seva</h3>
                                     <p className="text-white/60 text-xs">Pick any date</p>
                                     <div className="mt-3 text-amber-400 font-bold text-xl">₹5,000</div>
-                                </button>
-
-                                <button
-                                    onClick={() => handleSevaChange('type', 'BRAHMACHARI')}
-                                    className={`p-6 rounded-2xl border transition-all text-left group ${sevaDetails.type === 'BRAHMACHARI'
-                                        ? 'bg-violet-500/20 border-violet-500/50 shadow-[0_0_30px_rgba(139,92,246,0.2)]'
-                                        : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                                >
-                                    <Crown className={`mb-3 ${sevaDetails.type === 'BRAHMACHARI' ? 'text-violet-400 fill-violet-400' : 'text-white/40'}`} size={32} />
-                                    <h3 className="text-white font-bold text-lg mb-1">Brahmachari</h3>
-                                    <p className="text-white/60 text-xs">Rathotsava Day</p>
-                                    <div className="mt-3 text-violet-400 font-bold text-xl">₹2,500</div>
-                                </button>
+                                </div>
                             </div>
 
                             {/* Date Picker (General Only) */}
@@ -543,6 +595,45 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                     </div>
                                 </div>
                             )}
+
+                            {/* Payment Mode Selector */}
+                            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                                <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-4 block">
+                                    Payment Mode
+                                </label>
+                                <div className="grid grid-cols-5 gap-2">
+                                    {['CASH', 'UPI', 'CHEQUE', 'NEFT', 'RTGS'].map(mode => (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            onClick={() => handleSevaChange('payment_mode', mode)}
+                                            className={`py-3 rounded-xl font-bold text-xs transition-all ${sevaDetails.payment_mode === mode
+                                                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                                : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
+                                                }`}
+                                        >
+                                            {mode}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* UPI Transaction ID - Conditional */}
+                                {sevaDetails.payment_mode === 'UPI' && (
+                                    <div className="mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
+                                            UPI Transaction ID <span className="text-red-400">*</span>
+                                        </label>
+                                        <input
+                                            value={sevaDetails.upi_transaction_id}
+                                            onChange={(e) => handleSevaChange('upi_transaction_id', e.target.value)}
+                                            className="w-full px-4 py-3 bg-purple-900/30 border-2 border-purple-500/30 rounded-xl text-white font-mono placeholder:text-purple-300/40 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                                            placeholder="Enter UTR Number (e.g., 123456789012)"
+                                            maxLength={50}
+                                        />
+                                        <p className="text-xs text-white/40 mt-2">Enter the 12-digit UTR number from your payment app</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -561,18 +652,38 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                             <p className="text-white/60 mb-8">
                                 May Lord Subramanya bless your family.
                             </p>
-                            <div className="bg-white/10 p-6 rounded-2xl w-full max-w-sm border border-white/10 mx-auto">
+                            <div className="bg-white/10 p-6 rounded-2xl w-full max-w-sm border border-white/10 mx-auto mb-6">
                                 <div className="flex justify-between text-white/70 mb-2">
                                     <span>Receipt ID</span>
-                                    <span className="font-mono font-bold text-white">#{Math.floor(Math.random() * 9000) + 1000}</span>
+                                    <span className="font-mono font-bold text-white">#{receiptId}</span>
                                 </div>
                                 <div className="border-t border-white/10 my-2"></div>
                                 <div className="flex justify-between text-amber-400 font-bold text-lg">
                                     <span>Total Paid</span>
-                                    <span>{sevaDetails.type === 'GENERAL' ? '₹5,000' : '₹2,500'}</span>
+                                    <span>₹5,000</span>
                                 </div>
                             </div>
+
+                            {/* Print Certificate Button */}
+                            <button
+                                onClick={() => setShowCertificate(true)}
+                                className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-105 transition-all flex items-center gap-3"
+                            >
+                                <Sparkles size={20} />
+                                Print A4 Certificate
+                            </button>
                         </div>
+                    )}
+
+                    {/* Certificate Modal */}
+                    {showCertificate && (
+                        <ShaswataCertificate
+                            devotee={formData}
+                            sevaDetails={sevaDetails}
+                            receiptId={receiptId}
+                            lang={lang}
+                            onClose={() => setShowCertificate(false)}
+                        />
                     )}
                 </div>
 

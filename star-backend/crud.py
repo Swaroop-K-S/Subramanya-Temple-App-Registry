@@ -150,10 +150,10 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
             text("""
                 INSERT INTO transactions 
                 (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
-                 devotee_name, created_by_user_id, transaction_date, seva_date)
+                 devotee_name, created_by_user_id, transaction_date, seva_date, upi_transaction_id)
                 VALUES 
                 (:receipt_no, :devotee_id, :seva_id, :amount, CAST(:payment_mode AS payment_mode),
-                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date)
+                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date, :upi_txn_id)
                 RETURNING id
             """),
             {
@@ -164,7 +164,8 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
                 "payment_mode": transaction.payment_mode.value,
                 "devotee_name": transaction.devotee_name,
                 "user_id": user_id,
-                "seva_date": transaction.seva_date or datetime.now().date()
+                "seva_date": transaction.seva_date or datetime.now().date(),
+                "upi_txn_id": getattr(transaction, 'upi_transaction_id', None)
             }
         )
         db.commit()
@@ -178,7 +179,13 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
             "seva_name": seva_name,
             "amount_paid": transaction.amount,
             "payment_mode": transaction.payment_mode.value,
-            "message": f"Booking Successful! Receipt #{receipt_no}"
+            "message": f"Booking Successful! Receipt #{receipt_no}",
+            "nakshatra": transaction.nakshatra,
+            "rashi": transaction.rashi,
+            "gothra": transaction.gothra,
+            "gothra_en": gothra_en,
+            "gothra_kn": gothra_kn,
+            "seva_date": transaction.seva_date
         }
         
     except Exception as e:
@@ -430,7 +437,8 @@ def get_shaswata_subscriptions(db: Session, active_only: bool = True) -> list:
             COALESCE(sc.name_eng, 'Shaswata Seva') as seva_name,
             ss.subscription_type, ss.seva_type, ss.maasa, ss.paksha, ss.tithi,
             ss.event_day, ss.event_month,
-            ss.last_performed_year, ss.notes, ss.is_active
+            ss.last_performed_year, ss.notes, ss.is_active,
+            d.address
         FROM shaswata_subscriptions ss
         JOIN devotees d ON ss.devotee_id = d.id
         LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
@@ -455,7 +463,8 @@ def get_shaswata_subscriptions(db: Session, active_only: bool = True) -> list:
             "seva_name": row[4],
             "subscription_type": sub_type,
             "seva_type": row[6] or "GENERAL",
-            "is_active": row[14]
+            "is_active": row[14],
+            "address": row[15]  # NEW: Include address
         }
         
         if sub_type == "LUNAR":

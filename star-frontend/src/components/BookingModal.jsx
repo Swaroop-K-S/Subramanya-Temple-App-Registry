@@ -5,9 +5,9 @@ import 'react-transliterate/dist/index.css';
 import { bookSeva } from '../services/api';
 import api from '../services/api';
 import { NAKSHATRAS, RASHIS, GOTRAS } from './constants';
-import Receipt from './Receipt';
-import { useReactToPrint } from 'react-to-print';
 import { TRANSLATIONS } from './translations';
+import html2canvas from 'html2canvas';
+import { ReceiptPreview } from './ReceiptPreview';
 
 function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -19,31 +19,31 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
         rashi: '',
         seva_date: todayStr,
         payment_mode: 'CASH',
+        upi_transaction_id: '',
+        custom_amount: '',
     });
     const [loading, setLoading] = useState(false);
     const [searching, setSearching] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [transaction, setTransaction] = useState(null);
     const t = TRANSLATIONS[lang];
-
-    // Printer
     const receiptRef = useRef();
-    const handlePrint = useReactToPrint({
-        content: () => receiptRef.current,
-        documentTitle: `Receipt-${transaction?.receipt_no || 'New'}`,
-        onAfterPrint: () => onClose(),
-    });
+    const [receiptData, setReceiptData] = useState(null);
+    const [printStatus, setPrintStatus] = useState('idle');
 
     // --- AUTO-FILL LOGIC ---
     useEffect(() => {
         if (!isOpen) {
             setTransaction(null);
+            setPrintStatus('idle');
             setFormData({
                 devotee_name: '',
                 phone_number: '',
                 gothra: '',
                 nakshatra: '', rashi: '',
-                seva_date: todayStr, payment_mode: 'CASH'
+                seva_date: todayStr, payment_mode: 'CASH',
+                upi_transaction_id: '',
+                custom_amount: '',
             });
         }
         const checkPhone = async () => {
@@ -75,9 +75,34 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
         return () => clearTimeout(timer);
     }, [formData.phone_number, isOpen, lang]);
 
+    // --- ABHISHEKA LOGIC (Auto-Date to Tomorrow) ---
+    useEffect(() => {
+        if (isOpen && seva?.name_eng) {
+            const name = seva.name_eng.toLowerCase();
+            if (name.includes('abhisheka')) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tmrStr = tomorrow.toISOString().split('T')[0];
+                setFormData(prev => ({ ...prev, seva_date: tmrStr }));
+            }
+        }
+    }, [isOpen, seva]);
+
     if (!isOpen || !seva) return null;
 
-    const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleInputChange = (e) => setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
+
+    // Helper: Check if seva allows custom amount (General Seva, Anna Dhana Nidhi)
+    const allowsCustomAmount = () => {
+        if (!seva?.name_eng) return false;
+        const name = seva.name_eng.toLowerCase();
+        // Match: "general", "anna dhana", "annadhan", "anna dana", "samanya", "nidhi"
+        return name.includes('general') ||
+            name.includes('anna') ||
+            name.includes('annadhan') ||
+            name.includes('nidhi') ||
+            name.includes('samanya');
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -92,16 +117,29 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                 gothra_en: lang === 'EN' ? formData.gothra : '',
                 gothra_kn: lang === 'KN' ? formData.gothra : '',
                 seva_id: seva.id,
-                amount: parseFloat(seva.price) || 0
+                amount: allowsCustomAmount() && formData.custom_amount
+                    ? parseFloat(formData.custom_amount)
+                    : parseFloat(seva.price) || 0,
+                upi_transaction_id: formData.payment_mode === 'UPI' ? formData.upi_transaction_id : null
             };
             const response = await bookSeva(bookingData);
             setTransaction(response);
 
-            // Level 11: Auto-Print
-            import('../utils/thermalPrinter').then(module => {
-                module.printToThermal(response, seva, lang)
-                    .catch(err => console.warn("Printer Error", err));
+            // Auto-trigger preview
+            // Prepare Receipt Data
+            setReceiptData({
+                receipt_no: response.receipt_no,
+                booking_date: response.transaction_date || todayStr,
+                seva_date: response.seva_date || formData.seva_date,
+                seva_name: lang === 'KN' ? (seva.name_kan || seva.name_eng) : seva.name_eng,
+                devotee_name: response.devotee_name || formData.devotee_name,
+                gothra: response.gothra || formData.gothra,
+                nakshatra: response.nakshatra || formData.nakshatra,
+                rashi: response.rashi || formData.rashi,
+                amount_paid: response.amount_paid || bookingData.amount,
+                payment_mode: response.payment_mode || bookingData.payment_mode
             });
+
         } catch (err) {
             console.error(err);
             alert('Booking failed.');
@@ -110,30 +148,137 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
         }
     };
 
-    // --- RECEIPT VIEW (Unchanged Logic, just container style tweak) ---
+    // --- PRINT HANDLER (Frontend Generation) ---
+    // Using printStatus state: 'idle', 'printing', 'success', 'error'
+
+    const handleThermalPrint = async () => {
+        if (!receiptRef.current) return;
+        setPrintStatus('printing');
+
+        try {
+            // 1. Capture inner HTML 
+            const canvas = await html2canvas(receiptRef.current, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+                useCORS: true
+            });
+
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    setPrintStatus('error');
+                    return;
+                }
+
+                // 2. Send Blob to Backend
+                const fd = new FormData();
+                fd.append('file', blob, `receipt_${transaction?.receipt_no || 'new'}.png`);
+
+                try {
+                    await api.post('/print/image', fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    setPrintStatus('success');
+                } catch (printErr) {
+                    console.error("Printing failed", printErr);
+                    setPrintStatus('error');
+                }
+            });
+
+        } catch (err) {
+            console.error("Capture failed", err);
+            setPrintStatus('error');
+        }
+    };
+
+    // Auto-Print Trigger
+    useEffect(() => {
+        if (transaction && receiptRef.current && printStatus === 'idle') {
+            const timer = setTimeout(() => {
+                handleThermalPrint();
+            }, 800);
+            return () => clearTimeout(timer);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transaction]); // Only run when transaction is set
+
+    // --- SUCCESS VIEW (Cleaned up) ---
     if (transaction) {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300" />
-                <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
-                    <div className="bg-gray-50 px-8 py-4 flex justify-between items-center border-b">
-                        <h2 className="font-bold text-gray-700 flex items-center gap-2">
-                            <CheckCircle2 className="text-green-500" size={24} />
-                            {t?.bookingSuccessful || "Booking Successful"}
-                        </h2>
-                        <div className="flex gap-2">
-                            <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
-                                <Printer size={18} /> Print Invoice
-                            </button>
-                            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                                <X size={24} className="text-gray-500" />
-                            </button>
+
+                <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20 p-8 text-center flex flex-col items-center max-h-[90vh]">
+
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition-all duration-200 z-10"
+                    >
+                        <X size={20} />
+                    </button>
+
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 shrink-0 animate-bounce">
+                        <CheckCircle2 className="text-green-600 w-10 h-10" />
+                    </div>
+
+                    <h2 className="text-2xl font-black text-gray-800 mb-2 shrink-0">
+                        {t?.bookingSuccessful || "Booking Successful!"}
+                    </h2>
+                    <p className="text-gray-500 mb-4 shrink-0">
+                        Receipt #{transaction.receipt_no}
+                    </p>
+
+                    {/* Receipt Preview (Visible + Scrollable) */}
+                    <div className="my-4 border-2 border-dashed border-gray-300 rounded-2xl p-2 bg-gray-50 w-full flex justify-center shrink-0 shadow-sm overflow-y-auto max-h-[400px] custom-scrollbar">
+                        <div className="origin-top transform scale-90 sm:scale-100">
+                            <ReceiptPreview
+                                ref={receiptRef}
+                                transaction={receiptData}
+                                seva={seva}
+                                lang={lang}
+                            />
                         </div>
                     </div>
-                    <div className="p-8 bg-gray-100/50 max-h-[80vh] overflow-y-auto">
-                        <div ref={receiptRef}>
-                            <Receipt transaction={transaction} seva={seva} lang={lang} />
+
+                    {/* STATUS & CONTROLS */}
+                    <div className="w-full shrink-0 pt-4 space-y-4">
+
+                        {/* Status Message */}
+                        <div className="h-8 flex items-center justify-center">
+                            {printStatus === 'printing' && (
+                                <div className="flex items-center gap-2 text-orange-600 font-bold animate-pulse">
+                                    <Printer size={20} /> <span>Printing...</span>
+                                </div>
+                            )}
+                            {printStatus === 'success' && (
+                                <div className="flex items-center gap-2 text-green-600 font-bold animate-in fade-in slide-in-from-bottom-2">
+                                    <CheckCircle2 size={20} /> <span>Sent to Printer!</span>
+                                </div>
+                            )}
+                            {printStatus === 'error' && (
+                                <div className="flex items-center gap-2 text-red-600 font-bold">
+                                    <X size={20} /> <span>Print Failed</span>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Actions */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={handleThermalPrint}
+                                disabled={printStatus === 'printing'}
+                                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Printer size={18} /> Print Again
+                            </button>
+
+                            <button
+                                onClick={onClose}
+                                className="w-full py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200"
+                            >
+                                Close & New
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -179,8 +324,14 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                     <div className="relative z-10 mt-8">
                         <p className="text-gray-500 text-xs uppercase font-bold tracking-widest mb-1">Total Amount</p>
                         <div className="flex items-center gap-1 text-emerald-600">
-                            <IndianRupee className="w-6 h-6" />
-                            <span className="text-4xl font-black tracking-tight">{seva.price}</span>
+                            {allowsCustomAmount() ? (
+                                <span className="text-2xl font-bold text-emerald-500">Custom Amount</span>
+                            ) : (
+                                <>
+                                    <IndianRupee className="w-6 h-6" />
+                                    <span className="text-4xl font-black tracking-tight">{seva.price}</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -207,12 +358,11 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                     name="phone_number"
                                     value={formData.phone_number}
                                     onChange={handleInputChange}
-                                    className="peer w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all placeholder-transparent"
-                                    placeholder="Phone"
+                                    className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                    placeholder="Phone Number"
                                     maxLength={10}
                                     required
                                 />
-                                <label className="absolute left-10 top-3 text-gray-400 text-xs transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3.5 peer-focus:top-1 peer-focus:text-[10px] peer-focus:text-orange-500">Phone Number</label>
                                 {searching && <Loader2 className="absolute right-3 top-3.5 animate-spin text-orange-500 w-4 h-4" />}
                                 {!searching && successMsg && <CheckCircle2 className="absolute right-3 top-3.5 text-green-500 w-4 h-4" />}
                             </div>
@@ -319,13 +469,59 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                 <button
                                     key={mode}
                                     type="button"
-                                    onClick={() => setFormData(p => ({ ...p, payment_mode: mode }))}
+                                    onClick={() => setFormData(p => ({ ...p, payment_mode: mode, upi_transaction_id: mode === 'CASH' ? '' : p.upi_transaction_id }))}
                                     className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all shadow-sm ${formData.payment_mode === mode ? 'bg-white text-gray-800 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                                 >
                                     {mode}
                                 </button>
                             ))}
                         </div>
+
+                        {/* Custom Amount Input - Shows only for General/Annadhan Nidhi */}
+                        {allowsCustomAmount() && (
+                            <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                                    <span>{lang === 'KN' ? 'ಇಚ್ಛೆಯ ಮೊತ್ತ' : 'Custom Amount'}</span>
+                                    <span className="text-emerald-500 font-normal">{lang === 'KN' ? 'ಐಚ್ಛಿಕ' : 'Optional'}</span>
+                                </label>
+                                <div className="relative">
+                                    <IndianRupee className="absolute left-3 top-3.5 text-emerald-500 w-5 h-5" />
+                                    <input
+                                        type="number"
+                                        name="custom_amount"
+                                        value={formData.custom_amount}
+                                        onChange={handleInputChange}
+                                        min="1"
+                                        step="1"
+                                        className="w-full pl-10 pr-4 py-3 bg-emerald-50 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all text-emerald-800 font-bold text-lg placeholder-emerald-300"
+                                        placeholder="Enter your amount (₹)"
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400">Enter the amount you wish to donate</p>
+                            </div>
+                        )}
+
+                        {/* UPI Transaction ID Field - Shows only when UPI is selected */}
+                        {formData.payment_mode === 'UPI' && (
+                            <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    UPI Transaction ID <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        name="upi_transaction_id"
+                                        value={formData.upi_transaction_id}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-purple-50 border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all font-mono text-purple-800 placeholder-purple-300"
+                                        placeholder="Enter UPI Transaction ID (e.g., 123456789012)"
+                                        required
+                                        minLength={6}
+                                        maxLength={50}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400">Enter the 12-digit UTR number from your payment app</p>
+                            </div>
+                        )}
 
                         {/* Omni Action Button */}
                         <div className="pt-2 sticky bottom-0 bg-white/50 backdrop-blur-sm -mx-2 px-2 pb-2">

@@ -22,6 +22,7 @@ import Sidebar from './components/Sidebar';  // [NEW] Floating Sidebar
 import Navbar from './components/Navbar';    // [NEW] Celestial Navbar
 import GenesisChat from './components/GenesisChat'; // [NEW] Daiva-Setu AI Interface
 import PrasadamDispatch from './components/PrasadamDispatch'; // [NEW] Logistics
+import DailyTransactions from './components/DailyTransactions'; // [NEW] Phase 3
 
 function App() {
   // [AUTH] Security State
@@ -94,6 +95,7 @@ function App() {
         )}
 
         {/* B. OTHER PAGES */}
+        {activePage === 'daily' && <DailyTransactions lang={lang} />}
         {activePage === 'shaswata' && <ShaswataForm onBack={() => setActivePage('home')} />}
 
         {activePage === 'reports' && <ReportsDashboard onBack={() => setActivePage('home')} />}

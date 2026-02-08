@@ -1,4 +1,5 @@
 # S.T.A.R. Backend - FastAPI Main Application
+import multiprocessing
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,10 @@ import io
 import csv
 import traceback
 from sqlalchemy import text, func
+
+# Required for PyInstaller Windows executable
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
 
 from database import get_db
 from models import SevaCatalog
@@ -274,9 +279,13 @@ def book_seva(transaction: TransactionCreate, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Booking failed: {str(e)}")
 
-@app.get("/transactions/today", tags=["Transactions"])
-def get_today_transactions(db: Session = Depends(get_db)):
-    return get_daily_transactions(db)
+@app.get("/transactions", tags=["Transactions"])
+def list_transactions(date: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Get transactions for a specific date (YYYY-MM-DD). 
+    Defaults to today if no date provided.
+    """
+    return get_daily_transactions(db, date)
 
 # =============================================================================
 # API Routes - Devotee Management (Auto-Fill) -- NEW ADDITION
@@ -627,9 +636,154 @@ def migrate_legacy_database(
         # For now, running it as a separate process logic or function call is fine.
         migrate_legacy_data(temp_filename)
         
-        return {"message": "Legacy Data Absorbed. The timeline has been corrected."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
+
+# =============================================================================
+# Level 16: The Celestial Compass (Reverse Panchangam Search)
+# =============================================================================
+
+@app.get("/panchangam/find", tags=["Panchangam"])
+def find_date_by_panchangam(
+    masa: str, 
+    paksha: str, 
+    tithi: str, 
+    year: int = None
+):
+    """
+    Finds the Gregorian date for a given Panchangam date (Masa, Paksha, Tithi).
+    Iterates through the specified Gregorian year to find the first match.
+    """
+    target_year = year if year else datetime.now().year
+    
+    # Normalize inputs
+    t_masa = masa.lower().strip()
+    t_paksha = paksha.lower().strip()
+    t_tithi = tithi.lower().strip()
+    
+    # Alias handling
+    # Calculator uses 'Shasthi' (one 'h' after 's'), but inputs might be 'Shashthi' or 'Shasti'
+    if 'shashthi' in t_tithi: t_tithi = 'shasthi'
+    if 'shasti' in t_tithi: t_tithi = 'shasthi'
+
+    # Optimization: Reduce search space based on Masa
+    # (Optional, but simple iteration is fast enough for 365 days)
+    
+    start_date = date(target_year, 1, 1)
+    # Search for 380 days to cover overlaps into next year
+    for i in range(380):
+        current_date = start_date + timedelta(days=i)
+        
+        # Calculate Panchangam for this date
+        p = PanchangCalculator.calculate(current_date)
+        attrs = p['attributes']
+        
+        # Check Match
+        # Case-insensitive partial matches
+        p_masa = attrs['maasa'].lower()
+        p_paksha = attrs['paksha'].lower()
+        p_tithi = attrs['tithi'].lower()
+        
+        # We check if target input is IN the calculated string (e.g. "Shashthi" in "Shashthi")
+        if t_masa in p_masa and t_paksha in p_paksha and t_tithi in p_tithi:
+            return {"date": p['date'], "panchangam": attrs}
+            
+            
+    raise HTTPException(status_code=404, detail="Panchangam date not found in this year")
+
+# =============================================================================
+# Level 17: The Divine Scroll (Thermal Printer Integration)
+# =============================================================================
+from printer_service import generate_receipt_image, print_receipt_image
+
+from fastapi.responses import FileResponse
+import os
+
+@app.post("/print/preview", tags=["Device Integration"])
+def preview_receipt(data: dict):
+    """
+    Generates a receipt image and returns it for preview without printing.
+    """
+    try:
+        # Generate Image (Devotee Copy as default preview)
+        data['copy_label'] = "** PREVIEW **"
+        image_path = generate_receipt_image(data)
+        
+        if os.path.exists(image_path):
+            return FileResponse(image_path, media_type="image/jpeg")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate preview image")
+    except Exception as e:
+        print(f"Preview Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/print/receipt", tags=["Device Integration"])
+def print_receipt(data: dict):
+    """
+    Generates and prints a thermal receipt for the given data.
+    Usage: Payload must match the keys expected by printer_service.
+    """
+    image_paths = []
+    try:
+        # 1. Devotee Copy
+        data_devotee = data.copy()
+        data_devotee['copy_label'] = "** DEVOTEE COPY **"
+        image_path_d = generate_receipt_image(data_devotee)
+        image_paths.append(image_path_d)
+        s1 = print_receipt_image(image_path_d)
+        
+        # 2. Priest Copy (Archaka)
+        data_priest = data.copy()
+        data_priest['copy_label'] = "** ARCHAKA COPY **"
+        image_path_p = generate_receipt_image(data_priest)
+        image_paths.append(image_path_p)
+        s2 = print_receipt_image(image_path_p)
+        
+        # 3. Cleanup
+        for path in image_paths:
+            if os.path.exists(path):
+               try:
+                   os.remove(path)
+               except:
+                   pass
+            
+            raise HTTPException(status_code=500, detail="Failed to print receipts. Check printer connection.")
+            
+    except Exception as e:
+        print(f"Print Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/print/image", tags=["Device Integration"])
+def print_uploaded_image(file: UploadFile = File(...)):
+    """
+    Directly prints an uploaded image (from Frontend html2canvas).
+    Bypasses server-side rendering issues (font/ligatures).
+    """
+    try:
+        # Save temp file
+        file_location = f"temp_receipt_{int(datetime.now().timestamp())}.png"
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+            
+        # Print
+        # We print 2 copies for standard flow
+        s1 = print_receipt_image(file_location)
+        s2 = print_receipt_image(file_location)
+        
+        # Cleanup
+        if os.path.exists(file_location):
+            os.remove(file_location)
+            
+        if s1 and s2:
+             return {"status": "success", "message": "Receipts sent to printer (2 Copies)"}
+        elif s1 or s2:
+             return {"status": "partial_success", "message": "One copy failed to print"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to print receipts. Check printer connection.")
+
+    except Exception as e:
+        print(f"Print Image Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

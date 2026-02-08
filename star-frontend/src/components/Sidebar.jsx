@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Calendar, BarChart3, IndianRupee, Settings, LogOut, Flower, Truck } from 'lucide-react';
+import { Home, Calendar, BarChart3, IndianRupee, Settings, LogOut, Flower, Truck, ScrollText } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -7,8 +7,9 @@ const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
     const menuItems = [
         { id: 'home', icon: Home, label: 'Home' },
         { id: 'panchangam', icon: Calendar, label: 'Panchangam' },
+        { id: 'daily', icon: ScrollText, label: 'Daily Txns' },
         { id: 'reports', icon: IndianRupee, label: 'Reports' },
-        { id: 'dispatch', icon: Truck, label: 'Dispatch' },
+        { id: 'dispatch', icon: Truck, label: 'Shaswata Pooja' },
         { id: 'settings', icon: Settings, label: 'Settings' }
     ];
 

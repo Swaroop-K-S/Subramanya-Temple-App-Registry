@@ -19,6 +19,9 @@ class PaymentMode(str, Enum):
     """Payment modes accepted at the temple"""
     CASH = "CASH"
     UPI = "UPI"
+    CHEQUE = "CHEQUE"
+    NEFT = "NEFT"
+    RTGS = "RTGS"
 
 
 class SubscriptionType(str, Enum):
@@ -104,6 +107,17 @@ class TransactionCreate(BaseModel):
     amount: float = Field(..., gt=0, description="Amount paid for the seva")
     payment_mode: PaymentMode = Field(..., description="Payment method: CASH or UPI")
     seva_date: Optional[date] = Field(None, description="Date when seva should be performed. Defaults to today.")
+    
+    # UPI Transaction ID (required when payment_mode is UPI)
+    upi_transaction_id: Optional[str] = Field(None, max_length=50, description="UPI Transaction Reference ID")
+
+    @model_validator(mode='after')
+    def validate_upi_transaction_id(self):
+        """Validate that UPI transaction ID is provided when payment mode is UPI"""
+        if self.payment_mode == PaymentMode.UPI:
+            if not self.upi_transaction_id or not self.upi_transaction_id.strip():
+                raise ValueError("UPI Transaction ID is required when payment mode is UPI")
+        return self
 
     class Config:
         json_schema_extra = {
@@ -118,7 +132,8 @@ class TransactionCreate(BaseModel):
                 "nakshatra": "Ashwini",
                 "seva_id": 1,
                 "amount": 20.00,
-                "payment_mode": "CASH"
+                "payment_mode": "UPI",
+                "upi_transaction_id": "UPI123456789"
             }
         }
 
@@ -178,6 +193,9 @@ class ShaswataCreate(BaseModel):
     
     # Additional Info
     notes: Optional[str] = Field(None, max_length=500, description="Additional notes")
+    
+    # UPI Transaction ID (required when payment_mode is UPI)
+    upi_transaction_id: Optional[str] = Field(None, max_length=50, description="UPI Transaction Reference ID")
 
     @model_validator(mode='after')
     def validate_date_fields(self):
@@ -193,6 +211,12 @@ class ShaswataCreate(BaseModel):
                     "For GREGORIAN subscription, event_day and event_month are required."
                 )
         # RATHOTSAVA type does not require any date fields
+        
+        # Validate UPI Transaction ID
+        if self.payment_mode == PaymentMode.UPI:
+            if not self.upi_transaction_id or not self.upi_transaction_id.strip():
+                raise ValueError("UPI Transaction ID is required when payment mode is UPI")
+        
         return self
 
     class Config:
@@ -263,6 +287,9 @@ class TransactionResponse(BaseModel):
     seva_date: Optional[date] = None
     nakshatra: Optional[str] = None
     rashi: Optional[str] = None
+    gothra: Optional[str] = None
+    gothra_en: Optional[str] = None
+    gothra_kn: Optional[str] = None
 
     class Config:
         from_attributes = True

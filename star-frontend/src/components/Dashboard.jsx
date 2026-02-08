@@ -83,6 +83,9 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
     }, []);
 
     const filteredSevas = sevas.filter(seva => {
+        // Exclude Shaswata Pooja from home booking (it has its own dedicated form)
+        if (seva.is_shaswata) return false;
+
         const matchSearch = seva.name_eng?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             seva.name_kan?.includes(searchTerm);
         const matchCat = categoryFilter === 'ALL' || seva.name_eng?.toUpperCase().includes(categoryFilter);
@@ -240,8 +243,18 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                                                     Dakshina
                                                 </span>
                                                 <div className="flex items-center gap-1 font-display font-bold text-2xl text-temple-green dark:text-temple-green">
-                                                    <span className="text-lg">₹</span>
-                                                    {seva.price}
+                                                    {/* Show 'Custom' for General/Anna Dhana sevas */}
+                                                    {(seva.name_eng?.toLowerCase().includes('general') ||
+                                                        seva.name_eng?.toLowerCase().includes('anna') ||
+                                                        seva.name_eng?.toLowerCase().includes('nidhi') ||
+                                                        seva.name_eng?.toLowerCase().includes('samanya')) ? (
+                                                        <span className="text-lg">Custom</span>
+                                                    ) : (
+                                                        <>
+                                                            <span className="text-lg">₹</span>
+                                                            {seva.price}
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
