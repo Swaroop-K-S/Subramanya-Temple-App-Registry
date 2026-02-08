@@ -7,7 +7,7 @@ Defines the database models matching the PostgreSQL schema.
 from sqlalchemy import Column, Integer, String, Boolean, Numeric, DateTime, Date, ForeignKey, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database import Base
+from .database import Base
 import enum
 
 

@@ -1,6 +1,7 @@
 # S.T.A.R. Backend - FastAPI Main Application
 import multiprocessing
 import sys
+import os
 import webbrowser
 import threading
 from fastapi import FastAPI, Depends, HTTPException, status, Request
@@ -16,31 +17,38 @@ import csv
 import traceback
 from sqlalchemy import text, func
 
+# Fix for console-less mode (PyInstaller with console=False)
+# When running without console, sys.stdout/stderr are None which crashes uvicorn logging
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
 # Required for PyInstaller Windows executable
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
-from database import get_db
-from models import SevaCatalog
-from schemas import (
+from app.database import get_db, init_database
+from app.models import SevaCatalog
+from app.schemas import (
     TransactionCreate, TransactionResponse, SevaResponse,
     ShaswataCreate, ShaswataSubscriptionResponse,
     UserCreate, UserLogin, Token, TokenData, UserResponse
 )
-from crud import (
+from app.crud import (
     create_transaction, get_daily_transactions,
     create_shaswata_subscription, get_shaswata_subscriptions,
     get_financial_report,
     log_dispatch, log_feedback_sent, get_pending_feedback_subscriptions
 )
-from panchang import PanchangCalculator
-import daiva_setu  # Genesis Protocol (Level 15)
+from app.panchang import PanchangCalculator
+from app import daiva_setu  # Genesis Protocol (Level 15)
 
 # Authentication Imports
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import timedelta
-from models import User
+from app.models import User
 
 # =============================================================================
 # FastAPI Application Setup
@@ -59,6 +67,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Routers (if split)
+# app.include_router(users.router)
+
+@app.on_event("startup")
+def startup_event():
+    """Initialize database tables on app startup."""
+    init_database()
+
 
 # Register Genesis Protocol Router (AI Engine)
 app.include_router(daiva_setu.router)
@@ -244,6 +261,13 @@ def delete_user(
 
 @app.get("/", tags=["Health"])
 def root():
+    # In production (bundled exe), serve the React app
+    if getattr(sys, 'frozen', False):
+        base_dir = sys._MEIPASS
+        index_file = os.path.join(base_dir, 'static', 'index.html')
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+    # In dev mode or if no static files, return API status
     return {"message": "S.T.A.R. API is online"}
 
 @app.get("/sevas", response_model=List[SevaResponse], tags=["Seva Catalog"])

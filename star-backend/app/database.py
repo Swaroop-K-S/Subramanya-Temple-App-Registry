@@ -1,0 +1,105 @@
+"""
+S.T.A.R. Backend - Database Configuration
+==========================================
+SQLAlchemy connection to SQLite database.
+Fully portable - no database installation required!
+"""
+
+import os
+import sys
+from sqlalchemy import create_engine, event
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+# =============================================================================
+# SQLite Database - Portable, No Installation Required!
+# =============================================================================
+
+def get_database_path():
+    """
+    Determine the database file path based on execution context.
+    - Bundled exe: Database stored next to the .exe file
+    - Dev mode: Database stored in star-backend folder
+    """
+    if getattr(sys, 'frozen', False):
+        # Running as bundled .exe - store DB next to the executable
+        exe_dir = os.path.dirname(sys.executable)
+        return os.path.join(exe_dir, 'star_temple.db')
+    else:
+        # Dev mode - store in backend directory
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'star_temple.db')
+
+DATABASE_PATH = get_database_path()
+DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+
+# Create the SQLAlchemy engine with SQLite-specific settings
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},  # Required for SQLite with FastAPI
+    echo=False  # Set to True for SQL debugging
+)
+
+# Enable foreign keys for SQLite (disabled by default)
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+# SessionLocal class - each instance will be a database session
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for our ORM models
+Base = declarative_base()
+
+
+def get_db():
+    """
+    Dependency function that provides a database session.
+    Used with FastAPI's Depends() for automatic session management.
+    
+    Usage in routes:
+        @app.get("/items")
+        def get_items(db: Session = Depends(get_db)):
+            ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def init_database():
+    """
+    Initialize the database by creating all tables.
+    Called on app startup.
+    Also seeds default admin if no users exist.
+    """
+    from .models import Base as ModelsBase, User
+    from passlib.context import CryptContext
+    
+    # Create tables
+    ModelsBase.metadata.create_all(bind=engine)
+    print(f"[OK] Database initialized at: {DATABASE_PATH}")
+    
+    # Seed default admin if no users exist
+    session = SessionLocal()
+    try:
+        count = session.query(User).count()
+        if count == 0:
+            print("[INFO] No users found. Creating default admin...")
+            pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+            admin = User(
+                username="admin",
+                hashed_password=pwd_context.hash("admin123"),
+                role="admin",
+                is_active=True
+            )
+            session.add(admin)
+            session.commit()
+            print("[OK] Created default user: admin / admin123")
+    except Exception as e:
+        print(f"Error seeding admin: {e}")
+    finally:
+        session.close()

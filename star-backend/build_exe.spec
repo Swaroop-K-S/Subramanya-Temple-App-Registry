@@ -1,3 +1,4 @@
+
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
@@ -8,6 +9,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('../star-frontend/dist', 'static'),  # Bundle frontend build into 'static' folder
+        ('app/printer_config.json', 'app'),   # Bundle printer config
     ],
     hiddenimports=[
         'uvicorn.logging',
@@ -21,12 +23,19 @@ a = Analysis(
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
         'sqlalchemy.sql.default_comparator',
-        'engineio.async_drivers.asgi',  # Often needed for socketio if used, or uvicorn
+        'engineio.async_drivers.asgi',
+        'passlib.handlers.pbkdf2',
+        'passlib.handlers.bcrypt',
+        'multipart',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'psycopg2', 'psycopg2-binary', 
+        'matplotlib', 'tkinter', 'unittest', 'pydoc', 'pdb',
+        'torch', 'nltk', 'pandas', 'scipy', 'numpy'
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -44,7 +53,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # Hidden - runs in background, browser opens automatically
+    console=False,  # Hidden - clean Windows app experience
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

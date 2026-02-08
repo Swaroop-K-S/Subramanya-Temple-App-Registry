@@ -3,9 +3,9 @@ import logging
 from datetime import datetime
 from difflib import get_close_matches
 from sqlalchemy.orm import Session
-from database import SessionLocal
-from crud import create_transaction
-from schemas import TransactionCreate
+from .database import SessionLocal
+from .crud import create_transaction
+from .schemas import TransactionCreate
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [LEGACY_ERASER] - %(message)s')

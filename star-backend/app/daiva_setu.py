@@ -15,8 +15,8 @@ import re
 import random
 import traceback
 
-from database import get_db
-from models import SevaCatalog
+from .database import get_db
+from .models import SevaCatalog
 
 router = APIRouter(
     prefix="/genesis",

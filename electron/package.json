@@ -1,0 +1,49 @@
+{
+    "name": "temple-management-suite",
+    "version": "1.0.0",
+    "description": "Subramanya Temple Management Suite - Sacred Technology for Ritualistic Administration & Registry",
+    "main": "main.js",
+    "author": "Kukke Subramanya Temple",
+    "license": "MIT",
+    "scripts": {
+        "start": "electron .",
+        "build": "electron-builder --win --x64",
+        "dist": "electron-builder --win --x64 -p never"
+    },
+    "build": {
+        "appId": "com.kukketemple.management",
+        "productName": "Temple Management Suite",
+        "directories": {
+            "output": "release"
+        },
+        "win": {
+            "target": "nsis",
+            "icon": "resources/icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "installerIcon": "resources/icon.ico",
+            "uninstallerIcon": "resources/icon.ico",
+            "installerHeaderIcon": "resources/icon.ico",
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "Temple Management Suite"
+        },
+        "extraResources": [
+            {
+                "from": "resources/temple-backend.exe",
+                "to": "temple-backend.exe"
+            }
+        ],
+        "files": [
+            "main.js",
+            "preload.js",
+            "dist/**/*"
+        ]
+    },
+    "devDependencies": {
+        "electron": "^33.0.0",
+        "electron-builder": "^25.0.0"
+    }
+}

@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 import string
 
-from schemas import TransactionCreate, ShaswataCreate, SubscriptionType
+from .schemas import TransactionCreate, ShaswataCreate, SubscriptionType
 
 
 def generate_receipt_number() -> str:
