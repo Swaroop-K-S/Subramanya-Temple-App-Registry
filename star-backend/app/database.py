@@ -101,5 +101,28 @@ def init_database():
             print("[OK] Created default user: admin / admin123")
     except Exception as e:
         print(f"Error seeding admin: {e}")
+
+    # Seed default Sevas if catalog is empty
+    try:
+        from .models import SevaCatalog
+        count_sevas = session.query(SevaCatalog).count()
+        if count_sevas == 0:
+            print("[INFO] No sevas found. Seeding default catalog...")
+            default_sevas = [
+                SevaCatalog(name_eng="Archana", name_kan="ಅರ್ಚನೆ", price=20.0),
+                SevaCatalog(name_eng="Panchamrutha Abhisheka", name_kan="ಪಂಚಾಮೃತ ಅಭಿಷೇಕ", price=150.0),
+                SevaCatalog(name_eng="Ksheera Abhisheka", name_kan="ಕ್ಷೀರಾಭಿಷೇಕ", price=50.0),
+                SevaCatalog(name_eng="Rudra Abhisheka", name_kan="ರುದ್ರಾಭಿಷೇಕ", price=350.0),
+                SevaCatalog(name_eng="Karthika Pooje", name_kan="ಕಾರ್ತಿಕ ಪೂಜೆ", price=100.0),
+                SevaCatalog(name_eng="Sarpa Samskara", name_kan="ಸರ್ಪ ಸಂಸ್ಕಾರ", price=3500.0, is_slot_based=True),
+                SevaCatalog(name_eng="Ashlesha Bali", name_kan="ಆಶ್ಲೇಷ ಬಲಿ", price=500.0),
+                SevaCatalog(name_eng="Prasada Oota", name_kan="ಪ್ರಸಾದ ಊಟ", price=0.0),
+            ]
+            session.add_all(default_sevas)
+            session.commit()
+            print(f"[OK] Seeded {len(default_sevas)} sevas.")
+    except Exception as e:
+        print(f"Error seeding sevas: {e}")
+
     finally:
         session.close()
