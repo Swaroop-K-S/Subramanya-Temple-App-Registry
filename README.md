@@ -29,6 +29,22 @@ star-backend/
 - Python 3.10+
 - Git
 
+
+### Security Configuration (Recommended)
+Set these environment variables before running in production-like environments:
+
+```bash
+set STAR_SECRET_KEY=replace_with_a_long_random_secret
+set ADMIN_BOOTSTRAP_PASSWORD=replace_with_a_strong_password
+set ENABLE_CREATE_ADMIN=false
+set ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+```
+
+Notes:
+- `STAR_SECRET_KEY` should be stable per deployment, otherwise JWT tokens will be invalidated on restart.
+- `ENABLE_CREATE_ADMIN` is disabled by default for safety.
+- If no users exist and `ADMIN_BOOTSTRAP_PASSWORD` is not set, a one-time random bootstrap password is generated and printed in backend logs.
+
 ### Running Locally (Development)
 1. **Create Virtual Environment**:
    ```bash

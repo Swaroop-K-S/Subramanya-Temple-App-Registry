@@ -16,6 +16,7 @@ import io
 import csv
 import traceback
 from sqlalchemy import text, func
+import secrets
 
 # Fix for console-less mode (PyInstaller with console=False)
 # When running without console, sys.stdout/stderr are None which crashes uvicorn logging
@@ -60,9 +61,21 @@ app = FastAPI(
     version="1.0.6"
 )
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+def _env_list(name: str, default: str = "") -> list[str]:
+    raw = os.getenv(name, default)
+    return [v.strip() for v in raw.split(",") if v.strip()]
+
+allowed_origins = _env_list(
+    "ALLOWED_ORIGINS",
+    "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://localhost:8000"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -84,12 +97,13 @@ app.include_router(daiva_setu.router)
 # Authentication Configuration & Helpers
 # =============================================================================
 
-# SECRET_KEY should be kept secret in production!
-SECRET_KEY = "supersecretkey_change_this_for_production"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+SECRET_KEY = os.getenv("STAR_SECRET_KEY") or secrets.token_urlsafe(48)
+if not os.getenv("STAR_SECRET_KEY"):
+    print("[WARN] STAR_SECRET_KEY not set. Generated ephemeral key for this process.")
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+ENABLE_CREATE_ADMIN = _env_bool("ENABLE_CREATE_ADMIN", default=False)
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -126,7 +140,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
         
     user = db.query(User).filter(User.username == token_data.username).first()
-    if user is None:
+    if user is None or not user.is_active:
         raise credentials_exception
     return user
 
@@ -136,19 +150,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @app.post("/create-admin", response_model=Token, tags=["Authentication"])
 def create_initial_admin(db: Session = Depends(get_db)):
-    """One-time setup endpoint to create the admin user"""
-    # Check if admin already exists
-    user = db.query(User).filter(User.username == "admin").first()
+    """One-time setup endpoint to create the admin user (disabled by default)."""
+    if not ENABLE_CREATE_ADMIN:
+        raise HTTPException(status_code=403, detail="Admin bootstrap endpoint is disabled")
+
+    admin_username = os.getenv("ADMIN_BOOTSTRAP_USERNAME", "admin")
+    admin_password = os.getenv("ADMIN_BOOTSTRAP_PASSWORD")
+    if not admin_password or len(admin_password) < 12:
+        raise HTTPException(status_code=500, detail="ADMIN_BOOTSTRAP_PASSWORD must be set and at least 12 characters")
+
+    user = db.query(User).filter(User.username == admin_username).first()
     if user:
         raise HTTPException(status_code=400, detail="Admin user already exists")
-    
-    hashed_pwd = get_password_hash("password123")
-    new_user = User(username="admin", hashed_password=hashed_pwd, role="admin")
+
+    hashed_pwd = get_password_hash(admin_password)
+    new_user = User(username=admin_username, hashed_password=hashed_pwd, role="admin")
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
-    # Generate token
+
     access_token = create_access_token(data={"sub": new_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
