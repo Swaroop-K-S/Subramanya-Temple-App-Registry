@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import or_
 from datetime import datetime
 import re
 import random
@@ -54,23 +54,22 @@ class DaivaSetuEngine:
         return "GENERAL"
 
     def _rag_lookup_sevas(self, keywords: List[str]) -> List[SevaCatalog]:
-        """Retrieval Augmented Generation: Find relevant sevas"""
+        """Retrieval Augmented Generation: Find relevant sevas safely."""
         if not keywords:
             return []
-        
-        # Build dynamic SQL query for fuzzy matching
-        conditions = []
-        for kw in keywords:
-            conditions.append(f"LOWER(name_eng) LIKE :kw_{kw}")
-        
-        if not conditions:
+
+        safe_keywords = []
+        for kw in keywords[:5]:
+            clean_kw = re.sub(r"[^a-z0-9]", "", kw.lower())
+            if len(clean_kw) >= 3:
+                safe_keywords.append(clean_kw)
+
+        if not safe_keywords:
             return []
 
-        sql = text(f"SELECT * FROM seva_catalog WHERE {' OR '.join(conditions)}")
-        params = {f"kw_{kw}": f"%{kw}%" for kw in keywords}
-        
-        result = self.db.execute(sql, params).fetchall()
-        return result
+        query = self.db.query(SevaCatalog)
+        filters = [SevaCatalog.name_eng.ilike(f"%{kw}%") for kw in safe_keywords]
+        return query.filter(SevaCatalog.is_active == True).filter(or_(*filters)).limit(10).all()
 
     def process(self, request: GenesisRequest) -> GenesisResponse:
         intent = self._detect_intent(request.query)

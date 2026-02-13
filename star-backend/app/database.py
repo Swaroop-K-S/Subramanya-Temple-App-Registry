@@ -7,6 +7,7 @@ Fully portable - no database installation required!
 
 import os
 import sys
+import secrets
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -83,22 +84,27 @@ def init_database():
     ModelsBase.metadata.create_all(bind=engine)
     print(f"[OK] Database initialized at: {DATABASE_PATH}")
     
-    # Seed default admin if no users exist
+    # Seed bootstrap admin if no users exist
     session = SessionLocal()
     try:
         count = session.query(User).count()
         if count == 0:
-            print("[INFO] No users found. Creating default admin...")
+            print("[INFO] No users found. Creating bootstrap admin...")
             pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+            admin_username = os.getenv("ADMIN_BOOTSTRAP_USERNAME", "admin")
+            admin_password = os.getenv("ADMIN_BOOTSTRAP_PASSWORD") or secrets.token_urlsafe(12)
+            if not os.getenv("ADMIN_BOOTSTRAP_PASSWORD"):
+                print(f"[WARN] ADMIN_BOOTSTRAP_PASSWORD not set. Generated one-time bootstrap password: {admin_password}")
+
             admin = User(
-                username="admin",
-                hashed_password=pwd_context.hash("admin123"),
+                username=admin_username,
+                hashed_password=pwd_context.hash(admin_password),
                 role="admin",
                 is_active=True
             )
             session.add(admin)
             session.commit()
-            print("[OK] Created default user: admin / admin123")
+            print(f"[OK] Created bootstrap admin user: {admin_username}")
     except Exception as e:
         print(f"Error seeding admin: {e}")
 
