@@ -1,13 +1,17 @@
 {
   "name": "star-frontend",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "0.0.00",
+  "description": "S.T.A.R. - Subramanya Temple App & Registry Desktop Application",
+  "author": "Swaroop K S",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:start": "electron .",
+    "electron:pack": "electron-builder --win"
   },
   "dependencies": {
     "axios": "^1.13.4",
@@ -31,6 +35,9 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0",
+    "electron-packager": "^17.1.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

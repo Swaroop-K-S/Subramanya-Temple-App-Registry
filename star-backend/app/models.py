@@ -19,6 +19,7 @@ class SubscriptionType(str, enum.Enum):
     """Type of date tracking for Shaswata subscription"""
     LUNAR = "LUNAR"           # Based on Hindu Panchanga (Tithi)
     GREGORIAN = "GREGORIAN"   # Based on fixed calendar date (Birthday)
+    RATHOTSAVA = "RATHOTSAVA" # Fixed annual temple festival
 
 
 class Maasa(str, enum.Enum):
@@ -142,10 +143,15 @@ class Devotee(Base):
     
     # Audit columns
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    history = Column(Text, nullable=True)                  # JSON string of past bookings
+    
+    # Sync Metadata
+    synced = Column(Boolean, default=False)
+    last_modified = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     # Relationships
     subscriptions = relationship("ShaswataSubscription", back_populates="devotee")
+    transactions = relationship("Transaction", back_populates="devotee")
 
     def __repr__(self):
         return f"<Devotee(id={self.id}, name='{self.full_name_en}', phone='{self.phone_number}')>"
@@ -195,10 +201,18 @@ class ShaswataSubscription(Base):
     occasion = Column(String(100), nullable=True)          # NEW: Birthday, Anniversary, etc.
     notes = Column(Text, nullable=True)                   # Additional notes
     
+    # Dispatch & Feedback Tracking
+    last_dispatch_date = Column(Date, nullable=True)       # Date prasadam was last dispatched
+    last_feedback_date = Column(Date, nullable=True)       # Date feedback was last sent
+    
     # Audit columns
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     is_active = Column(Boolean, default=True)
+
+    # Sync Metadata
+    synced = Column(Boolean, default=False)
+    last_modified = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     # Relationships
     devotee = relationship("Devotee", back_populates="subscriptions")
@@ -235,6 +249,10 @@ class Transaction(Base):
     
     # Meta
     notes = Column(Text, nullable=True)
+    
+    # Sync Metadata
+    synced = Column(Boolean, default=False)
+    last_modified = Column(DateTime, default=func.now(), onupdate=func.now())
     created_by_user_id = Column(Integer, default=1)
 
     # Relationships
@@ -256,6 +274,7 @@ class User(Base):
     hashed_password = Column(String(200), nullable=False)
     role = Column(String(20), default="admin", nullable=False)
     is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"

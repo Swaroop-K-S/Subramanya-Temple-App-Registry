@@ -149,7 +149,7 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
                 (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
                  devotee_name, created_by_user_id, transaction_date, seva_date)
                 VALUES 
-                (:receipt_no, :devotee_id, :seva_id, :amount_paid, CAST(:payment_mode AS payment_mode),
+                (:receipt_no, :devotee_id, :seva_id, :amount_paid, :payment_mode,
                  :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date)
             """),
             {
@@ -366,7 +366,7 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
                     (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
                      devotee_name, created_by_user_id, transaction_date, notes)
                     VALUES 
-                    (:receipt_no, :devotee_id, :seva_id, :amount, CAST(:payment_mode AS payment_mode),
+                    (:receipt_no, :devotee_id, :seva_id, :amount, :payment_mode,
                      :devotee_name, :user_id, CURRENT_TIMESTAMP, :notes)
                 """),
                 {
@@ -489,19 +489,30 @@ def log_dispatch(db: Session, subscription_id: int) -> dict:
     Following DB Integrity: ACID transaction wrapping.
     """
     try:
-        result = db.execute(
+        # Check if subscription exists first
+        exists = db.execute(
+            text("SELECT id FROM shaswata_subscriptions WHERE id = :sub_id"),
+            {"sub_id": subscription_id}
+        ).fetchone()
+        if not exists:
+            raise ValueError(f"Subscription {subscription_id} not found")
+        
+        # Update (SQLite-compatible — no RETURNING clause)
+        db.execute(
             text("""
                 UPDATE shaswata_subscriptions 
-                SET last_dispatch_date = CURRENT_DATE,
+                SET last_dispatch_date = DATE('now'),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :sub_id
-                RETURNING id, last_dispatch_date
             """),
             {"sub_id": subscription_id}
         )
-        row = result.fetchone()
-        if not row:
-            raise ValueError(f"Subscription {subscription_id} not found")
+        
+        # Fetch updated values
+        row = db.execute(
+            text("SELECT id, last_dispatch_date FROM shaswata_subscriptions WHERE id = :sub_id"),
+            {"sub_id": subscription_id}
+        ).fetchone()
         
         db.commit()
         return {
@@ -520,19 +531,30 @@ def log_feedback_sent(db: Session, subscription_id: int) -> dict:
     Following DB Integrity: ACID transaction wrapping.
     """
     try:
-        result = db.execute(
+        # Check if subscription exists first
+        exists = db.execute(
+            text("SELECT id FROM shaswata_subscriptions WHERE id = :sub_id"),
+            {"sub_id": subscription_id}
+        ).fetchone()
+        if not exists:
+            raise ValueError(f"Subscription {subscription_id} not found")
+        
+        # Update (SQLite-compatible — no RETURNING clause)
+        db.execute(
             text("""
                 UPDATE shaswata_subscriptions 
-                SET last_feedback_date = CURRENT_DATE,
+                SET last_feedback_date = DATE('now'),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :sub_id
-                RETURNING id, last_feedback_date
             """),
             {"sub_id": subscription_id}
         )
-        row = result.fetchone()
-        if not row:
-            raise ValueError(f"Subscription {subscription_id} not found")
+        
+        # Fetch updated values
+        row = db.execute(
+            text("SELECT id, last_feedback_date FROM shaswata_subscriptions WHERE id = :sub_id"),
+            {"sub_id": subscription_id}
+        ).fetchone()
         
         db.commit()
         return {
@@ -561,11 +583,11 @@ def get_pending_feedback_subscriptions(db: Session) -> list:
         FROM shaswata_subscriptions ss
         JOIN devotees d ON ss.devotee_id = d.id
         LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
-        WHERE ss.is_active = TRUE
+        WHERE ss.is_active = 1
           AND ss.last_dispatch_date IS NOT NULL
-          AND ss.last_dispatch_date <= CURRENT_DATE - INTERVAL '5 days'
+          AND DATE(ss.last_dispatch_date, '+5 days') <= DATE('now')
           AND (ss.last_feedback_date IS NULL 
-               OR EXTRACT(YEAR FROM ss.last_feedback_date) < EXTRACT(YEAR FROM CURRENT_DATE))
+               OR CAST(strftime('%Y', ss.last_feedback_date) AS INTEGER) < CAST(strftime('%Y', 'now') AS INTEGER))
         ORDER BY ss.last_dispatch_date ASC
     """)
     
@@ -654,6 +676,7 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
         traceback.print_exc()
         return {
             "financials": {"total": 0, "cash": 0, "upi": 0},
-            "seva_stats": []
+            "seva_stats": [],
+            "daily_trends": []
         }
 

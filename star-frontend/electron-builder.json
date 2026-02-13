@@ -1,0 +1,45 @@
+{
+    "appId": "com.star-temple.app",
+    "productName": "S.T.A.R. - Subramanya Temple App & Registry",
+    "copyright": "Copyright © 2026 S.T.A.R.",
+    "files": [
+        "dist/**/*",
+        "electron/main.js"
+    ],
+    "directories": {
+        "output": "release"
+    },
+    "extraResources": [
+        {
+            "from": "../star-backend/dist/subramanya_temple_app_v2",
+            "to": "backend",
+            "filter": [
+                "**/*"
+            ]
+        }
+    ],
+    "win": {
+        "target": [
+            {
+                "target": "dir",
+                "arch": [
+                    "x64"
+                ]
+            }
+        ],
+        "icon": "public/app_icon.ico",
+        "requestedExecutionLevel": "asInvoker",
+        "verifyUpdateCodeSignature": false,
+        "sign": null
+    },
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "shortcutName": "S.T.A.R. App",
+        "installerIcon": "public/app_icon.ico",
+        "uninstallerIcon": "public/app_icon.ico",
+        "deleteAppDataOnUninstall": false
+    }
+}

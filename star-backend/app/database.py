@@ -15,19 +15,53 @@ from sqlalchemy.orm import sessionmaker
 # SQLite Database - Portable, No Installation Required!
 # =============================================================================
 
+import shutil
+
 def get_database_path():
     """
-    Determine the database file path based on execution context.
-    - Bundled exe: Database stored next to the .exe file
-    - Dev mode: Database stored in star-backend folder
+    Determine the persistent database file path.
+    - Windows: %APPDATA%/StarApp/star_temple.db
+    - Linux/Mac: ~/.local/share/StarApp/star_temple.db
     """
-    if getattr(sys, 'frozen', False):
-        # Running as bundled .exe - store DB next to the executable
-        exe_dir = os.path.dirname(sys.executable)
-        return os.path.join(exe_dir, 'star_temple.db')
+    app_name = "StarApp"
+    
+    # 1. Determine User Data Directory
+    if sys.platform == "win32":
+        user_data_dir = os.getenv('APPDATA')
     else:
-        # Dev mode - store in backend directory
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'star_temple.db')
+        user_data_dir = os.path.expanduser("~/.local/share")
+        
+    app_data_dir = os.path.join(user_data_dir, app_name)
+    
+    # Ensure directory exists
+    if not os.path.exists(app_data_dir):
+        os.makedirs(app_data_dir)
+        
+    target_db_path = os.path.join(app_data_dir, 'star_temple.db')
+    
+    # 2. Migration Check (Import Legacy Data)
+    # If DB exists in legacy location (next to exe or source), copy it over
+    # This ensures users don't lose data when upgrading to this version.
+    
+    legacy_path = None
+    if getattr(sys, 'frozen', False):
+        # Bundled exe legacy path
+        legacy_path = os.path.join(os.path.dirname(sys.executable), 'star_temple.db')
+    else:
+        # Dev mode legacy path (was inside app/)
+        legacy_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'star_temple.db')
+        
+    # Condition: Target missing AND Legacy exists -> MIGRATE
+    if not os.path.exists(target_db_path) and os.path.exists(legacy_path):
+        print(f"[MIGRATE] Found legacy database at: {legacy_path}")
+        print(f"[MIGRATE] Moving to persistent storage: {target_db_path}...")
+        try:
+            shutil.copy2(legacy_path, target_db_path)
+            print("[MIGRATE] Success! Data preserved.")
+        except Exception as e:
+             print(f"[MIGRATE] Failed to copy database: {e}")
+             
+    return target_db_path
 
 DATABASE_PATH = get_database_path()
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
@@ -79,9 +113,55 @@ def init_database():
     from .models import Base as ModelsBase, User
     from passlib.context import CryptContext
     
-    # Create tables
+    # Create tables (new installs) — does NOT alter existing tables
     ModelsBase.metadata.create_all(bind=engine)
     print(f"[OK] Database initialized at: {DATABASE_PATH}")
+    
+    # Migrate existing databases: add missing columns safely
+    from sqlalchemy import text as sa_text
+    try:
+        with engine.connect() as conn:
+            def _add_column_if_missing(table, column, col_type):
+                """Safely add a column to an existing table if it doesn't exist."""
+                # PRAGMA returns list of (cid, name, type, notnull, dflt_value, pk)
+                cols = conn.execute(sa_text(f"PRAGMA table_info({table})")).fetchall()
+                col_names = [c[1] for c in cols]
+                if column not in col_names:
+                    conn.execute(sa_text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+                    conn.commit()
+                    print(f"[MIGRATE] Added column '{column}' to '{table}'")
+            
+            # ShaswataSubscription: dispatch & feedback tracking
+            _add_column_if_missing("shaswata_subscriptions", "last_dispatch_date", "DATE")
+            _add_column_if_missing("shaswata_subscriptions", "last_feedback_date", "DATE")
+            # User: created_at timestamp
+            # SQLite workaround: Add as nullable first, then backfill
+            cols = conn.execute(sa_text(f"PRAGMA table_info(users)")).fetchall()
+            col_names = [c[1] for c in cols]
+            if "created_at" not in col_names:
+                conn.execute(sa_text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+                conn.execute(sa_text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                conn.commit()
+                print(f"[MIGRATE] Added column 'created_at' to 'users'")
+            
+            # Sync Metadata Migration (Phase 3)
+            for tbl in ["transactions", "devotees", "shaswata_subscriptions"]:
+                cols = conn.execute(sa_text(f"PRAGMA table_info({tbl})")).fetchall()
+                col_names = [c[1] for c in cols]
+                
+                if "synced" not in col_names:
+                    conn.execute(sa_text(f"ALTER TABLE {tbl} ADD COLUMN synced BOOLEAN DEFAULT 0"))
+                    print(f"[MIGRATE] Added 'synced' to '{tbl}'")
+                    
+                if "last_modified" not in col_names:
+                    conn.execute(sa_text(f"ALTER TABLE {tbl} ADD COLUMN last_modified DATETIME"))
+                    conn.execute(sa_text(f"UPDATE {tbl} SET last_modified = CURRENT_TIMESTAMP WHERE last_modified IS NULL"))
+                    print(f"[MIGRATE] Added 'last_modified' to '{tbl}'")
+                
+                conn.commit()
+            
+    except Exception as e:
+        print(f"[WARN] Migration check: {e}")
     
     # Seed default admin if no users exist
     session = SessionLocal()

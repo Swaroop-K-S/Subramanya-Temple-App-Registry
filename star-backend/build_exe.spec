@@ -59,7 +59,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='subramanya_temple_app',
+    name='subramanya_temple_app_v2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -80,5 +80,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='subramanya_temple_app',
+    name='subramanya_temple_app_v2',
 )

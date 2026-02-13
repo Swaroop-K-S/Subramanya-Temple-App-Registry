@@ -1,0 +1,84 @@
+/* CSS for ShaswataForm Wizard & Animations */
+
+/* Deep Glass Wizard Transitions */
+.wizard-slide-enter {
+    opacity: 0;
+    transform: translateX(50px);
+}
+
+.wizard-slide-enter-active {
+    opacity: 1;
+    transform: translateX(0);
+    transition: all 400ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.wizard-slide-exit {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.wizard-slide-exit-active {
+    opacity: 0;
+    transform: translateX(-50px);
+    transition: all 400ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Shake Animation for Errors (Agent Beta Request) */
+@keyframes shake-horizontal {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(-4px);
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(4px);
+    }
+}
+
+.animate-shake {
+    animation: shake-horizontal 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    border-color: #F59E0B !important;
+    /* Amber-500 */
+}
+
+/* Dopamine Checkmark (Agent Gamma Request) */
+.checkmark-circle {
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    stroke-width: 2;
+    stroke-miterlimit: 10;
+    stroke: #10B981;
+    /* Emerald-500 */
+    fill: none;
+    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark-check {
+    transform-origin: 50% 50%;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+}
+
+@keyframes stroke {
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* Vedic Typography (Agent Gamma Request) */
+.vedic-input {
+    line-height: 1.6 !important;
+}

@@ -43,6 +43,7 @@ from app.crud import (
 )
 from app.panchang import PanchangCalculator
 from app import daiva_setu  # Genesis Protocol (Level 15)
+from app.sync_engine import sync_engine
 
 # Authentication Imports
 from passlib.context import CryptContext
@@ -55,9 +56,9 @@ from app.models import User
 # =============================================================================
 
 app = FastAPI(
-    title="S.T.A.R. API",
-    description="Subramanya Temple App & Registry - Backend API",
-    version="1.0.6"
+    title="S.T.A.R. API (Dev Mode)",
+    description="Subramanya Temple App & Registry - Backend API [v0.0.00]",
+    version="0.0.00"
 )
 
 app.add_middleware(
@@ -75,6 +76,11 @@ app.add_middleware(
 def startup_event():
     """Initialize database tables on app startup."""
     init_database()
+    sync_engine.start()
+
+@app.on_event("shutdown")
+def shutdown_event():
+    sync_engine.stop()
 
 
 # Register Genesis Protocol Router (AI Engine)
@@ -87,8 +93,6 @@ app.include_router(daiva_setu.router)
 # SECRET_KEY should be kept secret in production!
 SECRET_KEY = "supersecretkey_change_this_for_production"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
-
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -383,7 +387,9 @@ def validate_safe_input(text: str, field_name: str):
 
 def validate_transaction_payload(data):
     """Scan all string fields in the payload"""
-    if hasattr(data, "dict"):
+    if hasattr(data, "model_dump"):
+        data = data.model_dump()
+    elif hasattr(data, "dict"):
         data = data.dict()
     
     for key, value in data.items():
@@ -735,7 +741,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
 
     # Fetch Data
     tx_stmt = text("""
-        SELECT t.receipt_no, TO_CHAR(t.transaction_date, 'DD-MM-YYYY HH12:MI PM'), 
+        SELECT t.receipt_no, strftime('%d-%m-%Y %I:%M %p', t.transaction_date), 
                d.full_name_en, sc.name_eng, t.payment_mode, t.amount_paid, t.notes
         FROM transactions t
         JOIN devotees d ON t.devotee_id = d.id
@@ -940,16 +946,24 @@ def print_receipt(data: dict):
         image_paths.append(image_path_p)
         s2 = print_receipt_image(image_path_p)
         
-        # 3. Cleanup
+        # 3. Cleanup temp files
         for path in image_paths:
             if os.path.exists(path):
                try:
                    os.remove(path)
                except:
                    pass
-            
+        
+        # 4. Check print results
+        if s1 and s2:
+            return {"status": "success", "message": "Receipts sent to printer (2 Copies)"}
+        elif s1 or s2:
+            return {"status": "partial_success", "message": "One copy failed to print"}
+        else:
             raise HTTPException(status_code=500, detail="Failed to print receipts. Check printer connection.")
             
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Print Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1024,6 +1038,10 @@ else:
 
 def open_browser():
     """Open the browser after a short delay to let the server start."""
+    if os.environ.get('ELECTRON_MODE') == 'true':
+        print("Running in Electron Mode - Browser launch skipped")
+        return
+        
     import time
     time.sleep(2)  # Wait for server to start
     webbrowser.open("http://127.0.0.1:8000")
