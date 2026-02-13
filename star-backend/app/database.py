@@ -109,14 +109,13 @@ def init_database():
         if count_sevas == 0:
             print("[INFO] No sevas found. Seeding default catalog...")
             default_sevas = [
-                SevaCatalog(name_eng="Archana", name_kan="ಅರ್ಚನೆ", price=20.0),
-                SevaCatalog(name_eng="Panchamrutha Abhisheka", name_kan="ಪಂಚಾಮೃತ ಅಭಿಷೇಕ", price=150.0),
-                SevaCatalog(name_eng="Ksheera Abhisheka", name_kan="ಕ್ಷೀರಾಭಿಷೇಕ", price=50.0),
-                SevaCatalog(name_eng="Rudra Abhisheka", name_kan="ರುದ್ರಾಭಿಷೇಕ", price=350.0),
-                SevaCatalog(name_eng="Karthika Pooje", name_kan="ಕಾರ್ತಿಕ ಪೂಜೆ", price=100.0),
-                SevaCatalog(name_eng="Sarpa Samskara", name_kan="ಸರ್ಪ ಸಂಸ್ಕಾರ", price=3500.0, is_slot_based=True),
-                SevaCatalog(name_eng="Ashlesha Bali", name_kan="ಆಶ್ಲೇಷ ಬಲಿ", price=500.0),
-                SevaCatalog(name_eng="Prasada Oota", name_kan="ಪ್ರಸಾದ ಊಟ", price=0.0),
+                SevaCatalog(name_eng="Kunkuma Archane", name_kan="ಕುಂಕುಮ ಅರ್ಚನೆ", price=20.0),
+                SevaCatalog(name_eng="Panchambruta Abhisheka", name_kan="ಪಂಚಾಮೃತ ಅಭಿಷೇಕ", price=100.0),
+                SevaCatalog(name_eng="Ksheera Abhisheka", name_kan="ಕ್ಷೀರಾಭಿಷೇಕ", price=150.0),
+                SevaCatalog(name_eng="Rudra Abhisheka", name_kan="ರುದ್ರ ಅಭಿಷೇಕ", price=250.0),
+                SevaCatalog(name_eng="Anna Dhana Nidhi", name_kan="ಅನ್ನ ದಾನ ನಿಧಿ", price=0.0),
+                SevaCatalog(name_eng="General", name_kan="ಸಾಮಾನ್ಯ", price=0.0),
+                SevaCatalog(name_eng="Rajata Ashtottara Seva", name_kan="ರಜತ ಅಷ್ಟೋತ್ತರ ಸೇವೆ", price=500.0),
             ]
             session.add_all(default_sevas)
             session.commit()

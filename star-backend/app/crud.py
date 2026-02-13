@@ -50,11 +50,11 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
     result = db.execute(
         text("SELECT id FROM devotees WHERE phone_number = :phone"),
         {"phone": phone}
-    ).fetchone()
+    ).scalar()
     
     if result:
         # Devotee exists, update their info and return ID
-        devotee_id = result[0]
+        devotee_id = result
         db.execute(
             text("""
                 UPDATE devotees 
@@ -73,8 +73,8 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
             {"name_en": name_en, "name_kn": name_kn, "gothra_en": gothra_en, 
              "gothra_kn": gothra_kn, "nakshatra": nakshatra, "rashi": rashi, 
              "address": address, "area": area, "pincode": pincode, "id": devotee_id}
-        )
-        db.flush() # Keep transaction open
+        ).close()
+        db.commit()
         return devotee_id
     else:
         # Create new devotee
@@ -82,14 +82,13 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
             text("""
                 INSERT INTO devotees (full_name_en, full_name_kn, phone_number, gothra_en, gothra_kn, nakshatra, rashi, address, area, pincode)
                 VALUES (:name_en, :name_kn, :phone, :gothra_en, :gothra_kn, :nakshatra, :rashi, :address, :area, :pincode)
-                RETURNING id
             """),
             {"name_en": name_en, "name_kn": name_kn, "phone": phone, 
              "gothra_en": gothra_en, "gothra_kn": gothra_kn, "nakshatra": nakshatra, 
              "rashi": rashi, "address": address, "area": area, "pincode": pincode}
         )
-        db.flush() # Keep transaction open
-        new_id = result.fetchone()[0]
+        new_id = result.lastrowid
+        db.commit()
         return new_id
 
 
@@ -135,42 +134,37 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
         receipt_no = generate_receipt_number()
         
         # Step 3: Get seva name for the response
-        seva_result = db.execute(
+        seva_name = db.execute(
             text("SELECT name_eng FROM seva_catalog WHERE id = :seva_id"),
             {"seva_id": transaction.seva_id}
-        ).fetchone()
+        ).scalar()
         
-        if not seva_result:
+        if not seva_name:
             raise ValueError(f"Seva with ID {transaction.seva_id} not found")
-        
-        seva_name = seva_result[0]
         
         # Step 4: Insert transaction
         result = db.execute(
             text("""
                 INSERT INTO transactions 
                 (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
-                 devotee_name, created_by_user_id, transaction_date, seva_date, upi_transaction_id)
+                 devotee_name, created_by_user_id, transaction_date, seva_date)
                 VALUES 
-                (:receipt_no, :devotee_id, :seva_id, :amount, CAST(:payment_mode AS payment_mode),
-                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date, :upi_txn_id)
-                RETURNING id
+                (:receipt_no, :devotee_id, :seva_id, :amount_paid, CAST(:payment_mode AS payment_mode),
+                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date)
             """),
             {
                 "receipt_no": receipt_no,
                 "devotee_id": devotee_id,
                 "seva_id": transaction.seva_id,
-                "amount": transaction.amount,
+                "amount_paid": transaction.amount,
                 "payment_mode": transaction.payment_mode.value,
                 "devotee_name": transaction.devotee_name,
                 "user_id": user_id,
-                "seva_date": transaction.seva_date or datetime.now().date(),
-                "upi_txn_id": getattr(transaction, 'upi_transaction_id', None)
+                "seva_date": transaction.seva_date or datetime.now().date()
             }
         )
+        transaction_id = result.lastrowid
         db.commit()
-        
-        transaction_id = result.fetchone()[0]
         
         return {
             "transaction_id": transaction_id,
@@ -345,7 +339,6 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
                  :event_day, :event_month,
                  :maasa, :paksha, :tithi,
                  :occasion, :notes, TRUE)
-                RETURNING id
             """),
             {
                 "devotee_id": devotee_id,
@@ -362,7 +355,7 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
             }
         )
         
-        subscription_id = result.fetchone()[0]
+        subscription_id = result.lastrowid
         
         # Step 5: Create transaction for payment (if amount provided)
         if subscription.amount and subscription.payment_mode:

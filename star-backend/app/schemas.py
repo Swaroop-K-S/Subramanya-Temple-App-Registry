@@ -4,7 +4,7 @@ S.T.A.R. Backend - Pydantic Schemas
 Request and response models for API validation.
 """
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 from typing import Optional
 from decimal import Decimal
 from enum import Enum
@@ -196,6 +196,25 @@ class ShaswataCreate(BaseModel):
     
     # UPI Transaction ID (required when payment_mode is UPI)
     upi_transaction_id: Optional[str] = Field(None, max_length=50, description="UPI Transaction Reference ID")
+
+    @field_validator('tithi', mode='before')
+    @classmethod
+    def convert_tithi_int(cls, v):
+        """Allow integer input for tithi and convert to Enum"""
+        # If it's a string digit (e.g. "5"), convert to int
+        if isinstance(v, str) and v.isdigit():
+            v = int(v)
+            
+        if isinstance(v, int):
+            try:
+                # 1-based index to Enum list
+                tithi_list = list(Tithi)
+                if 1 <= v <= len(tithi_list):
+                    return tithi_list[v-1]
+                raise ValueError(f"Tithi integer must be between 1 and {len(tithi_list)}")
+            except IndexError:
+                raise ValueError("Invalid tithi integer")
+        return v
 
     @model_validator(mode='after')
     def validate_date_fields(self):
