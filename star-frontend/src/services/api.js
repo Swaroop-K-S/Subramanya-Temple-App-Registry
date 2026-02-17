@@ -31,11 +31,32 @@ api.interceptors.request.use(
 );
 
 /**
+ * Get current logged-in user details
+ * @returns {Promise<Object>} User object with role
+ */
+export const getCurrentUser = async () => {
+    const response = await api.get('/users/me');
+    return response.data;
+};
+
+/**
  * Fetch all sevas from the seva_catalog table
  * @returns {Promise<Array>} Array of seva objects
  */
-export const getAllSevas = async () => {
-    const response = await api.get('/sevas');
+export const getAllSevas = async (activeOnly = true) => {
+    const response = await api.get('/sevas', {
+        params: { active_only: activeOnly }
+    });
+    return response.data;
+};
+
+/**
+ * Create a new Seva
+ * @param {Object} sevaData - Seva details
+ * @returns {Promise<Object>} Created Seva object
+ */
+export const createSeva = async (sevaData) => {
+    const response = await api.post('/sevas', sevaData);
     return response.data;
 };
 

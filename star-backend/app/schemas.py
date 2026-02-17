@@ -83,6 +83,24 @@ class Tithi(str, Enum):
 # Request Schemas (for receiving data)
 # =============================================================================
 
+class SevaUpdate(BaseModel):
+    """Schema for updating Seva details"""
+    price: Optional[float] = Field(None, ge=0, description="New price required for the Seva")
+    is_active: Optional[bool] = Field(None, description="Enable/Disable the Seva")
+    daily_limit: Optional[int] = Field(None, ge=0, description="Daily booking limit (0 or null for unlimited)")
+
+
+class SevaCreate(BaseModel):
+    """Schema for creating a new Seva"""
+    name_eng: str = Field(..., description="Name of the Seva in English")
+    name_kan: Optional[str] = Field(None, description="Name of the Seva in Kannada")
+    price: float = Field(..., ge=0, description="Price of the Seva")
+    is_shaswata: bool = Field(False, description="Is this a Shaswata Seva?")
+    is_slot_based: bool = Field(False, description="Is this a Slot-based Seva?")
+    daily_limit: Optional[int] = Field(None, ge=0, description="Daily booking limit")
+    is_active: bool = Field(True, description="Enable/Disable the Seva")
+
+
 class TransactionCreate(BaseModel):
     """Schema for creating a new seva booking/transaction (bilingual support)"""
     # Bilingual Name Fields
@@ -294,6 +312,12 @@ class SevaResponse(BaseModel):
         from_attributes = True
 
 
+
+
+
+
+
+
 class TransactionResponse(BaseModel):
     """Response schema after successful booking"""
     transaction_id: int
@@ -331,7 +355,7 @@ class DevoteeResponse(BaseModel):
         from_attributes = True
 
 
-class ShaswataSubscriptionResponse(BaseModel):
+class ShaswataResponse(BaseModel):
     """Response schema after successful Shaswata subscription"""
     subscription_id: int
     devotee_name: str

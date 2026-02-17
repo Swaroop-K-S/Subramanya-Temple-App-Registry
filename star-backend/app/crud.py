@@ -4,13 +4,49 @@ S.T.A.R. Backend - CRUD Operations
 Database operations for creating and managing records.
 """
 
+
+
+
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 import random
 import string
 
-from .schemas import TransactionCreate, ShaswataCreate, SubscriptionType
+try:
+    from .schemas import (
+        TransactionCreate, ShaswataCreate, SubscriptionType, 
+        SevaUpdate, SevaCreate, UserCreate
+    )
+except ImportError as e:
+    print(f"DEBUG ERROR in crud.py: {e}")
+    import app.schemas
+    print(f"DEBUG: app.schemas path: {app.schemas.__file__}")
+    print(f"DEBUG: dir(app.schemas): {dir(app.schemas)}")
+    raise e
+from .models import SevaCatalog, User, Transaction, Devotee, ShaswataSubscription
+
+# =============================================================================
+# USER MANAGEMENT (AUTH)
+# =============================================================================
+
+def get_user_by_username(db: Session, username: str):
+    """Get a user by username"""
+    return db.query(User).filter(User.username == username).first()
+
+def create_user(db: Session, user: UserCreate):
+    """Create a new user (with pre-hashed password from service)"""
+    db_user = User(
+        username=user.username,
+        hashed_password=user.password, # Service layer handles hashing
+        role=user.role
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
 
 
 def generate_receipt_number() -> str:
@@ -187,44 +223,155 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
         raise e
 
 
-def get_daily_transactions(db: Session, date: str = None) -> list:
+def get_daily_transactions(db: Session, date: str = None, 
+                           payment_mode: str = None, seva_id: int = None,
+                           skip: int = 0, limit: int = 200,
+                           sort_by: str = "time_desc") -> dict:
     """
-    Get all transactions for a specific date.
+    Get paginated, filterable transactions for a specific date.
     
     Args:
         db: Database session
         date: Date string in YYYY-MM-DD format. Defaults to today.
+        payment_mode: Filter by 'CASH' or 'UPI' (optional)
+        seva_id: Filter by specific seva ID (optional)
+        skip: Number of records to skip (pagination offset)
+        limit: Max records to return (default 200)
+        sort_by: Sort order - 'time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name_asc'
         
     Returns:
-        List of transactions for the specified date
+        Dict with 'transactions' list, 'total' count, 'page_info'
     """
     if date is None:
         date = datetime.now().strftime("%Y-%m-%d")
     
-    result = db.execute(
+    # Build dynamic WHERE clause
+    where_clauses = ["DATE(t.transaction_date) = :date"]
+    params = {"date": date}
+    
+    if payment_mode:
+        where_clauses.append("t.payment_mode = :payment_mode")
+        params["payment_mode"] = payment_mode.upper()
+    
+    if seva_id:
+        where_clauses.append("t.seva_id = :seva_id")
+        params["seva_id"] = seva_id
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    # Sort mapping
+    sort_map = {
+        "time_desc": "t.transaction_date DESC",
+        "time_asc": "t.transaction_date ASC",
+        "amount_desc": "t.amount_paid DESC",
+        "amount_asc": "t.amount_paid ASC",
+        "name_asc": "t.devotee_name ASC",
+    }
+    order_sql = sort_map.get(sort_by, "t.transaction_date DESC")
+    
+    # Count total (for pagination info)
+    count_result = db.execute(
+        text(f"SELECT COUNT(*) FROM transactions t WHERE {where_sql}"),
+        params
+    ).scalar()
+    
+    # Fetch paginated data (Phase 2: join users for staff info, devotee for gothra/nakshatra)
+    query = f"""
+        SELECT t.id, t.receipt_no, t.devotee_name, s.name_eng as seva_name,
+               t.amount_paid, t.payment_mode, t.transaction_date, t.seva_id,
+               t.notes,
+               d.phone_number, d.gothra_en, d.nakshatra, d.rashi,
+               u.username as booked_by, u.role as booked_by_role
+        FROM transactions t
+        JOIN seva_catalog s ON t.seva_id = s.id
+        LEFT JOIN devotees d ON t.devotee_id = d.id
+        LEFT JOIN users u ON t.created_by_user_id = u.id
+        WHERE {where_sql}
+        ORDER BY {order_sql}
+        LIMIT :limit OFFSET :skip
+    """
+    params["limit"] = limit
+    params["skip"] = skip
+    
+    result = db.execute(text(query), params)
+    keys = result.keys()
+    transactions = [dict(zip(keys, row)) for row in result.fetchall()]
+    
+    return {
+        "transactions": transactions,
+        "total": count_result,
+        "page": (skip // limit) + 1,
+        "pages": max(1, -(-count_result // limit)),  # ceil division
+        "has_more": (skip + limit) < count_result
+    }
+
+
+def get_daily_stats(db: Session, date: str = None) -> dict:
+    """
+    Get aggregate statistics for a specific date — computed in the DB for zero-cost.
+    
+    Returns:
+        Dict with total_amount, cash_total, upi_total, booking_count, 
+        seva_breakdown (list of seva-wise totals), and hourly_trend.
+    """
+    if date is None:
+        date = datetime.now().strftime("%Y-%m-%d")
+    
+    # Aggregate totals
+    agg = db.execute(
         text("""
-            SELECT t.id, t.receipt_no, t.devotee_name, s.name_eng as seva_name,
-                   t.amount_paid, t.payment_mode, t.transaction_date
+            SELECT 
+                COUNT(*) as booking_count,
+                COALESCE(SUM(amount_paid), 0) as total_amount,
+                COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0) as cash_total,
+                COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0) as upi_total
+            FROM transactions
+            WHERE DATE(transaction_date) = :date
+        """),
+        {"date": date}
+    ).fetchone()
+    
+    # Seva-wise breakdown
+    seva_rows = db.execute(
+        text("""
+            SELECT s.name_eng as seva_name, s.id as seva_id, 
+                   COUNT(*) as count, SUM(t.amount_paid) as total
             FROM transactions t
             JOIN seva_catalog s ON t.seva_id = s.id
             WHERE DATE(t.transaction_date) = :date
-            ORDER BY t.transaction_date DESC
+            GROUP BY s.id, s.name_eng
+            ORDER BY total DESC
         """),
         {"date": date}
-    ).fetchall()
+    )
+    seva_keys = seva_rows.keys()
+    seva_breakdown = [dict(zip(seva_keys, row)) for row in seva_rows.fetchall()]
     
-    return [
-        {
-            "id": row[0],
-            "receipt_no": row[1],
-            "devotee_name": row[2],
-            "seva_name": row[3],
-            "amount_paid": float(row[4]),
-            "payment_mode": row[5],
-            "transaction_date": str(row[6])
-        }
-        for row in result
-    ]
+    # Hourly trend (for chart)
+    hourly_rows = db.execute(
+        text("""
+            SELECT strftime('%H', transaction_date) as hour, 
+                   COUNT(*) as count,
+                   SUM(amount_paid) as total
+            FROM transactions
+            WHERE DATE(transaction_date) = :date
+            GROUP BY strftime('%H', transaction_date)
+            ORDER BY hour ASC
+        """),
+        {"date": date}
+    )
+    hourly_keys = hourly_rows.keys()
+    hourly_trend = [dict(zip(hourly_keys, row)) for row in hourly_rows.fetchall()]
+    
+    return {
+        "date": date,
+        "booking_count": agg[0],
+        "total_amount": float(agg[1]),
+        "cash_total": float(agg[2]),
+        "upi_total": float(agg[3]),
+        "seva_breakdown": seva_breakdown,
+        "hourly_trend": hourly_trend
+    }
 
 
 def get_devotee_by_phone(db: Session, phone: str) -> dict:
@@ -614,8 +761,8 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
             COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0) as cash,
             COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0) as upi
         FROM transactions
-        WHERE CAST(transaction_date AS DATE) >= CAST(:start_date AS DATE) 
-          AND CAST(transaction_date AS DATE) <= CAST(:end_date AS DATE)
+        WHERE DATE(transaction_date) >= DATE(:start_date) 
+          AND DATE(transaction_date) <= DATE(:end_date)
     """)
     
     # Get Seva-wise Performance
@@ -626,8 +773,8 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
             COALESCE(SUM(t.amount_paid), 0) as revenue
         FROM transactions t
         JOIN seva_catalog s ON t.seva_id = s.id
-        WHERE CAST(t.transaction_date AS DATE) >= CAST(:start_date AS DATE) 
-          AND CAST(t.transaction_date AS DATE) <= CAST(:end_date AS DATE)
+        WHERE DATE(t.transaction_date) >= DATE(:start_date) 
+          AND DATE(t.transaction_date) <= DATE(:end_date)
         GROUP BY s.name_eng
         ORDER BY revenue DESC
     """)
@@ -635,13 +782,13 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
     # Get Daily Trends (For Area Chart)
     trends_query = text("""
         SELECT 
-            CAST(transaction_date AS DATE) as date,
+            DATE(transaction_date) as date,
             COALESCE(SUM(amount_paid), 0) as revenue,
             COUNT(id) as count
         FROM transactions
-        WHERE CAST(transaction_date AS DATE) >= CAST(:start_date AS DATE) 
-          AND CAST(transaction_date AS DATE) <= CAST(:end_date AS DATE)
-        GROUP BY CAST(transaction_date AS DATE)
+        WHERE DATE(transaction_date) >= DATE(:start_date) 
+          AND DATE(transaction_date) <= DATE(:end_date)
+        GROUP BY DATE(transaction_date)
         ORDER BY date ASC
     """)
     
@@ -680,3 +827,346 @@ def get_financial_report(db: Session, start_date: str, end_date: str) -> dict:
             "daily_trends": []
         }
 
+
+def get_enhanced_report(db: Session, start_date: str, end_date: str) -> dict:
+    """
+    Enhanced financial report with comparison period, hourly heatmap,
+    average transaction value, and category breakdown.
+    """
+    from datetime import datetime as dt, timedelta
+
+    # --- 1. Parse dates and compute previous period ---
+    try:
+        s = dt.strptime(start_date, "%Y-%m-%d")
+        e = dt.strptime(end_date, "%Y-%m-%d")
+    except ValueError:
+        s = dt.now().replace(day=1)
+        e = dt.now()
+    
+    period_days = (e - s).days + 1
+    prev_end = s - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=period_days - 1)
+    prev_start_str = prev_start.strftime("%Y-%m-%d")
+    prev_end_str = prev_end.strftime("%Y-%m-%d")
+
+    # --- 2. Current period financials ---
+    fin_query = text("""
+        SELECT 
+            COALESCE(SUM(amount_paid), 0) as total,
+            COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0) as cash,
+            COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0) as upi,
+            COUNT(*) as tx_count
+        FROM transactions
+        WHERE DATE(transaction_date) >= DATE(:start) 
+          AND DATE(transaction_date) <= DATE(:end)
+    """)
+    cur = db.execute(fin_query, {"start": start_date, "end": end_date}).fetchone()
+    total = float(cur[0] or 0)
+    cash = float(cur[1] or 0)
+    upi = float(cur[2] or 0)
+    tx_count = int(cur[3] or 0)
+    atv = round(total / tx_count, 2) if tx_count > 0 else 0
+
+    # --- 3. Previous period financials (for comparison) ---
+    prev = db.execute(fin_query, {"start": prev_start_str, "end": prev_end_str}).fetchone()
+    prev_total = float(prev[0] or 0)
+    prev_count = int(prev[3] or 0)
+    prev_atv = round(prev_total / prev_count, 2) if prev_count > 0 else 0
+
+    def pct_change(cur_val, prev_val):
+        if prev_val == 0:
+            return 100.0 if cur_val > 0 else 0.0
+        return round(((cur_val - prev_val) / prev_val) * 100, 1)
+
+    # --- 4. Seva-wise breakdown ---
+    seva_rows = db.execute(text("""
+        SELECT s.name_eng, COUNT(t.id), COALESCE(SUM(t.amount_paid), 0)
+        FROM transactions t
+        JOIN seva_catalog s ON t.seva_id = s.id
+        WHERE DATE(t.transaction_date) >= DATE(:start) 
+          AND DATE(t.transaction_date) <= DATE(:end)
+        GROUP BY s.name_eng
+        ORDER BY SUM(t.amount_paid) DESC
+    """), {"start": start_date, "end": end_date}).fetchall()
+
+    # --- 5. Daily trends ---
+    trend_rows = db.execute(text("""
+        SELECT DATE(transaction_date) as d,
+               COALESCE(SUM(amount_paid), 0), COUNT(*)
+        FROM transactions
+        WHERE DATE(transaction_date) >= DATE(:start) 
+          AND DATE(transaction_date) <= DATE(:end)
+        GROUP BY DATE(transaction_date)
+        ORDER BY d ASC
+    """), {"start": start_date, "end": end_date}).fetchall()
+
+    # --- 6. Hourly heatmap ---
+    hourly_rows = db.execute(text("""
+        SELECT CAST(strftime('%H', transaction_date) AS INTEGER) as hour,
+               COUNT(*) as bookings,
+               COALESCE(SUM(amount_paid), 0) as revenue
+        FROM transactions
+        WHERE DATE(transaction_date) >= DATE(:start)
+          AND DATE(transaction_date) <= DATE(:end)
+        GROUP BY hour
+        ORDER BY hour
+    """), {"start": start_date, "end": end_date}).fetchall()
+
+    # Build full 24-hour array (0-23)
+    hourly_map = {int(r[0]): {"bookings": int(r[1]), "revenue": float(r[2])} for r in hourly_rows}
+    hourly_heatmap = [
+        {"hour": h, "bookings": hourly_map.get(h, {}).get("bookings", 0),
+         "revenue": hourly_map.get(h, {}).get("revenue", 0)}
+        for h in range(24)
+    ]
+
+    # --- 7. Shaswata vs Daily count ---
+    shaswata_row = db.execute(text("""
+        SELECT COUNT(*) FROM shaswata_subscriptions
+        WHERE is_active = 1
+    """)).fetchone()
+    shaswata_active = int(shaswata_row[0]) if shaswata_row else 0
+
+    return {
+        "financials": {
+            "total": total, "cash": cash, "upi": upi,
+            "tx_count": tx_count, "atv": atv,
+            "cash_pct": round((cash / total * 100), 1) if total > 0 else 0,
+            "upi_pct": round((upi / total * 100), 1) if total > 0 else 0,
+        },
+        "comparison": {
+            "prev_total": prev_total,
+            "prev_count": prev_count,
+            "prev_atv": prev_atv,
+            "total_change": pct_change(total, prev_total),
+            "count_change": pct_change(tx_count, prev_count),
+            "atv_change": pct_change(atv, prev_atv),
+        },
+        "seva_stats": [
+            {"name": r[0], "count": int(r[1]), "revenue": float(r[2])}
+            for r in seva_rows
+        ],
+        "daily_trends": [
+            {"date": str(r[0]), "revenue": float(r[1]), "count": int(r[2])}
+            for r in trend_rows
+        ],
+        "hourly_heatmap": hourly_heatmap,
+        "shaswata_active": shaswata_active,
+    }
+
+
+def get_collection_details(db: Session, start_date: str, end_date: str) -> list:
+    """
+    Get line-item transaction details for a period (for PDF/Excel exports and drill-down).
+    """
+    rows = db.execute(text("""
+        SELECT t.receipt_no, t.devotee_name, s.name_eng as seva_name,
+               t.amount_paid, t.payment_mode, t.transaction_date, t.notes
+        FROM transactions t
+        JOIN seva_catalog s ON t.seva_id = s.id
+        WHERE DATE(t.transaction_date) >= DATE(:start)
+          AND DATE(t.transaction_date) <= DATE(:end)
+        ORDER BY t.transaction_date ASC
+    """), {"start": start_date, "end": end_date}).fetchall()
+    
+    return [
+        {
+            "receipt_no": r[0], "devotee_name": r[1], "seva_name": r[2],
+            "amount": float(r[3] or 0), "payment_mode": r[4],
+            "time": str(r[5]), "notes": r[6] or ""
+        }
+        for r in rows
+    ]
+
+
+
+
+
+def create_seva_fn(db: Session, seva_create: SevaCreate) -> SevaCatalog:
+    """
+    Create a new Seva.
+    
+    Args:
+        db: Database session
+        seva_create: Seva creation schema
+        
+    Returns:
+        Created SevaCatalog object
+    """
+    db_seva = SevaCatalog(
+        name_eng=seva_create.name_eng,
+        name_kan=seva_create.name_kan,
+        price=seva_create.price,
+        is_shaswata=seva_create.is_shaswata,
+        is_slot_based=seva_create.is_slot_based,
+        daily_limit=seva_create.daily_limit,
+        is_active=seva_create.is_active
+    )
+    db.add(db_seva)
+    db.commit()
+    db.refresh(db_seva)
+    return db_seva
+
+
+def get_all_sevas(db: Session, skip: int = 0, limit: int = 100):
+    """Get all Sevas"""
+    return db.query(SevaCatalog).offset(skip).limit(limit).all()
+
+
+
+def update_seva(db: Session, seva_id: int, seva_update: SevaUpdate) -> SevaCatalog:
+    """
+    Update a Seva's details (Price, Active Status, Daily Limit).
+    
+    Args:
+        db: Database session
+        seva_id: ID of the seva to update
+        seva_update: Pydantic model with update fields
+        
+    Returns:
+        Updated SevaCatalog object
+    """
+    seva = db.query(SevaCatalog).filter(SevaCatalog.id == seva_id).first()
+    
+    if not seva:
+        return None
+        
+    # Update fields if provided
+    if seva_update.price is not None:
+        seva.price = seva_update.price
+        
+    if seva_update.is_active is not None:
+        seva.is_active = seva_update.is_active
+        
+    if seva_update.daily_limit is not None:
+        # If 0 is passed, treat as unlimited (None)
+        seva.daily_limit = seva_update.daily_limit if seva_update.daily_limit > 0 else None
+    
+    # updated_at is handled by database ON UPDATE
+    
+    db.commit()
+    db.refresh(seva)
+    return seva
+
+
+
+# =============================================================================
+# ALIASES & RE-EXPORTS (For Compatibility with Main.py)
+# =============================================================================
+
+# Alias create_transaction to book_seva_transaction
+book_seva_transaction = create_transaction
+
+# Alias get_daily_transactions to get_today_transactions
+get_today_transactions = get_daily_transactions
+
+
+def delete_seva(db: Session, seva_id: int):
+    """
+    Soft delete a Seva (set is_active=False).
+    """
+    return update_seva(db, seva_id, SevaUpdate(is_active=False))
+
+
+def restore_seva(db: Session, seva_id: int):
+    """
+    Restore a soft-deleted Seva (set is_active=True).
+    """
+    return update_seva(db, seva_id, SevaUpdate(is_active=True))
+
+
+def permanently_delete_seva(db: Session, seva_id: int):
+    """
+    Hard delete a Seva from the database permanently.
+    Only works on inactive (soft-deleted) sevas for safety.
+    """
+    seva = db.query(SevaCatalog).filter(SevaCatalog.id == seva_id).first()
+    if not seva:
+        return None
+    if seva.is_active:
+        raise ValueError("Cannot permanently delete an active Seva. Soft-delete it first.")
+    db.delete(seva)
+    db.commit()
+    return True
+
+
+def permanently_delete_all_inactive_sevas(db: Session):
+    """
+    Hard delete ALL inactive sevas from the database (empty recycle bin).
+    Returns the count of deleted items.
+    """
+    count = db.query(SevaCatalog).filter(SevaCatalog.is_active == False).count()
+    db.query(SevaCatalog).filter(SevaCatalog.is_active == False).delete()
+    db.commit()
+    return count
+
+
+def get_transaction_trends(db: Session, days: int = 7):
+    """Placeholder for transaction trends"""
+    # Logic to be implemented. Returning empty list for now.
+    return []
+
+def get_daily_summary(db: Session, date_str: str = None):
+    """Placeholder for daily summary"""
+    # Logic to be implemented.
+    return {"total_active_subscriptions": 0, "today_dispatches": 0, "pending_feedback": 0}
+
+
+# =============================================================================
+# Address Confirmation Functions
+# =============================================================================
+
+def send_address_confirmation(db: Session, devotee_id: int):
+    """
+    Mark that an address confirmation request was sent to the devotee.
+    Sets address_confirmation_sent_at timestamp.
+    """
+    devotee = db.query(Devotee).filter(Devotee.id == devotee_id).first()
+    if not devotee:
+        raise ValueError(f"Devotee {devotee_id} not found")
+    
+    devotee.address_confirmation_sent_at = func.now()
+    devotee.address_confirmed = False  # Reset confirmed status on re-send
+    db.commit()
+    db.refresh(devotee)
+    return devotee
+
+
+def confirm_devotee_address(db: Session, devotee_id: int, new_address: str = None, new_area: str = None, new_pincode: str = None):
+    """
+    Confirm a devotee's address. Optionally update address fields if changed.
+    Sets address_confirmed=True and address_confirmed_at timestamp.
+    """
+    devotee = db.query(Devotee).filter(Devotee.id == devotee_id).first()
+    if not devotee:
+        raise ValueError(f"Devotee {devotee_id} not found")
+    
+    # Update address if new values provided
+    if new_address is not None:
+        devotee.address = new_address
+    if new_area is not None:
+        devotee.area = new_area
+    if new_pincode is not None:
+        devotee.pincode = new_pincode
+    
+    devotee.address_confirmed = True
+    devotee.address_confirmed_at = func.now()
+    db.commit()
+    db.refresh(devotee)
+    return devotee
+
+
+def reset_address_confirmation(db: Session, devotee_id: int):
+    """
+    Reset address confirmation for a new cycle.
+    """
+    devotee = db.query(Devotee).filter(Devotee.id == devotee_id).first()
+    if not devotee:
+        raise ValueError(f"Devotee {devotee_id} not found")
+    
+    devotee.address_confirmed = False
+    devotee.address_confirmed_at = None
+    devotee.address_confirmation_sent_at = None
+    db.commit()
+    db.refresh(devotee)
+    return devotee

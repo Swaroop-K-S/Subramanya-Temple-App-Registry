@@ -2,7 +2,7 @@
 S.T.A.R. Backend - Database Configuration
 ==========================================
 SQLAlchemy connection to SQLite database.
-Fully portable - no database installation required!
+Fully portable - database stored inside the app directory!
 """
 
 import os
@@ -12,56 +12,32 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # =============================================================================
-# SQLite Database - Portable, No Installation Required!
+# SQLite Database - Stored Inside App Directory (Portable)
 # =============================================================================
-
-import shutil
 
 def get_database_path():
     """
-    Determine the persistent database file path.
-    - Windows: %APPDATA%/StarApp/star_temple.db
-    - Linux/Mac: ~/.local/share/StarApp/star_temple.db
+    Database file lives inside the app's own directory.
+    star-backend/data/star_temple.db
     """
-    app_name = "StarApp"
+    # Get the directory where this file (database.py) lives → app/
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    # Go up one level to star-backend/
+    backend_dir = os.path.dirname(app_dir)
+    # Store in star-backend/data/
+    data_dir = os.path.join(backend_dir, "data")
     
-    # 1. Determine User Data Directory
-    if sys.platform == "win32":
-        user_data_dir = os.getenv('APPDATA')
-    else:
-        user_data_dir = os.path.expanduser("~/.local/share")
+    print(f"DEBUG DB: __file__ = {os.path.abspath(__file__)}")
+    print(f"DEBUG DB: app_dir = {app_dir}")
+    print(f"DEBUG DB: backend_dir = {backend_dir}")
+    print(f"DEBUG DB: data_dir = {data_dir}")
+    
+    # Ensure data directory exists
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
         
-    app_data_dir = os.path.join(user_data_dir, app_name)
-    
-    # Ensure directory exists
-    if not os.path.exists(app_data_dir):
-        os.makedirs(app_data_dir)
-        
-    target_db_path = os.path.join(app_data_dir, 'star_temple.db')
-    
-    # 2. Migration Check (Import Legacy Data)
-    # If DB exists in legacy location (next to exe or source), copy it over
-    # This ensures users don't lose data when upgrading to this version.
-    
-    legacy_path = None
-    if getattr(sys, 'frozen', False):
-        # Bundled exe legacy path
-        legacy_path = os.path.join(os.path.dirname(sys.executable), 'star_temple.db')
-    else:
-        # Dev mode legacy path (was inside app/)
-        legacy_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'star_temple.db')
-        
-    # Condition: Target missing AND Legacy exists -> MIGRATE
-    if not os.path.exists(target_db_path) and os.path.exists(legacy_path):
-        print(f"[MIGRATE] Found legacy database at: {legacy_path}")
-        print(f"[MIGRATE] Moving to persistent storage: {target_db_path}...")
-        try:
-            shutil.copy2(legacy_path, target_db_path)
-            print("[MIGRATE] Success! Data preserved.")
-        except Exception as e:
-             print(f"[MIGRATE] Failed to copy database: {e}")
-             
-    return target_db_path
+    return os.path.join(data_dir, "star_temple.db")
+
 
 DATABASE_PATH = get_database_path()
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
@@ -123,7 +99,6 @@ def init_database():
         with engine.connect() as conn:
             def _add_column_if_missing(table, column, col_type):
                 """Safely add a column to an existing table if it doesn't exist."""
-                # PRAGMA returns list of (cid, name, type, notnull, dflt_value, pk)
                 cols = conn.execute(sa_text(f"PRAGMA table_info({table})")).fetchall()
                 col_names = [c[1] for c in cols]
                 if column not in col_names:
@@ -134,8 +109,8 @@ def init_database():
             # ShaswataSubscription: dispatch & feedback tracking
             _add_column_if_missing("shaswata_subscriptions", "last_dispatch_date", "DATE")
             _add_column_if_missing("shaswata_subscriptions", "last_feedback_date", "DATE")
+            
             # User: created_at timestamp
-            # SQLite workaround: Add as nullable first, then backfill
             cols = conn.execute(sa_text(f"PRAGMA table_info(users)")).fetchall()
             col_names = [c[1] for c in cols]
             if "created_at" not in col_names:
@@ -143,8 +118,16 @@ def init_database():
                 conn.execute(sa_text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
                 conn.commit()
                 print(f"[MIGRATE] Added column 'created_at' to 'users'")
+
+            # SevaCatalog: updated_at timestamp
+            _add_column_if_missing("seva_catalog", "updated_at", "DATETIME")
             
-            # Sync Metadata Migration (Phase 3)
+            # Devotee: Address Confirmation Tracking
+            _add_column_if_missing("devotees", "address_confirmed", "BOOLEAN DEFAULT 0")
+            _add_column_if_missing("devotees", "address_confirmed_at", "DATETIME")
+            _add_column_if_missing("devotees", "address_confirmation_sent_at", "DATETIME")
+            
+            # Sync Metadata Migration
             for tbl in ["transactions", "devotees", "shaswata_subscriptions"]:
                 cols = conn.execute(sa_text(f"PRAGMA table_info({tbl})")).fetchall()
                 col_names = [c[1] for c in cols]
@@ -158,7 +141,23 @@ def init_database():
                     conn.execute(sa_text(f"UPDATE {tbl} SET last_modified = CURRENT_TIMESTAMP WHERE last_modified IS NULL"))
                     print(f"[MIGRATE] Added 'last_modified' to '{tbl}'")
                 
+                if "last_modified" not in col_names:
+                    conn.execute(sa_text(f"ALTER TABLE {tbl} ADD COLUMN last_modified DATETIME"))
+                    conn.execute(sa_text(f"UPDATE {tbl} SET last_modified = CURRENT_TIMESTAMP WHERE last_modified IS NULL"))
+                    print(f"[MIGRATE] Added 'last_modified' to '{tbl}'")
+                
                 conn.commit()
+
+            # Ensure 'notes' column exists in transactions
+            _add_column_if_missing("transactions", "notes", "TEXT")
+            
+            
+            # Performance: Index on transaction_date for fast daily lookups
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_payment_mode ON transactions(payment_mode)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_created_by ON transactions(created_by_user_id)"))
+            conn.commit()
+            print("[MIGRATE] Ensured performance indexes and Phase 2 columns on transactions")
             
     except Exception as e:
         print(f"[WARN] Migration check: {e}")
@@ -196,6 +195,7 @@ def init_database():
                 SevaCatalog(name_eng="Anna Dhana Nidhi", name_kan="ಅನ್ನ ದಾನ ನಿಧಿ", price=0.0),
                 SevaCatalog(name_eng="General", name_kan="ಸಾಮಾನ್ಯ", price=0.0),
                 SevaCatalog(name_eng="Rajata Ashtottara Seva", name_kan="ರಜತ ಅಷ್ಟೋತ್ತರ ಸೇವೆ", price=500.0),
+                SevaCatalog(name_eng="Shaswata Brahmachari Pooja", name_kan="ಶಾಶ್ವತ ಬ್ರಹ್ಮಚಾರಿ ಪೂಜೆ", price=0.0),
             ]
             session.add_all(default_sevas)
             session.commit()

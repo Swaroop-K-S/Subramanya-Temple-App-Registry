@@ -1,0 +1,7 @@
+DEBUG MAIN: Importing database
+DEBUG MAIN: Importing models
+DEBUG: Initializing crud.py
+DEBUG: Finished initializing crud.py
+DEBUG MAIN: Importing panchang
+INFO: Static files not found at C:\Users\swaro\Desktop\Subramanya Temple App & Registry\star-backend\..\star-frontend\dist. Run 'npm run build' first for production mode.
+SUCCESS: Imported main

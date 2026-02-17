@@ -1,0 +1,6 @@
+CRITICAL ERROR IN MAIN: name 'get_daily_transactions' is not defined
+Traceback (most recent call last):
+  File "C:\Users\swaro\Desktop\Subramanya Temple App & Registry\star-backend\main.py", line 474, in list_transactions
+    return get_daily_transactions(db, date)
+           ^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'get_daily_transactions' is not defined. Did you mean: 'get_today_transactions'?

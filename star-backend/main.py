@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import io
 import csv
 import traceback
@@ -28,19 +28,29 @@ if sys.stderr is None:
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
+
 from app.database import get_db, init_database
+
 from app.models import SevaCatalog
 from app.schemas import (
-    TransactionCreate, TransactionResponse, SevaResponse,
-    ShaswataCreate, ShaswataSubscriptionResponse,
-    UserCreate, UserLogin, Token, TokenData, UserResponse
+    UserCreate, UserResponse, Token, UserLogin, TokenData,
+    SevaResponse, SevaUpdate, SevaCreate,
+    TransactionCreate, TransactionResponse,
+    ShaswataCreate, ShaswataResponse,
 )
+
 from app.crud import (
-    create_transaction, get_daily_transactions,
+    create_user, get_user_by_username,
+    get_all_sevas, create_seva_fn, update_seva,
+    book_seva_transaction,
+    get_today_transactions, get_daily_transactions, get_daily_stats,
     create_shaswata_subscription, get_shaswata_subscriptions,
-    get_financial_report,
-    log_dispatch, log_feedback_sent, get_pending_feedback_subscriptions
+    get_daily_summary, get_transaction_trends,
+    get_financial_report, get_enhanced_report, get_collection_details,
+    log_dispatch, log_feedback_sent, get_pending_feedback_subscriptions,
+    send_address_confirmation, confirm_devotee_address, reset_address_confirmation
 )
+
 from app.panchang import PanchangCalculator
 from app import daiva_setu  # Genesis Protocol (Level 15)
 from app.sync_engine import sync_engine
@@ -95,7 +105,7 @@ SECRET_KEY = "supersecretkey_change_this_for_production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def verify_password(plain_password, hashed_password):
@@ -275,8 +285,11 @@ def root():
     return {"message": "S.T.A.R. API is online"}
 
 @app.get("/sevas", response_model=List[SevaResponse], tags=["Seva Catalog"])
-def get_all_sevas(db: Session = Depends(get_db)):
-    return db.query(SevaCatalog).filter(SevaCatalog.is_active == True).all()
+def get_all_sevas(active_only: bool = True, db: Session = Depends(get_db)):
+    query = db.query(SevaCatalog)
+    if active_only:
+        query = query.filter(SevaCatalog.is_active == True)
+    return query.all()
 
 @app.get("/sevas/{seva_id}", response_model=SevaResponse, tags=["Seva Catalog"])
 def get_seva_by_id(seva_id: int, db: Session = Depends(get_db)):
@@ -285,20 +298,257 @@ def get_seva_by_id(seva_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Seva not found")
     return seva
 
+@app.put("/sevas/{seva_id}", response_model=SevaResponse, tags=["Seva Catalog"])
+def update_seva_endpoint(
+    seva_id: int, 
+    seva_update: SevaUpdate, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """
+    Update Seva details (Admin only).
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can update Seva details"
+        )
+    
+    try:
+        updated_seva = update_seva(db, seva_id, seva_update)
+        if not updated_seva:
+             raise HTTPException(status_code=404, detail="Seva not found")
+        return updated_seva
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update Seva: {str(e)}")
+
+@app.post("/sevas", response_model=SevaResponse, status_code=status.HTTP_201_CREATED, tags=["Seva Catalog"])
+def create_seva_endpoint(
+    seva: SevaCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new Seva (Admin only).
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can create new Sevas"
+        )
+    
+    try:
+        return create_seva_fn(db, seva)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create Seva: {str(e)}")
+
+
+@app.delete("/sevas/{seva_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Seva Catalog"])
+def delete_seva_endpoint(
+    seva_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Soft delete a Seva (Admin only).
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can delete Sevas"
+        )
+    
+    from app.crud import delete_seva
+    updated_seva = delete_seva(db, seva_id)
+    if not updated_seva:
+        raise HTTPException(status_code=404, detail="Seva not found")
+    return None
+
+
+@app.post("/sevas/{seva_id}/restore", response_model=SevaResponse, tags=["Seva Catalog"])
+def restore_seva_endpoint(
+    seva_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Restore a soft-deleted Seva (Admin only).
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can restore Sevas"
+        )
+    
+    from app.crud import restore_seva
+    updated_seva = restore_seva(db, seva_id)
+    if not updated_seva:
+        raise HTTPException(status_code=404, detail="Seva not found")
+    return updated_seva
+
+
+@app.delete("/sevas/{seva_id}/permanent", status_code=status.HTTP_204_NO_CONTENT, tags=["Seva Catalog"])
+def permanently_delete_seva_endpoint(
+    seva_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently delete a soft-deleted Seva (Admin only).
+    The seva must already be inactive (in recycle bin).
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can permanently delete Sevas"
+        )
+    
+    from app.crud import permanently_delete_seva
+    try:
+        result = permanently_delete_seva(db, seva_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not result:
+        raise HTTPException(status_code=404, detail="Seva not found")
+    return None
+
+
+@app.delete("/sevas/recycle-bin/empty", status_code=status.HTTP_200_OK, tags=["Seva Catalog"])
+def empty_recycle_bin_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently delete ALL inactive sevas (Admin only). Empties the recycle bin.
+    """
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can empty the recycle bin"
+        )
+    
+    from app.crud import permanently_delete_all_inactive_sevas
+    count = permanently_delete_all_inactive_sevas(db)
+    return {"message": f"Permanently deleted {count} seva(s)", "count": count}
+
+
+
 # =============================================================================
 # API Routes - Booking / Transactions
 # =============================================================================
 
-@app.get("/reports")
+@app.get("/reports", tags=["Reports"])
 def get_reports(start_date: str, end_date: str, db: Session = Depends(get_db)):
     """
-    Get financial reports and seva statistics for a date range.
+    Enhanced financial report with comparison period, hourly heatmap,
+    ATV, cash/UPI splits, and shaswata count.
     """
     try:
-        report = get_financial_report(db, start_date, end_date)
-        # Add period info to match requested structure
+        report = get_enhanced_report(db, start_date, end_date)
         report["period"] = {"start": start_date, "end": end_date}
         return report
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/reports/collection", tags=["Reports"])
+def get_report_collection(start_date: str, end_date: str, db: Session = Depends(get_db)):
+    """
+    Get line-item transaction details for exports and drill-down.
+    """
+    try:
+        txns = get_collection_details(db, start_date, end_date)
+        return {"transactions": txns, "count": len(txns)}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/reports/export/excel", tags=["Reports"])
+def export_report_excel(start_date: str, end_date: str, db: Session = Depends(get_db)):
+    """
+    Export a multi-tab Excel report (.xlsx) for the given date range.
+    Tabs: Summary, Transactions, Seva Breakdown.
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        import io as excel_io
+
+        report = get_enhanced_report(db, start_date, end_date)
+        txns = get_collection_details(db, start_date, end_date)
+
+        wb = Workbook()
+
+        # --- Tab 1: Summary ---
+        ws1 = wb.active
+        ws1.title = "Summary"
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        header_fill = PatternFill(start_color="F97316", end_color="F97316", fill_type="solid")
+        bold = Font(bold=True)
+
+        ws1.append(["SHREE SUBRAMANYA TEMPLE — Financial Report"])
+        ws1.append([f"Period: {start_date} to {end_date}"])
+        ws1.append([])
+        ws1.append(["Metric", "Current Period", "Previous Period", "Change %"])
+        for cell in ws1[4]:
+            cell.font = header_font
+            cell.fill = header_fill
+
+        fin = report["financials"]
+        comp = report["comparison"]
+        ws1.append(["Total Collection", fin["total"], comp["prev_total"], f"{comp['total_change']}%"])
+        ws1.append(["Booking Count", fin["tx_count"], comp["prev_count"], f"{comp['count_change']}%"])
+        ws1.append(["Avg. Ticket Value", fin["atv"], comp["prev_atv"], f"{comp['atv_change']}%"])
+        ws1.append(["Cash Collection", fin["cash"], "", f"{fin['cash_pct']}%"])
+        ws1.append(["UPI Collection", fin["upi"], "", f"{fin['upi_pct']}%"])
+        ws1.column_dimensions['A'].width = 25
+        ws1.column_dimensions['B'].width = 20
+        ws1.column_dimensions['C'].width = 20
+        ws1.column_dimensions['D'].width = 15
+
+        # --- Tab 2: Transactions ---
+        ws2 = wb.create_sheet(title="Transactions")
+        ws2.append(["Receipt #", "Devotee", "Seva", "Amount", "Mode", "Time"])
+        for cell in ws2[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+        for t in txns:
+            ws2.append([t["receipt_no"], t["devotee_name"], t["seva_name"],
+                        t["amount"], t["payment_mode"], t["time"]])
+        ws2.column_dimensions['A'].width = 18
+        ws2.column_dimensions['B'].width = 25
+        ws2.column_dimensions['C'].width = 25
+        ws2.column_dimensions['D'].width = 12
+        ws2.column_dimensions['E'].width = 10
+        ws2.column_dimensions['F'].width = 20
+
+        # --- Tab 3: Seva Breakdown ---
+        ws3 = wb.create_sheet(title="Seva Breakdown")
+        ws3.append(["Seva Name", "Count", "Revenue"])
+        for cell in ws3[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+        for s in report["seva_stats"]:
+            ws3.append([s["name"], s["count"], s["revenue"]])
+        ws3.column_dimensions['A'].width = 30
+        ws3.column_dimensions['B'].width = 12
+        ws3.column_dimensions['C'].width = 15
+
+        # Save to bytes
+        output = excel_io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"Temple_Report_{start_date}_to_{end_date}.xlsx"
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ImportError:
+        raise HTTPException(status_code=500, detail="openpyxl not installed. Run: pip install openpyxl")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -310,19 +560,97 @@ def book_seva(transaction: TransactionCreate, db: Session = Depends(get_db)):
     validate_transaction_payload(transaction)
     
     try:
-        return create_transaction(db=db, transaction=transaction)
+        return book_seva_transaction(db=db, transaction=transaction)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Booking failed: {str(e)}")
 
 @app.get("/transactions", tags=["Transactions"])
-def list_transactions(date: Optional[str] = None, db: Session = Depends(get_db)):
+def list_transactions(
+    date: Optional[str] = None,
+    payment_mode: Optional[str] = None,
+    seva_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 200,
+    sort_by: str = "time_desc",
+    db: Session = Depends(get_db)
+):
     """
-    Get transactions for a specific date (YYYY-MM-DD). 
-    Defaults to today if no date provided.
+    Get paginated, filterable transactions for a specific date.
+    
+    - **date**: YYYY-MM-DD (defaults to today)
+    - **payment_mode**: CASH or UPI
+    - **seva_id**: Filter by specific seva
+    - **skip/limit**: Pagination
+    - **sort_by**: time_desc, time_asc, amount_desc, amount_asc, name_asc
     """
-    return get_daily_transactions(db, date)
+    return get_daily_transactions(
+        db, date=date, payment_mode=payment_mode, seva_id=seva_id,
+        skip=skip, limit=limit, sort_by=sort_by
+    )
+
+
+@app.get("/transactions/stats", tags=["Transactions"])
+def transaction_stats(date: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Get aggregate statistics for a date: totals, payment breakdown,
+    seva-wise breakdown, and hourly trend data for charts.
+    """
+    return get_daily_stats(db, date)
+
+
+@app.get("/transactions/export", tags=["Transactions"])
+def export_transactions(date: Optional[str] = None, db: Session = Depends(get_db)):
+    """Export transactions for a date as CSV download."""
+    from fastapi.responses import StreamingResponse
+    import csv, io
+    
+    data = get_daily_transactions(db, date=date, limit=10000)
+    transactions = data["transactions"]
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Receipt #", "Devotee Name", "Seva", "Amount (₹)", "Payment Mode", "Time"])
+    
+    for t in transactions:
+        time_str = str(t.get("transaction_date", ""))
+        writer.writerow([
+            t.get("receipt_no", ""),
+            t.get("devotee_name", ""),
+            t.get("seva_name", ""),
+            t.get("amount_paid", 0),
+            t.get("payment_mode", ""),
+            time_str
+        ])
+    
+    output.seek(0)
+    filename = f"transactions_{date or 'today'}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.put("/transactions/{transaction_id}/note", tags=["Transactions"])
+def update_transaction_note(transaction_id: int, note: str = "", db: Session = Depends(get_db)):
+    """Update the note on a transaction (inline edit from list)."""
+    from sqlalchemy import text as sa_text
+    result = db.execute(
+        sa_text("SELECT id FROM transactions WHERE id = :id"),
+        {"id": transaction_id}
+    ).fetchone()
+    if not result:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    db.execute(
+        sa_text("UPDATE transactions SET notes = :note WHERE id = :id"),
+        {"id": transaction_id, "note": note}
+    )
+    db.commit()
+    return {"message": "Note updated", "id": transaction_id, "note": note}
+
 
 # =============================================================================
 # API Routes - Devotee Management (Auto-Fill) -- NEW ADDITION
@@ -400,7 +728,7 @@ def validate_transaction_payload(data):
 # API Routes - Shaswata (Perpetual Puja)
 # =============================================================================
 
-@app.post("/shaswata/subscribe", response_model=ShaswataSubscriptionResponse, tags=["Shaswata"])
+@app.post("/shaswata/subscribe", response_model=ShaswataResponse, tags=["Shaswata"])
 def subscribe_shaswata(subscription: ShaswataCreate, db: Session = Depends(get_db)):
     # Security Scan
     validate_transaction_payload(subscription)
@@ -418,6 +746,123 @@ def list_shaswata_subscriptions(active_only: bool = True, db: Session = Depends(
 def list_shaswata_alias(active_only: bool = True, db: Session = Depends(get_db)):
     """Alias for /shaswata/subscriptions for frontend compatibility."""
     return get_shaswata_subscriptions(db, active_only=active_only)
+
+
+@app.get("/shaswata/tomorrow", tags=["Shaswata"])
+def get_tomorrow_shaswata_pujas(db: Session = Depends(get_db)):
+    """
+    Get all Shaswata subscriptions scheduled for TOMORROW.
+    Used to power the notification bell in the Navbar.
+    Returns list of pujas with devotee details and address confirmation status.
+    """
+    from app.models import Devotee
+    tomorrow = date.today() + timedelta(days=1)
+    
+    pc = PanchangCalculator()
+    panchangam_tomorrow = pc.calculate(tomorrow)
+    
+    # 1. LUNAR subscriptions matching tomorrow's Tithi
+    lunar_query = text("""
+        SELECT ss.id, d.id as devotee_id, d.full_name_en, d.phone_number, d.address, d.area, d.pincode,
+               sc.name_eng, ss.maasa, ss.paksha, ss.tithi, ss.occasion,
+               d.address_confirmed, d.address_confirmation_sent_at
+        FROM shaswata_subscriptions ss
+        JOIN devotees d ON ss.devotee_id = d.id
+        JOIN seva_catalog sc ON ss.seva_id = sc.id
+        WHERE ss.is_active = TRUE AND ss.subscription_type = 'LUNAR'
+        AND ss.maasa = :maasa AND ss.paksha = :paksha AND ss.tithi = :tithi
+    """)
+    lunar_result = db.execute(lunar_query, {
+        "maasa": panchangam_tomorrow["attributes"]["maasa"],
+        "paksha": panchangam_tomorrow["attributes"]["paksha"],
+        "tithi": panchangam_tomorrow["attributes"]["tithi"]
+    }).fetchall()
+    
+    # 2. GREGORIAN subscriptions matching tomorrow's date
+    greg_query = text("""
+        SELECT ss.id, d.id as devotee_id, d.full_name_en, d.phone_number, d.address, d.area, d.pincode,
+               sc.name_eng, ss.event_day, ss.event_month, ss.occasion,
+               d.address_confirmed, d.address_confirmation_sent_at
+        FROM shaswata_subscriptions ss
+        JOIN devotees d ON ss.devotee_id = d.id
+        JOIN seva_catalog sc ON ss.seva_id = sc.id
+        WHERE ss.is_active = TRUE AND ss.subscription_type = 'GREGORIAN'
+        AND ss.event_day = :day AND ss.event_month = :month
+    """)
+    greg_result = db.execute(greg_query, {"day": tomorrow.day, "month": tomorrow.month}).fetchall()
+    
+    pujas = []
+    for row in lunar_result:
+        pujas.append({
+            "id": row[0], "devotee_id": row[1], "name": row[2], "phone": row[3],
+            "address": row[4], "area": row[5], "pincode": row[6],
+            "seva": row[7], "date_info": f"{row[8]} {row[9]} {row[10]}",
+            "occasion": row[11], "type": "LUNAR",
+            "address_confirmed": row[12] or False,
+            "confirmation_sent": row[13] is not None
+        })
+    for row in greg_result:
+        month_names = ["", "January", "February", "March", "April", "May", "June",
+                       "July", "August", "September", "October", "November", "December"]
+        month_idx = row[9]
+        month_str = month_names[month_idx] if 0 < month_idx <= 12 else str(month_idx)
+        pujas.append({
+            "id": row[0], "devotee_id": row[1], "name": row[2], "phone": row[3],
+            "address": row[4], "area": row[5], "pincode": row[6],
+            "seva": row[7], "date_info": f"{month_str} {row[8]}",
+            "occasion": row[10], "type": "GREGORIAN",
+            "address_confirmed": row[11] or False,
+            "confirmation_sent": row[12] is not None
+        })
+    
+    return {
+        "count": len(pujas),
+        "date": tomorrow.strftime("%d-%m-%Y"),
+        "pujas": pujas
+    }
+
+
+@app.patch("/devotees/{devotee_id}/send-address-confirmation", tags=["Shaswata"])
+def send_address_confirmation_endpoint(devotee_id: int, db: Session = Depends(get_db)):
+    """
+    Mark that an address confirmation WhatsApp message was sent to a devotee.
+    """
+    try:
+        devotee = send_address_confirmation(db, devotee_id)
+        return {
+            "status": "confirmation_sent",
+            "devotee_id": devotee.id,
+            "name": devotee.full_name_en,
+            "sent_at": str(devotee.address_confirmation_sent_at)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.patch("/devotees/{devotee_id}/confirm-address", tags=["Shaswata"])
+def confirm_address_endpoint(
+    devotee_id: int,
+    address: Optional[str] = None,
+    area: Optional[str] = None,
+    pincode: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Confirm a devotee's address. Optionally update if changed.
+    """
+    try:
+        devotee = confirm_devotee_address(db, devotee_id, address, area, pincode)
+        return {
+            "status": "confirmed",
+            "devotee_id": devotee.id,
+            "name": devotee.full_name_en,
+            "address": devotee.address,
+            "area": devotee.area,
+            "pincode": devotee.pincode,
+            "confirmed_at": str(devotee.address_confirmed_at)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # =============================================================================
@@ -559,7 +1004,7 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
     # 4. Calculate Daily Revenue
     revenue_query = text("""
         SELECT SUM(amount_paid) FROM transactions 
-        WHERE seva_date = :date OR CAST(transaction_date AS DATE) = :date
+        WHERE seva_date = :date OR DATE(transaction_date) = :date
     """)
     daily_revenue = db.execute(revenue_query, {"date": target_date}).scalar() or 0
 
@@ -681,7 +1126,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
             COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0)
         FROM transactions
-        WHERE CAST(transaction_date AS DATE) >= :start AND CAST(transaction_date AS DATE) <= :end
+        WHERE DATE(transaction_date) >= :start AND DATE(transaction_date) <= :end
     """)
     totals = db.execute(stmt, {"start": start, "end": end}).fetchone()
     total_val, cash_val, upi_val = totals[0], totals[1], totals[2]

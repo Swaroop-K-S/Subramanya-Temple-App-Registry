@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Sun, Moon, Languages, Bell, Search, Flower } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Sun, Moon, Languages, Bell, Search, Flower, MapPin, ChevronRight, X } from 'lucide-react';
 import { useTempleTime } from '../context/TimeContext';
+import api from '../services/api';
 
-const Navbar = ({ lang, setLang }) => {
+const Navbar = ({ lang, setLang, user, setActivePage }) => {
     const [isDark, setIsDark] = useState(false);
     const { formattedTime } = useTempleTime();
+
+    // === NOTIFICATION STATE ===
+    const [tomorrowPujas, setTomorrowPujas] = useState([]);
+    const [notifOpen, setNotifOpen] = useState(false);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const notifRef = useRef(null);
 
     // Theme Toggle Logic
     useEffect(() => {
@@ -14,6 +21,49 @@ const Navbar = ({ lang, setLang }) => {
             document.documentElement.classList.remove('dark');
         }
     }, [isDark]);
+
+    // === FETCH TOMORROW'S PUJAS (Notification Data Source) ===
+    useEffect(() => {
+        const fetchTomorrowPujas = async () => {
+            setNotifLoading(true);
+            try {
+                const response = await api.get('/shaswata/tomorrow');
+                setTomorrowPujas(response.data?.pujas || []);
+            } catch (error) {
+                console.error("Failed to fetch tomorrow's pujas:", error);
+            } finally {
+                setNotifLoading(false);
+            }
+        };
+        fetchTomorrowPujas();
+
+        // Re-check every 5 minutes
+        const interval = setInterval(fetchTomorrowPujas, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (notifRef.current && !notifRef.current.contains(e.target)) {
+                setNotifOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const unconfirmedCount = tomorrowPujas.filter(p => !p.address_confirmed).length;
+    const totalCount = tomorrowPujas.length;
+
+    const handleNotifClick = () => {
+        setNotifOpen(!notifOpen);
+    };
+
+    const handleGoToDispatch = () => {
+        setNotifOpen(false);
+        if (setActivePage) setActivePage('dispatch');
+    };
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-40 h-28 px-8 flex items-center justify-between pointer-events-none md:pl-40 bg-white/60 dark:bg-slate-950/80 backdrop-blur-3xl border-b border-white/20 dark:border-white/5 shadow-sm transition-all duration-500">
@@ -43,11 +93,134 @@ const Navbar = ({ lang, setLang }) => {
                     />
                 </div>
 
-                {/* Notifications */}
-                <button className="w-12 h-12 rounded-full bg-white/50 dark:bg-slate-800/50 backdrop-blur-xl border border-white/30 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-temple-saffron hover:scale-110 transition-all shadow-sm hover:shadow-lg relative group">
-                    <Bell size={22} className="group-hover:animate-swing" />
-                    <span className="absolute top-3 right-3.5 w-2 h-2 bg-temple-rose rounded-full border border-white animate-pulse" />
-                </button>
+                {/* === NOTIFICATIONS BELL (Address Confirmation) === */}
+                <div className="relative" ref={notifRef}>
+                    <button
+                        onClick={handleNotifClick}
+                        className={`
+                            w-12 h-12 rounded-full backdrop-blur-xl border flex items-center justify-center
+                            transition-all shadow-sm hover:shadow-lg relative group
+                            ${totalCount > 0
+                                ? 'bg-amber-50/80 dark:bg-amber-900/20 border-amber-200/50 dark:border-amber-700/30 text-amber-600 dark:text-amber-400 hover:scale-110'
+                                : 'bg-white/50 dark:bg-slate-800/50 border-white/30 dark:border-white/10 text-slate-500 hover:text-temple-saffron hover:scale-110'
+                            }
+                        `}
+                    >
+                        <Bell size={22} className={`${totalCount > 0 ? 'animate-swing' : 'group-hover:animate-swing'}`} />
+
+                        {/* Badge */}
+                        {unconfirmedCount > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[22px] h-[22px] bg-gradient-to-r from-red-500 to-rose-600 text-white text-[11px] font-black rounded-full flex items-center justify-center px-1 shadow-lg shadow-red-500/40 animate-bounce">
+                                {unconfirmedCount}
+                            </span>
+                        )}
+
+                        {/* All confirmed green dot */}
+                        {totalCount > 0 && unconfirmedCount === 0 && (
+                            <span className="absolute top-3 right-3.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />
+                        )}
+                    </button>
+
+                    {/* === NOTIFICATION DROPDOWN === */}
+                    {notifOpen && (
+                        <div className="absolute top-full mt-3 right-0 z-50 w-96 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-700/50 animate-in slide-in-from-top-2 fade-in duration-200 overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                                <div>
+                                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                                        Tomorrow's Poojas
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        {totalCount === 0
+                                            ? 'No poojas scheduled'
+                                            : `${totalCount} pooja${totalCount > 1 ? 's' : ''} — ${unconfirmedCount} need${unconfirmedCount === 1 ? 's' : ''} address confirmation`
+                                        }
+                                    </p>
+                                </div>
+                                <button onClick={() => setNotifOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Puja List */}
+                            <div className="max-h-80 overflow-y-auto">
+                                {notifLoading ? (
+                                    <div className="py-8 text-center">
+                                        <div className="inline-block w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                                        <p className="text-xs text-slate-400 mt-2">Checking...</p>
+                                    </div>
+                                ) : totalCount === 0 ? (
+                                    <div className="py-8 text-center">
+                                        <Bell size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                                        <p className="text-sm text-slate-400">All clear for tomorrow! 🙏</p>
+                                    </div>
+                                ) : (
+                                    tomorrowPujas.map((puja, idx) => (
+                                        <div
+                                            key={puja.id || idx}
+                                            className={`
+                                                px-5 py-3.5 flex items-start gap-3 border-b last:border-0 border-slate-50 dark:border-slate-800/50
+                                                hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors cursor-pointer
+                                            `}
+                                            onClick={handleGoToDispatch}
+                                        >
+                                            {/* Status Icon */}
+                                            <div className={`
+                                                mt-0.5 w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+                                                ${puja.address_confirmed
+                                                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                                                    : puja.confirmation_sent
+                                                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                                                        : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'
+                                                }
+                                            `}>
+                                                <MapPin size={16} />
+                                            </div>
+
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                                                    {puja.name}
+                                                </p>
+                                                <p className="text-xs text-slate-400 truncate mt-0.5">
+                                                    {puja.seva} • {puja.date_info}
+                                                </p>
+
+                                                {/* Status Badge */}
+                                                <span className={`
+                                                    inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full
+                                                    ${puja.address_confirmed
+                                                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                                        : puja.confirmation_sent
+                                                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                                            : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                                                    }
+                                                `}>
+                                                    {puja.address_confirmed ? '✅ Confirmed' : puja.confirmation_sent ? '🟡 Pending' : '⚪ Not Sent'}
+                                                </span>
+                                            </div>
+
+                                            <ChevronRight size={16} className="text-slate-300 dark:text-slate-600 mt-2 flex-shrink-0" />
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Footer CTA */}
+                            {totalCount > 0 && (
+                                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+                                    <button
+                                        onClick={handleGoToDispatch}
+                                        className="w-full py-2.5 bg-gradient-to-r from-temple-gold to-temple-saffron text-white rounded-xl font-bold text-sm shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <MapPin size={16} />
+                                        Open Shaswata Pooja Dashboard
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Language Toggle */}
                 <button

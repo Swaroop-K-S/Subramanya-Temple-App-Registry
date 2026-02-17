@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTempleTime } from '../context/TimeContext';
-import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sun, Sparkles, Plus, Check, Package, Send, X, MessageCircle } from 'lucide-react';
+import { Calendar, Truck, MapPin, Printer, Filter, Search, ArrowLeft, Moon, Sun, Sparkles, Plus, Check, Package, Send, X, MessageCircle, Shield, Edit3, CheckCircle2, Clock, ChevronDown } from 'lucide-react';
 import { OmniInput, OmniToggle } from './ui/Widgets';
 import api from '../services/api';
 import ShaswataForm from './ShaswataForm'; // [NEW] Embedded Booking Wizard
@@ -50,6 +50,11 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
 
     // === PENDING FEEDBACK COUNT (Automation Badge) ===
     const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
+
+    // === ADDRESS CONFIRMATION STATE ===
+    const [addressConfirmStatus, setAddressConfirmStatus] = useState({}); // { [devoteeId]: { sent: bool, confirmed: bool } }
+    const [editingAddress, setEditingAddress] = useState(null); // devoteeId being edited
+    const [editAddressForm, setEditAddressForm] = useState({ address: '', area: '', pincode: '' });
 
     // --- FETCH DATA ---
     useEffect(() => {
@@ -290,7 +295,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
     const isDispatched = (pujaId) => actionStatus[pujaId]?.dispatched || false;
 
     // === MESSAGING UTILS (Temple OS Communication Hub) ===
-    const generateMessage = (type, devotee, seva, dateInfo) => {
+    const generateMessage = (type, devotee, seva, dateInfo, address) => {
         const phone = "9448066755"; // Temple Admin/Contact
         const greeting = `Namaste ${devotee},`;
 
@@ -301,15 +306,86 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                 return `${greeting} your ${seva} has been performed successfully. The Prasadam has been dispatched to your address. It will arrive within 3-5 days. For queries, contact ${phone}.`;
             case 'FEEDBACK':
                 return `${greeting} checking if you received the Prasadam for your ${seva}. May Subramanya Swamy's blessings be with you.`;
+            case 'ADDRESS_CONFIRM':
+                return `${greeting} your Shaswata Seva (${seva}) is scheduled for tomorrow (${dateInfo}) at Kukke Subramanya Temple. Please confirm your current address for Prasadam delivery:\n\n📍 ${address || 'No address on file'}\n\nIf this address is correct, please reply with "Confirmed". If changed, please reply with your new address. For queries, contact ${phone}. 🙏`;
             default:
                 return '';
         }
     };
 
     const handleSendMessage = (type, puja) => {
-        const msg = generateMessage(type, puja.name, puja.seva, puja.date_info);
+        const msg = generateMessage(type, puja.name, puja.seva, puja.date_info, puja.address);
         const url = `https://wa.me/91${puja.phone}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
+    };
+
+    // === ADDRESS CONFIRMATION HANDLERS ===
+    const handleSendAddressConfirmation = async (puja) => {
+        const devoteeId = puja.devotee_id;
+        if (!devoteeId) {
+            // If no devotee_id, just send WhatsApp
+            handleSendMessage('ADDRESS_CONFIRM', puja);
+            return;
+        }
+        try {
+            await api.patch(`/devotees/${devoteeId}/send-address-confirmation`);
+            setAddressConfirmStatus(prev => ({
+                ...prev,
+                [devoteeId]: { ...prev[devoteeId], sent: true, confirmed: false }
+            }));
+            // Open WhatsApp
+            handleSendMessage('ADDRESS_CONFIRM', puja);
+        } catch (error) {
+            console.error('Failed to log address confirmation sent:', error);
+            // Still open WhatsApp even if API fails
+            handleSendMessage('ADDRESS_CONFIRM', puja);
+        }
+    };
+
+    const handleConfirmAddress = async (puja) => {
+        const devoteeId = puja.devotee_id;
+        if (!devoteeId) return;
+        try {
+            await api.patch(`/devotees/${devoteeId}/confirm-address`);
+            setAddressConfirmStatus(prev => ({
+                ...prev,
+                [devoteeId]: { ...prev[devoteeId], confirmed: true }
+            }));
+        } catch (error) {
+            console.error('Failed to confirm address:', error);
+            alert('Failed to confirm address. Please try again.');
+        }
+    };
+
+    const handleUpdateAddress = async (puja) => {
+        const devoteeId = puja.devotee_id;
+        if (!devoteeId) return;
+        try {
+            const params = new URLSearchParams();
+            if (editAddressForm.address) params.append('address', editAddressForm.address);
+            if (editAddressForm.area) params.append('area', editAddressForm.area);
+            if (editAddressForm.pincode) params.append('pincode', editAddressForm.pincode);
+            await api.patch(`/devotees/${devoteeId}/confirm-address?${params.toString()}`);
+            setAddressConfirmStatus(prev => ({
+                ...prev,
+                [devoteeId]: { ...prev[devoteeId], confirmed: true }
+            }));
+            setEditingAddress(null);
+            setEditAddressForm({ address: '', area: '', pincode: '' });
+            // Refresh data
+            fetchDispatchList();
+        } catch (error) {
+            console.error('Failed to update address:', error);
+            alert('Failed to update address. Please try again.');
+        }
+    };
+
+    const getAddressStatus = (puja) => {
+        const devoteeId = puja.devotee_id;
+        const local = addressConfirmStatus[devoteeId];
+        if (local?.confirmed || puja.address_confirmed) return 'confirmed';
+        if (local?.sent || puja.confirmation_sent) return 'pending';
+        return 'not_sent';
     };
 
     // === AUTOMATION API CALLS (Stage 3) ===
@@ -643,13 +719,38 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                     )}
                                 </div>
 
-                                {/* Address Section */}
-                                <div className="
-                                    bg-slate-50 dark:bg-black/20 
+                                {/* Address Section with Confirmation Status */}
+                                <div className={`
                                     rounded-xl p-4 mb-4 
-                                    min-h-[80px] flex flex-col justify-center
-                                    border border-slate-100 dark:border-white/5
-                                ">
+                                    min-h-[80px] flex flex-col
+                                    border transition-colors
+                                    ${getAddressStatus(puja) === 'confirmed'
+                                        ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30'
+                                        : getAddressStatus(puja) === 'pending'
+                                            ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30'
+                                            : 'bg-slate-50 dark:bg-black/20 border-slate-100 dark:border-white/5'
+                                    }
+                                `}>
+                                    {/* Status Badge */}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                                            <MapPin size={10} /> Delivery Address
+                                        </span>
+                                        <span className={`
+                                            inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full
+                                            ${getAddressStatus(puja) === 'confirmed'
+                                                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                                : getAddressStatus(puja) === 'pending'
+                                                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 animate-pulse'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                            }
+                                        `}>
+                                            {getAddressStatus(puja) === 'confirmed' && <><CheckCircle2 size={10} /> Confirmed</>}
+                                            {getAddressStatus(puja) === 'pending' && <><Clock size={10} /> Pending</>}
+                                            {getAddressStatus(puja) === 'not_sent' && <><Shield size={10} /> Not Verified</>}
+                                        </span>
+                                    </div>
+
                                     {puja.address ? (
                                         <p className="text-sm text-slate-600 dark:text-slate-400 font-medium whitespace-pre-wrap leading-relaxed">
                                             {puja.address}
@@ -658,6 +759,48 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                         <p className="text-xs text-red-400 italic font-bold flex items-center gap-1">
                                             ⚠️ No Address Found
                                         </p>
+                                    )}
+
+                                    {/* Inline Address Edit Form */}
+                                    {editingAddress === puja.devotee_id && (
+                                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                            <p className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider mb-1">Update Address</p>
+                                            <textarea
+                                                value={editAddressForm.address}
+                                                onChange={(e) => setEditAddressForm(prev => ({ ...prev, address: e.target.value }))}
+                                                placeholder="New address..."
+                                                rows={2}
+                                                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+                                            />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input
+                                                    value={editAddressForm.area}
+                                                    onChange={(e) => setEditAddressForm(prev => ({ ...prev, area: e.target.value }))}
+                                                    placeholder="Area"
+                                                    className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+                                                />
+                                                <input
+                                                    value={editAddressForm.pincode}
+                                                    onChange={(e) => setEditAddressForm(prev => ({ ...prev, pincode: e.target.value }))}
+                                                    placeholder="Pincode"
+                                                    className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+                                                />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleUpdateAddress(puja)}
+                                                    className="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                                >
+                                                    <Check size={14} /> Save & Confirm
+                                                </button>
+                                                <button
+                                                    onClick={() => { setEditingAddress(null); setEditAddressForm({ address: '', area: '', pincode: '' }); }}
+                                                    className="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
 
@@ -685,15 +828,65 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                     </div>
                                 </div>
 
-                                {/* === COMMUNICATION HUB (Stage 1, 2, 3) === */}
+                                {/* === COMMUNICATION HUB (Stage 0, 1, 2, 3) === */}
                                 <div className="mb-4 bg-slate-50 dark:bg-slate-800/30 rounded-xl p-3 border border-slate-100 dark:border-white/5">
                                     <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">Devotee Communication</p>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap gap-2">
+
+                                        {/* Stage 0: Address Confirmation (Pre-Seva) */}
+                                        {getAddressStatus(puja) !== 'confirmed' && (
+                                            <button
+                                                onClick={() => handleSendAddressConfirmation(puja)}
+                                                disabled={!puja.phone}
+                                                className={`
+                                                    flex-1 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-lg transition-colors min-w-[120px]
+                                                    ${getAddressStatus(puja) === 'pending'
+                                                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100'
+                                                        : 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300 hover:bg-orange-100'
+                                                    }
+                                                    ${!puja.phone ? 'opacity-50 cursor-not-allowed' : ''}
+                                                `}
+                                            >
+                                                <MapPin size={14} />
+                                                {getAddressStatus(puja) === 'pending' ? 'Resend Confirmation' : 'Confirm Address'}
+                                            </button>
+                                        )}
+
+                                        {/* Mark Confirmed Button (when pending) */}
+                                        {getAddressStatus(puja) === 'pending' && (
+                                            <button
+                                                onClick={() => handleConfirmAddress(puja)}
+                                                className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors min-w-[120px]"
+                                            >
+                                                <CheckCircle2 size={14} /> Mark Confirmed
+                                            </button>
+                                        )}
+
+                                        {/* Update Address Button */}
+                                        {getAddressStatus(puja) !== 'confirmed' && puja.devotee_id && (
+                                            <button
+                                                onClick={() => {
+                                                    setEditingAddress(editingAddress === puja.devotee_id ? null : puja.devotee_id);
+                                                    setEditAddressForm({ address: puja.address || '', area: puja.area || '', pincode: puja.pincode || '' });
+                                                }}
+                                                className="flex items-center justify-center gap-1 py-2 px-3 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors"
+                                            >
+                                                <Edit3 size={14} /> Update
+                                            </button>
+                                        )}
+
+                                        {/* Confirmed Badge */}
+                                        {getAddressStatus(puja) === 'confirmed' && (
+                                            <div className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-lg min-w-[120px]">
+                                                <CheckCircle2 size={14} /> Address Verified ✅
+                                            </div>
+                                        )}
+
                                         {/* Stage 1: Reminder (Before/On Seva Day) */}
                                         {!isPoojaPerformed(puja.id) && (
                                             <button
                                                 onClick={() => handleSendMessage('REMINDER', puja)}
-                                                className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300 text-xs font-bold rounded-lg hover:bg-blue-100 transition-colors"
+                                                className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300 text-xs font-bold rounded-lg hover:bg-blue-100 transition-colors min-w-[120px]"
                                             >
                                                 <MessageCircle size={14} /> Send Reminder
                                             </button>
@@ -706,7 +899,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                                 {!isDispatched(puja.id) && (
                                                     <button
                                                         onClick={() => handleLogDispatch(puja)}
-                                                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors"
+                                                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors min-w-[120px]"
                                                     >
                                                         <Send size={14} /> Dispatch & Notify
                                                     </button>
@@ -716,7 +909,7 @@ const PrasadamDispatch = ({ onBack, lang = 'EN' }) => {
                                                 {isDispatched(puja.id) && (
                                                     <button
                                                         onClick={() => handleLogFeedback(puja)}
-                                                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300 text-xs font-bold rounded-lg hover:bg-purple-100 transition-colors"
+                                                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300 text-xs font-bold rounded-lg hover:bg-purple-100 transition-colors min-w-[120px]"
                                                     >
                                                         <MessageCircle size={14} /> Ask Feedback
                                                     </button>

@@ -114,7 +114,7 @@ function App() {
     <div className="min-h-screen transition-colors duration-500 bg-slate-50 dark:!bg-slate-950">
 
       {/* 1. CELESTIAL NAVBAR (Top) */}
-      <Navbar lang={lang} setLang={setLang} user={user} />
+      <Navbar lang={lang} setLang={setLang} user={user} setActivePage={setActivePage} />
 
       {/* 2. FLOATING SIDEBAR (Left) */}
       <Sidebar

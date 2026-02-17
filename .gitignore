@@ -32,3 +32,6 @@ build/
 # IDEs
 .vscode/
 .idea/
+
+# Database
+star-backend/data/

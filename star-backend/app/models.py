@@ -117,6 +117,7 @@ class SevaCatalog(Base):
     # Audit columns
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self):
         return f"<SevaCatalog(id={self.id}, name='{self.name_eng}', price={self.price})>"
@@ -140,6 +141,11 @@ class Devotee(Base):
     address = Column(Text, nullable=True)
     area = Column(String(100), nullable=True)           # NEW
     pincode = Column(String(10), nullable=True)         # NEW
+    
+    # Address Confirmation Tracking
+    address_confirmed = Column(Boolean, default=False)
+    address_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    address_confirmation_sent_at = Column(DateTime(timezone=True), nullable=True)
     
     # Audit columns
     created_at = Column(DateTime(timezone=True), server_default=func.now())
