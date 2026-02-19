@@ -31,12 +31,13 @@ if __name__ == "__main__":
 
 from app.database import get_db, init_database
 
-from app.models import SevaCatalog
+from app.models import SevaCatalog, SystemSetting, AuditLog, DailyPanchang
 from app.schemas import (
     UserCreate, UserResponse, Token, UserLogin, TokenData,
     SevaResponse, SevaUpdate, SevaCreate,
     TransactionCreate, TransactionResponse,
-    ShaswataCreate, ShaswataResponse,
+    ShaswataCreate, ShaswataResponse, ShaswataDispatchAdhoc,
+    PasswordChange, SystemSettingResponse, SystemSettingUpdate, AuditLogResponse,
 )
 
 from app.crud import (
@@ -54,6 +55,12 @@ from app.crud import (
 from app.panchang import PanchangCalculator
 from app import daiva_setu  # Genesis Protocol (Level 15)
 from app.sync_engine import sync_engine
+from app.shaswata_service import (
+    populate_upcoming_events, get_upcoming_events,
+    mark_event_dispatched, record_delivery_feedback, dispatch_adhoc_event,
+    get_pending_delivery_checks, get_communication_history,
+    MessagingService
+)
 
 # Authentication Imports
 from passlib.context import CryptContext
@@ -268,6 +275,210 @@ def delete_user(
     db.delete(user)
     db.commit()
     return {"message": f"User '{user.username}' deleted successfully"}
+
+
+@app.put("/users/me/password", tags=["User Management"])
+def change_my_password(
+    data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change the current user's password"""
+    # Verify current password
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Update password
+    current_user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    
+    # Log the action
+    audit = AuditLog(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="USER",
+        resource_id=str(current_user.id),
+        details='{"field": "password", "note": "Password changed by user"}'
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}
+
+
+# =============================================================================
+# API Routes - System Settings
+# =============================================================================
+
+@app.get("/settings", response_model=List[SystemSettingResponse], tags=["Settings"])
+def get_all_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all system settings"""
+    return db.query(SystemSetting).order_by(SystemSetting.category, SystemSetting.key).all()
+
+
+@app.put("/settings", tags=["Settings"])
+def update_settings(
+    data: SystemSettingUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Batch update system settings (Admin only)"""
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can update settings"
+        )
+    
+    updated_keys = []
+    for key, value in data.settings.items():
+        setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+        if setting:
+            old_value = setting.value
+            setting.value = str(value)
+            updated_keys.append(key)
+        else:
+            # Create new setting if it doesn't exist
+            new_setting = SystemSetting(key=key, value=str(value))
+            db.add(new_setting)
+            updated_keys.append(key)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="SETTING",
+        details=f'{{"updated_keys": {updated_keys}}}'
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {"message": f"Updated {len(updated_keys)} settings", "updated_keys": updated_keys}
+
+
+# =============================================================================
+# API Routes - System Operations
+# =============================================================================
+
+@app.get("/system/backup", tags=["System"])
+def download_backup(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Download the SQLite database file as backup (Admin only)"""
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can download backups"
+        )
+    
+    # Determine DB path from database.py
+    from app.database import DATABASE_PATH as DB_PATH
+    
+    if not os.path.exists(DB_PATH):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Database file not found"
+        )
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="BACKUP",
+        resource_type="DATABASE",
+        details='{"action": "Database backup downloaded"}'
+    )
+    db.add(audit)
+    db.commit()
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"star_temple_backup_{timestamp}.db"
+    
+    return FileResponse(
+        path=DB_PATH,
+        filename=filename,
+        media_type="application/octet-stream"
+    )
+
+
+@app.get("/system/health", tags=["System"])
+def system_health(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get system health stats: DB size, record counts, uptime"""
+    from app.database import DATABASE_PATH as DB_PATH
+    from app.models import Devotee, ShaswataSubscription, Transaction
+    
+    # DB file size
+    db_size_bytes = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+    db_size_mb = round(db_size_bytes / (1024 * 1024), 2)
+    
+    # Record counts
+    total_sevas = db.query(func.count(SevaCatalog.id)).scalar() or 0
+    active_sevas = db.query(func.count(SevaCatalog.id)).filter(SevaCatalog.is_active == True).scalar() or 0
+    total_devotees = db.query(func.count(Devotee.id)).scalar() or 0
+    total_subscriptions = db.query(func.count(ShaswataSubscription.id)).scalar() or 0
+    total_transactions = db.query(func.count(Transaction.id)).scalar() or 0
+    total_users = db.query(func.count(User.id)).scalar() or 0
+    
+    return {
+        "database": {
+            "size_mb": db_size_mb,
+            "size_bytes": db_size_bytes,
+            "path": str(DB_PATH)
+        },
+        "records": {
+            "total_sevas": total_sevas,
+            "active_sevas": active_sevas,
+            "total_devotees": total_devotees,
+            "total_subscriptions": total_subscriptions,
+            "total_transactions": total_transactions,
+            "total_users": total_users
+        },
+        "server": {
+            "version": "0.0.00",
+            "status": "running"
+        }
+    }
+
+
+# =============================================================================
+# API Routes - Audit Logs
+# =============================================================================
+
+@app.get("/audit-logs", response_model=List[AuditLogResponse], tags=["Audit"])
+def get_audit_logs(
+    limit: int = 50,
+    offset: int = 0,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get paginated audit logs (Admin only)"""
+    if current_user.role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Admins can view audit logs"
+        )
+    
+    query = db.query(AuditLog)
+    
+    if action:
+        query = query.filter(AuditLog.action == action.upper())
+    if resource_type:
+        query = query.filter(AuditLog.resource_type == resource_type.upper())
+    
+    return query.order_by(AuditLog.timestamp.desc()).offset(offset).limit(limit).all()
 
 # =============================================================================
 # API Routes - Health & Sevas
@@ -909,28 +1120,226 @@ def get_subscriptions_pending_feedback(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 # =============================================================================
+# API Routes - Shaswata Phase 2 (Event Lifecycle & Messaging)
+# =============================================================================
+
+@app.post("/shaswata/events/populate", tags=["Shaswata Manager"])
+def populate_shaswata_events(days: int = 30, db: Session = Depends(get_db)):
+    """
+    Populate shaswata_events for the next N days.
+    Scans all active subscriptions and creates PENDING events.
+    Idempotent: safe to call multiple times.
+    """
+    try:
+        result = populate_upcoming_events(db, days_ahead=days)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Event population failed: {str(e)}")
+
+
+@app.get("/shaswata/upcoming", tags=["Shaswata Manager"])
+def get_upcoming_shaswata(days: int = 30, db: Session = Depends(get_db)):
+    """
+    Get all upcoming Shaswata events for the admin dashboard.
+    Returns enriched data with devotee details and lifecycle status.
+    """
+    try:
+        events = get_upcoming_events(db, days_ahead=days)
+        return {
+            "count": len(events),
+            "events": events
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@app.post("/shaswata/events/{event_id}/dispatch", tags=["Shaswata Manager"])
+def dispatch_event(
+    event_id: int,
+    dispatch_ref: Optional[str] = None,
+    dispatch_method: str = "POST",
+    db: Session = Depends(get_db)
+):
+    """
+    Mark a specific event as DISPATCHED with optional tracking reference.
+    Also sends a notification to the devotee.
+    """
+    try:
+        return mark_event_dispatched(db, event_id, dispatch_ref, dispatch_method)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dispatch failed: {str(e)}")
+
+
+@app.post("/shaswata/events/{event_id}/delivery-feedback", tags=["Shaswata Manager"])
+def submit_delivery_feedback(
+    event_id: int,
+    received: bool = True,
+    notes: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Record delivery feedback from a devotee.
+    received=True  → Status = DELIVERED (happy path)
+    received=False → Status = NOT_RECEIVED or ADDRESS_CHANGED (follow-up needed)
+    """
+    try:
+        return record_delivery_feedback(db, event_id, received, notes)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feedback recording failed: {str(e)}")
+
+
+@app.get("/shaswata/pending-delivery-checks", tags=["Shaswata Manager"])
+def pending_delivery_checks(db: Session = Depends(get_db)):
+    """
+    Get events dispatched 4+ days ago that haven't been checked for delivery.
+    Admin should send 'Did you receive Prasadam?' message to these devotees.
+    """
+    try:
+        checks = get_pending_delivery_checks(db)
+        return {"count": len(checks), "pending": checks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@app.post("/shaswata/dispatch-adhoc", tags=["Shaswata Manager"])
+def legacy_dispatch_adapter(
+    payload: ShaswataDispatchAdhoc,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Unified Dispatch Endpoint.
+    Handles ad-hoc dispatch for manual 'Send Prasadam' actions in Search/Calendar view.
+    Ensures event exists -> Marks Dispatched -> Logs Communication.
+    """
+    if current_user.role.lower() not in ["admin", "clerk"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    try:
+        return dispatch_adhoc_event(
+            db, 
+            payload.subscription_id, 
+            payload.dispatch_date, 
+            payload.dispatch_ref, 
+            payload.dispatch_method
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/shaswata/events/{event_id}/send-reminder", tags=["Shaswata Manager"])
+def send_event_reminder(event_id: int, db: Session = Depends(get_db)):
+    """
+    Send a 'Pooja Tomorrow' reminder for a specific event.
+    V1: Logs to console + communication_logs table.
+    """
+    try:
+        return MessagingService.send_reminder(db, event_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reminder failed: {str(e)}")
+
+
+@app.post("/shaswata/events/{event_id}/send-delivery-check", tags=["Shaswata Manager"])
+def send_delivery_check_message(event_id: int, db: Session = Depends(get_db)):
+    """
+    Send a 'Did you receive Prasadam?' message for a dispatched event.
+    """
+    try:
+        return MessagingService.send_delivery_check(db, event_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delivery check failed: {str(e)}")
+
+
+@app.get("/shaswata/communication-history", tags=["Shaswata Manager"])
+def get_comm_history(
+    devotee_id: Optional[int] = None,
+    subscription_id: Optional[int] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Get communication history for a devotee or subscription.
+    Used in the admin detail panel to see all messages sent.
+    """
+    try:
+        history = get_communication_history(db, devotee_id, subscription_id, limit)
+        return {"count": len(history), "messages": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+# =============================================================================
 # API Routes - Priest Dashboard
 # =============================================================================
 
 @app.get("/daily-sankalpa", tags=["Priest Dashboard"])
-def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
+def get_daily_sankalpa(date_str: str = None, lang: str = "en", db: Session = Depends(get_db)):
     """
-    Get daily sankalpa/schedule. 
+    Get daily sankalpa/schedule with cached Panchangam. 
     If date_str provided (DD-MM-YYYY), use that date. 
     Otherwise default to today.
     """
+    import json as json_lib
+    import hashlib
+    
     try:
         if date_str:
-            # Parse DD-MM-YYYY format
             target_date = datetime.strptime(date_str, "%d-%m-%Y").date()
         else:
             target_date = date.today()
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use DD-MM-YYYY")
 
-    # Calculate Panchangam using Astronomical Data
-    pc = PanchangCalculator()
-    panchangam = pc.calculate(target_date) # Returns Rich JSON Object
+    # ── Read Location & Ayanamsa from SystemSettings ──
+    def _get_setting(key, default):
+        s = db.query(SystemSetting).filter_by(key=key).first()
+        return s.value if s else default
+    
+    temple_lat = _get_setting("temple_lat", "12.6745")
+    temple_lon = _get_setting("temple_lon", "75.3370")
+    temple_elev = _get_setting("temple_elevation", "120")
+    ayanamsa = _get_setting("panchang_ayanamsa", "lahiri")
+    cache_version = int(_get_setting("panchang_cache_version", "1"))
+    
+    location_hash = hashlib.md5(f"{temple_lat}:{temple_lon}:{ayanamsa}".encode()).hexdigest()[:12]
+
+    # ── Cache Check ──
+    cached = db.query(DailyPanchang).filter_by(date=target_date).first()
+    if cached and cached.version == cache_version and cached.location_hash == location_hash:
+        panchangam = json_lib.loads(cached.data_json)
+    else:
+        # Calculate fresh
+        pc = PanchangCalculator(
+            lat=temple_lat,
+            lon=temple_lon,
+            elevation=temple_elev,
+            ayanamsa=ayanamsa
+        )
+        panchangam = pc.calculate(target_date, lang=lang)
+        
+        # Save to cache
+        try:
+            if cached:
+                cached.data_json = json_lib.dumps(panchangam, ensure_ascii=False)
+                cached.version = cache_version
+                cached.location_hash = location_hash
+            else:
+                new_cache = DailyPanchang(
+                    date=target_date,
+                    data_json=json_lib.dumps(panchangam, ensure_ascii=False),
+                    version=cache_version,
+                    location_hash=location_hash
+                )
+                db.add(new_cache)
+            db.commit()
+        except Exception as cache_err:
+            print(f"[WARN] Panchang cache write failed: {cache_err}")
+            db.rollback()
     
     # 1. Lunar Query - Find subscriptions matching TODAY's Tithi
     lunar_query = text("""
@@ -1013,7 +1422,7 @@ def get_daily_sankalpa(date_str: str = None, db: Session = Depends(get_db)):
         "panchangam": panchangam,
         "pujas": lunar_pujas + gregorian_pujas + transaction_pujas,
         "revenue": daily_revenue,
-        "festivals": [panchangam["is_festival"]] if panchangam["is_festival"] else (["Shiva Rathri (Upcoming)", "Pradosha"] if panchangam["attributes"]["maasa"] == "Magha" else ["Daily Sevas"])
+        "festivals": [panchangam["is_festival"]] if panchangam.get("is_festival") else (["Shiva Rathri (Upcoming)", "Pradosha"] if panchangam["attributes"]["maasa"] == "Magha" else ["Daily Sevas"])
     }
 
 # =============================================================================

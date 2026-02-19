@@ -293,6 +293,15 @@ class ShaswataCreate(BaseModel):
         }
 
 
+
+class ShaswataDispatchAdhoc(BaseModel):
+    """Schema for manual event dispatch (ad-hoc creation)"""
+    subscription_id: int = Field(..., description="ID of the subscription to dispatch for")
+    dispatch_date: date = Field(..., description="The date of the event being dispatched")
+    dispatch_ref: Optional[str] = Field(None, max_length=50, description="Courier/Post reference number")
+    dispatch_method: str = Field("POST", max_length=20, description="Dispatch method (POST, COURIER, HAND)")
+
+
 # =============================================================================
 # Response Schemas (for sending data)
 # =============================================================================
@@ -404,3 +413,44 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+# =============================================================================
+# Settings & Admin Schemas
+# =============================================================================
+
+class PasswordChange(BaseModel):
+    """Schema for changing the current user's password"""
+    current_password: str = Field(..., min_length=1, description="Current password for verification")
+    new_password: str = Field(..., min_length=6, max_length=100, description="New password (min 6 chars)")
+
+
+class SystemSettingResponse(BaseModel):
+    """Response schema for a single system setting"""
+    key: str
+    value: Optional[str] = None
+    value_type: str = "STRING"
+    description: Optional[str] = None
+    category: str = "general"
+
+    class Config:
+        from_attributes = True
+
+
+class SystemSettingUpdate(BaseModel):
+    """Schema for batch-updating system settings"""
+    settings: dict = Field(..., description="Key-value pairs to update, e.g. {'printer_margin': '10', 'auto_backup': 'true'}")
+
+
+class AuditLogResponse(BaseModel):
+    """Response schema for audit log entries"""
+    id: int
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    action: str
+    resource_type: str
+    resource_id: Optional[str] = None
+    details: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

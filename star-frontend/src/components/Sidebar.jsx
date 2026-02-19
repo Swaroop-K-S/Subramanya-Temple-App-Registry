@@ -9,7 +9,7 @@ const Sidebar = ({ activePage, setActivePage, handleLogout, user }) => {
         { id: 'panchangam', icon: Calendar, label: 'Panchangam', allowed: ['admin', 'clerk'] },
         { id: 'daily', icon: ScrollText, label: 'Daily Txns', allowed: ['admin'] },
         { id: 'reports', icon: IndianRupee, label: 'Reports', allowed: ['admin'] },
-        { id: 'dispatch', icon: Truck, label: 'Shaswata Pooja', allowed: ['admin', 'clerk'] }, // Assuming clerks can book
+        { id: 'dispatch', icon: Truck, label: 'Shaswata Seva', allowed: ['admin', 'clerk'] },
         { id: 'settings', icon: Settings, label: 'Settings', allowed: ['admin'] }
     ];
 

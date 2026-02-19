@@ -21,7 +21,7 @@ import Login from './components/Login';
 import Sidebar from './components/Sidebar';  // [NEW] Floating Sidebar
 import Navbar from './components/Navbar';    // [NEW] Celestial Navbar
 import GenesisChat from './components/GenesisChat'; // [NEW] Daiva-Setu AI Interface
-import PrasadamDispatch from './components/PrasadamDispatch'; // [NEW] Logistics
+import ShaswataUnified from './components/ShaswataUnified'; // [UNIFIED] Shaswata Seva
 import DailyTransactions from './components/DailyTransactions'; // [NEW] Phase 3
 
 import api from './services/api'; // [NEW] API Service
@@ -95,7 +95,7 @@ function App() {
     if (!role) return false;
     if (role === 'admin') return true;
     // Clerk access
-    if (['home', 'panchangam', 'shaswata'].includes(page)) return true;
+    if (['home', 'panchangam', 'shaswata', 'dispatch'].includes(page)) return true;
     return false;
   };
 
@@ -145,7 +145,7 @@ function App() {
         {activePage === 'shaswata' && <ShaswataForm onBack={() => setActivePage('home')} />}
 
         {activePage === 'reports' && canAccess(user?.role, 'reports') && <ReportsDashboard onBack={() => setActivePage('home')} />}
-        {activePage === 'dispatch' && <PrasadamDispatch onBack={() => setActivePage('home')} lang={lang} />}
+        {activePage === 'dispatch' && <ShaswataUnified onBack={() => setActivePage('home')} lang={lang} />}
         {activePage === 'panchangam' && <Panchangam />}
         {activePage === 'settings' && canAccess(user?.role, 'settings') && <Settings onBack={() => setActivePage('home')} />}
 

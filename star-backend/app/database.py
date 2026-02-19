@@ -159,6 +159,60 @@ def init_database():
             conn.commit()
             print("[MIGRATE] Ensured performance indexes and Phase 2 columns on transactions")
             
+            # ==================================================================
+            # SHASWATA PHASE 1: New tables & columns for lifecycle tracking
+            # ==================================================================
+            
+            # 1. Add new columns to shaswata_subscriptions
+            _add_column_if_missing("shaswata_subscriptions", "communication_preference", "VARCHAR(20) DEFAULT 'WHATSAPP'")
+            _add_column_if_missing("shaswata_subscriptions", "last_address_confirmed_at", "DATE")
+            
+            # 2. Create shaswata_events table (annual lifecycle tracking)
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS shaswata_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subscription_id INTEGER NOT NULL REFERENCES shaswata_subscriptions(id) ON DELETE CASCADE,
+                    scheduled_date DATE NOT NULL,
+                    year INTEGER NOT NULL,
+                    status VARCHAR(20) DEFAULT 'PENDING',
+                    pooja_completed_at DATETIME,
+                    dispatch_date DATE,
+                    dispatch_ref VARCHAR(100),
+                    dispatch_method VARCHAR(30),
+                    delivery_status VARCHAR(20),
+                    delivery_checked_at DATE,
+                    delivery_notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME
+                )
+            """))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_date ON shaswata_events(scheduled_date)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_status ON shaswata_events(status)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_sub ON shaswata_events(subscription_id)"))
+            
+            # 3. Create communication_logs table (message audit trail)
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS communication_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    devotee_id INTEGER NOT NULL REFERENCES devotees(id) ON DELETE CASCADE,
+                    subscription_id INTEGER REFERENCES shaswata_subscriptions(id) ON DELETE SET NULL,
+                    event_id INTEGER REFERENCES shaswata_events(id) ON DELETE SET NULL,
+                    message_type VARCHAR(30) NOT NULL,
+                    channel VARCHAR(20) NOT NULL,
+                    recipient_phone VARCHAR(15),
+                    status VARCHAR(20) DEFAULT 'SENT',
+                    error_message TEXT,
+                    message_preview TEXT,
+                    sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    sent_by_user_id INTEGER
+                )
+            """))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_comm_logs_devotee ON communication_logs(devotee_id)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_comm_logs_type ON communication_logs(message_type)"))
+            
+            conn.commit()
+            print("[MIGRATE] Phase 1 Shaswata tables & indexes created successfully")
+            
     except Exception as e:
         print(f"[WARN] Migration check: {e}")
     
@@ -202,6 +256,30 @@ def init_database():
             print(f"[OK] Seeded {len(default_sevas)} sevas.")
     except Exception as e:
         print(f"Error seeding sevas: {e}")
+
+    # Seed default Panchangam system settings if missing
+    try:
+        from .models import SystemSetting
+        panchang_defaults = [
+            SystemSetting(key="temple_lat", value="12.6745", value_type="STRING",
+                          description="Temple Latitude (default: Kukke Subramanya)", category="panchang"),
+            SystemSetting(key="temple_lon", value="75.3370", value_type="STRING",
+                          description="Temple Longitude (default: Kukke Subramanya)", category="panchang"),
+            SystemSetting(key="temple_elevation", value="120", value_type="INTEGER",
+                          description="Temple Elevation in meters", category="panchang"),
+            SystemSetting(key="panchang_ayanamsa", value="lahiri", value_type="STRING",
+                          description="Ayanamsa system (lahiri / raman / kp)", category="panchang"),
+            SystemSetting(key="panchang_cache_version", value="1", value_type="INTEGER",
+                          description="Bump to invalidate cached panchang data", category="panchang"),
+        ]
+        for setting in panchang_defaults:
+            existing = session.query(SystemSetting).filter_by(key=setting.key).first()
+            if not existing:
+                session.add(setting)
+        session.commit()
+        print("[OK] Ensured Panchangam system settings exist.")
+    except Exception as e:
+        print(f"Error seeding panchang settings: {e}")
 
     finally:
         session.close()

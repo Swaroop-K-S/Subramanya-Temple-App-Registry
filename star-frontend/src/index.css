@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
@@ -6,7 +7,7 @@
    ========================================================================== */
 
 /* 1. Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+/* Fonts imported at top */
 
 @theme {
   /* Semantic Colors - Divine Palette */
@@ -327,4 +328,40 @@ h4 {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.5);
+}
+
+/* ═══ PRINT STYLES ═══ */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .print\\:hidden,
+  nav,
+  aside,
+  [data-sidebar],
+  header {
+    display: none !important;
+  }
+
+  .glass-card {
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .print\\:p-2 {
+    padding: 0.5rem !important;
+  }
+
+  .print\\:max-w-none {
+    max-width: 100% !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
