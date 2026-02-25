@@ -4,10 +4,11 @@ import {
     Plus, Trash2, Globe, Bell, Server, FileText, Download, Upload,
     IndianRupee, Edit, RefreshCw, Search, AlertTriangle, Lock, Eye, EyeOff,
     CheckCircle2, X, Loader2, Skull, Package, HardDrive, Clock, Hash,
-    ChevronRight, Save, RotateCcw
+    ChevronRight, Save, RotateCcw, MapPin, Calendar
 } from 'lucide-react';
 import api, { getCurrentUser } from '../services/api';
 import { OmniToggle, OmniInput } from './ui/Widgets';
+import { TRANSLATIONS } from './translations';
 
 // ─── Toast Notification System ───────────────────────────────────────────────
 function Toast({ toast, onDismiss }) {
@@ -33,17 +34,19 @@ function ToastContainer({ toasts, onDismiss }) {
 }
 
 // ─── Sidebar Navigation Items ────────────────────────────────────────────────
-const NAV_ITEMS = [
-    { id: 'general', label: 'General', icon: Settings2, desc: 'Profile & App Info' },
-    { id: 'sevas', label: 'Seva Catalog', icon: Package, desc: 'Pricing & Management' },
-    { id: 'staff', label: 'Staff Access', icon: Shield, desc: 'User Management' },
-    { id: 'database', label: 'Data & Backup', icon: Database, desc: 'Backup & Recovery' },
-    { id: 'printer', label: 'Printing', icon: Printer, desc: 'Thermal Config' },
-    { id: 'audit', label: 'Audit Logs', icon: FileText, desc: 'Activity History' },
+const NAV_ITEMS_BASE = [
+    { id: 'general', labelKey: 'general', icon: Settings2, descKey: 'profileAppInfo' },
+    { id: 'sevas', labelKey: 'sevaCatalog', icon: Package, descKey: 'pricingManagement' },
+    { id: 'staff', labelKey: 'staffAccess', icon: Shield, descKey: 'userManagement' },
+    { id: 'database', labelKey: 'dataBackup', icon: Database, descKey: 'backupRecovery' },
+    { id: 'panchangam', labelKey: 'panchangamSettings', icon: Calendar, descKey: 'locationAyanamsa' },
+    { id: 'printer', labelKey: 'printerSettings', icon: Printer, descKey: 'thermalConfig' },
+    { id: 'audit', labelKey: 'auditLogs', icon: FileText, descKey: 'activityHistory' },
 ];
 
 // ─── Main Settings Component ─────────────────────────────────────────────────
-function Settings({ onBack }) {
+function Settings({ onBack, lang = 'EN' }) {
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
     const [activeTab, setActiveTab] = useState('general');
     const [toasts, setToasts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -524,6 +527,84 @@ function Settings({ onBack }) {
         </div>
     );
 
+    const PanchangamPanel = () => {
+        const handleInvalidateCache = async () => {
+            try {
+                const ver = parseInt(localSettings.panchang_cache_version || '1') + 1;
+                handleSettingChange('panchang_cache_version', String(ver));
+                await api.put('/settings', { settings: { ...localSettings, panchang_cache_version: String(ver) } });
+                setSettings(p => ({ ...p, panchang_cache_version: String(ver) }));
+                setSettingsDirty(false);
+                showToast('Cache invalidated! Panchangam will recalculate.');
+            } catch { showToast('Failed to invalidate cache', 'error'); }
+        };
+
+        return (
+            <div className="space-y-5">
+                <SectionHeader icon={Calendar} title="Panchangam Configuration" subtitle="Location & Ayanamsa settings" />
+                <GlassCard>
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-white/80 mb-3 flex items-center gap-2">
+                        <MapPin size={14} className="text-amber-500" /> Temple Location
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-white/40 mb-4">
+                        Sunrise, sunset, and all Panchangam calculations use this location.
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="text-xs text-slate-500 dark:text-white/40">Latitude (°N)</label>
+                            <InputField type="number" step="0.0001" value={localSettings.temple_lat || '12.6745'}
+                                onChange={e => handleSettingChange('temple_lat', e.target.value)} className="w-full mt-1" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 dark:text-white/40">Longitude (°E)</label>
+                            <InputField type="number" step="0.0001" value={localSettings.temple_lon || '75.3370'}
+                                onChange={e => handleSettingChange('temple_lon', e.target.value)} className="w-full mt-1" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 dark:text-white/40">Elevation (m)</label>
+                            <InputField type="number" value={localSettings.temple_elevation || '120'}
+                                onChange={e => handleSettingChange('temple_elevation', e.target.value)} className="w-full mt-1" />
+                        </div>
+                    </div>
+                    <div className="mt-2 p-2 bg-slate-100 dark:bg-black/20 rounded-lg text-xs text-slate-400 dark:text-white/30">
+                        Default: Kukke Subramanya (12.6745°N, 75.3370°E, 120m)
+                    </div>
+                </GlassCard>
+
+                <GlassCard>
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-white/80 mb-3 flex items-center gap-2">
+                        <Globe size={14} className="text-purple-500" /> Ayanamsa System
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-white/40 mb-4">
+                        The precession correction used for sidereal longitude calculations.
+                    </p>
+                    <SelectField value={localSettings.panchang_ayanamsa || 'lahiri'}
+                        onChange={e => handleSettingChange('panchang_ayanamsa', e.target.value)} className="w-full">
+                        <option value="lahiri">Lahiri (Chitrapaksha) — Most Common</option>
+                        <option value="raman">Raman — Traditional</option>
+                        <option value="kp">Krishnamurti (KP) — KP Astrology</option>
+                    </SelectField>
+                </GlassCard>
+
+                <div className="flex gap-3">
+                    {settingsDirty && (
+                        <button onClick={async () => {
+                            await handleSaveSettings();
+                            handleInvalidateCache();
+                        }}
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 transition-all">
+                            <Save size={14} /> Save & Recalculate
+                        </button>
+                    )}
+                    <button onClick={handleInvalidateCache}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl bg-purple-50 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/30 transition-all font-medium">
+                        <RefreshCw size={14} /> Force Recalculate All
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     const PrinterPanel = () => (
         <div className="space-y-5">
             <SectionHeader icon={Printer} title="Thermal Printer" subtitle="Receipt formatting options" />
@@ -599,7 +680,7 @@ function Settings({ onBack }) {
     // ═══════════════════════════════════════════════════════════════════════════
     // RENDER
     // ═══════════════════════════════════════════════════════════════════════════
-    const panels = { general: GeneralPanel, sevas: SevaCatalogPanel, staff: StaffPanel, database: DatabasePanel, printer: PrinterPanel, audit: AuditPanel };
+    const panels = { general: GeneralPanel, sevas: SevaCatalogPanel, staff: StaffPanel, database: DatabasePanel, panchangam: PanchangamPanel, printer: PrinterPanel, audit: AuditPanel };
     const ActivePanel = panels[activeTab] || GeneralPanel;
 
     return (
@@ -611,27 +692,31 @@ function Settings({ onBack }) {
                     <Settings2 size={20} className="text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Settings</h1>
+                    <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">{t.settingsTitle || "Settings"}</h1>
                     <p className="text-xs text-slate-400 dark:text-white/40">Admin Control Center • S.T.A.R.</p>
                 </div>
             </div>
             {/* Body */}
             <div className="flex flex-1 overflow-hidden">
                 <nav className="w-56 border-r border-slate-200 dark:border-white/5 py-3 px-2 overflow-y-auto shrink-0">
-                    {NAV_ITEMS.map(item => (
-                        <button key={item.id} onClick={() => setActiveTab(item.id)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 text-left transition-all ${activeTab === item.id
-                                ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-500/15 dark:to-orange-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-300 shadow-sm'
-                                : 'text-slate-500 dark:text-white/50 hover:text-slate-700 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent'
-                                }`}>
-                            <item.icon size={16} className={activeTab === item.id ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-white/30'} />
-                            <div>
-                                <p className="text-sm font-medium leading-tight">{item.label}</p>
-                                <p className="text-[10px] opacity-50 leading-tight">{item.desc}</p>
-                            </div>
-                            {activeTab === item.id && <ChevronRight size={12} className="ml-auto text-amber-400 dark:text-amber-500/50" />}
-                        </button>
-                    ))}
+                    {NAV_ITEMS_BASE.map(item => {
+                        const label = t[item.labelKey] || item.labelKey;
+                        const desc = t[item.descKey] || item.descKey;
+                        return (
+                            <button key={item.id} onClick={() => setActiveTab(item.id)}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 text-left transition-all ${activeTab === item.id
+                                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-500/15 dark:to-orange-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-300 shadow-sm'
+                                    : 'text-slate-500 dark:text-white/50 hover:text-slate-700 dark:hover:text-white/80 hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent'
+                                    }`}>
+                                <item.icon size={16} className={activeTab === item.id ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-white/30'} />
+                                <div>
+                                    <p className="text-sm font-medium leading-tight">{label}</p>
+                                    <p className="text-[10px] opacity-50 leading-tight">{desc}</p>
+                                </div>
+                                {activeTab === item.id && <ChevronRight size={12} className="ml-auto text-amber-400 dark:text-amber-500/50" />}
+                            </button>
+                        );
+                    })}
                 </nav>
                 <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                     <ActivePanel />

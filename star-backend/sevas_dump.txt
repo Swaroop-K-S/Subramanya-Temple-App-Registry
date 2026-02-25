@@ -1,0 +1,8 @@
+1: Kunkuma Archane -> ಕುಂಕುಮ ಅರ್ಚನೆ
+2: Panchambruta Abhisheka -> ಪಂಚಾಮೃತ ಅಭಿಷೇಕ
+3: Ksheera Abhisheka -> ಕ್ಷೀರಾಭಿಷೇಕ
+4: Rudra Abhisheka -> ರುದ್ರ ಅಭಿಷೇಕ
+5: Anna Dhana Nidhi -> ಅನ್ನ ದಾನ ನಿಧಿ
+6: General -> ಸಾಮಾನ್ಯ
+7: Rajata Ashtottara Seva -> ರಜತ ಅಷ್ಟೋತ್ತರ ಸೇವೆ
+8: Shaswata Brahmachari Pooja -> ಶಾಶ್ವತ ಬ್ರಹ್ಮಚಾರಿ ಪೂಜೆ

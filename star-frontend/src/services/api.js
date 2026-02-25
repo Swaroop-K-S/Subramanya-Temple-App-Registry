@@ -14,18 +14,18 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    withCredentials: true // Extremely important: sends HttpOnly cookie with every request
 });
 
-// Add a request interceptor to include the JWT token
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('access_token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
+// We no longer need the interceptor as the browser handles the cookie automatically
+// But we still need an interceptor for handling 401 Unauthorized responses
+api.interceptors.response.use(
+    (response) => response,
     (error) => {
+        if (error.response && error.response.status === 401) {
+            // Tell the app to log out (since token is invalid or expired)
+            window.dispatchEvent(new Event('unauthorized'));
+        }
         return Promise.reject(error);
     }
 );
@@ -82,8 +82,9 @@ export const getSevaById = async (sevaId) => {
  * @param {string} bookingData.payment_mode - 'CASH' or 'UPI'
  * @returns {Promise<Object>} Transaction response with receipt number
  */
-export const bookSeva = async (bookingData) => {
-    const response = await api.post('/book-seva', bookingData);
+export const bookSeva = async (bookingData, idempotencyKey = null) => {
+    const config = idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {};
+    const response = await api.post('/book-seva', bookingData, config);
     return response.data;
 };
 

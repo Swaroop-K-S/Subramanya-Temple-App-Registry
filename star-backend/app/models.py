@@ -149,6 +149,7 @@ class Devotee(Base):
     
     # Audit columns
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_active = Column(Boolean, default=True)
     history = Column(Text, nullable=True)                  # JSON string of past bookings
     
     # Sync Metadata
@@ -266,6 +267,7 @@ class ShaswataEvent(Base):
     # Audit
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    is_active = Column(Boolean, default=True)
     
     # Relationships
     subscription = relationship("ShaswataSubscription", back_populates="events")
@@ -336,6 +338,7 @@ class Transaction(Base):
     
     # Meta
     notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
     
     # Sync Metadata
     synced = Column(Boolean, default=False)

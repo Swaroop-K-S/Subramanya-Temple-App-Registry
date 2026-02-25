@@ -5,6 +5,7 @@ import {
     ChevronLeft, ChevronRight, Compass, Clock, Eye, Leaf, PartyPopper, Info
 } from 'lucide-react';
 import api from '../services/api';
+import { TRANSLATIONS } from './translations';
 import CelestialCycle from './CelestialCycle';
 import { useTempleTime } from '../context/TimeContext';
 
@@ -66,9 +67,9 @@ const AngaCard = ({ icon, label, value, glossary }) => (
             <div className="mt-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <p className="text-[9px] text-temple-stone/50 dark:text-slate-500 italic">{glossary.meaning}</p>
                 <span className={`inline-block mt-0.5 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${glossary.nature?.includes('Very Auspicious') ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        glossary.nature?.includes('Auspicious') ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' :
-                            glossary.nature?.includes('Inauspicious') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
-                                'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                    glossary.nature?.includes('Auspicious') ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' :
+                        glossary.nature?.includes('Inauspicious') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                     }`}>{glossary.nature}</span>
             </div>
         )}
@@ -89,7 +90,8 @@ const MiniStatCard = ({ icon: Icon, iconColor, label, value }) => (
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
-const Panchangam = () => {
+const Panchangam = ({ lang = 'EN' }) => {
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
     const { currentDate, isNewDay } = useTempleTime();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -110,18 +112,19 @@ const Panchangam = () => {
         }
     }, [isNewDay, currentDate]);
 
-    useEffect(() => { fetchPanchangam(); }, [selectedDate]);
+    useEffect(() => { fetchPanchangam(); }, [selectedDate, lang]);
 
     const fetchPanchangam = async () => {
         try {
             setLoading(true);
             setError(null);
             const [year, month, day] = selectedDate.split('-');
-            const response = await api.get(`/daily-sankalpa?date_str=${day}-${month}-${year}`);
+            // Pass lang param to backend for localized data
+            const response = await api.get(`/daily-sankalpa?date_str=${day}-${month}-${year}&lang=${lang}`);
             setData(response.data.panchangam);
         } catch (err) {
             console.error("Error fetching panchangam:", err);
-            setError("Failed to load Divine Almanac");
+            setError(t.failedToLoadAlmanac || "Failed to load Divine Almanac");
         } finally {
             setLoading(false);
         }
@@ -172,8 +175,8 @@ const Panchangam = () => {
                         <Sun className="w-16 h-16 text-temple-saffron opacity-10" />
                     </div>
                 </div>
-                <p className="mt-6 text-temple-brown dark:text-amber-100 font-heading font-bold animate-pulse text-lg">Loading Divine Almanac...</p>
-                <p className="text-[10px] text-temple-stone/40 dark:text-slate-500 mt-1 uppercase tracking-widest">Calculating celestial positions</p>
+                <p className="mt-6 text-temple-brown dark:text-amber-100 font-heading font-bold animate-pulse text-lg">{t.loadingAlmanac || "Loading Divine Almanac..."}</p>
+                <p className="text-[10px] text-temple-stone/40 dark:text-slate-500 mt-1 uppercase tracking-widest">{t.calculatingPositions || "Calculating celestial positions"}</p>
             </div>
         );
     }
@@ -184,9 +187,9 @@ const Panchangam = () => {
             <div className="max-w-md mx-auto mt-20 p-8 text-center bg-red-50 dark:bg-red-950/30 rounded-3xl border border-red-100 dark:border-red-900/30 shadow-lg">
                 <ShieldAlert className="w-14 h-14 mx-auto mb-4 text-red-400 opacity-60" />
                 <p className="font-heading font-bold text-lg text-red-700 dark:text-red-300">{error || "Data unavailable"}</p>
-                <p className="text-xs text-red-400 mt-1">Please check your connection</p>
+                <p className="text-xs text-red-400 mt-1">{t.checkConnection || "Please check your connection"}</p>
                 <button onClick={fetchPanchangam} className="mt-6 px-6 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">
-                    Try Again
+                    {t.tryAgain || "Try Again"}
                 </button>
             </div>
         );
@@ -242,7 +245,7 @@ const Panchangam = () => {
                     </button>
                     {!isToday() && (
                         <button onClick={goToToday} className="px-3 py-2 bg-temple-saffron/10 dark:bg-orange-900/20 border border-temple-saffron/20 dark:border-orange-800/30 rounded-xl text-[11px] font-bold text-temple-saffron hover:bg-temple-saffron/20 transition-all">
-                            Today
+                            {t.today || "Today"}
                         </button>
                     )}
 
@@ -267,7 +270,7 @@ const Panchangam = () => {
                             <Star className="w-6 h-6 text-amber-500 animate-pulse" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-[0.15em]">Today's Observances</p>
+                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-[0.15em]">{t.todaysObservances || "Today's Observances"}</p>
                             <p className="text-lg font-heading font-bold text-amber-800 dark:text-amber-200">
                                 {data.festivals.map(f => f.name_en).join(' • ')}
                             </p>
@@ -320,7 +323,7 @@ const Panchangam = () => {
                 PANCHA-ANGA GRID (The 5 Limbs + Maasa)
                ═══════════════════════════════════════════════ */}
             <div>
-                <SectionTitle icon="🕉️" title="Pancha-Aṅga" subtitle="The Five Limbs of the Day" />
+                <SectionTitle icon="🕉️" title={t.panchaAnga || "Pancha-Aṅga"} subtitle={t.fiveLimbs || "The Five Limbs of the Day"} />
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {[
                         { label: 'Tithi', value: data.attributes?.tithi, glossaryKey: 'tithi' },
@@ -339,7 +342,7 @@ const Panchangam = () => {
                 ZODIAC POSITIONS & TIME MARKERS
                ═══════════════════════════════════════════════ */}
             <div>
-                <SectionTitle icon="🔭" title="Celestial Positions" subtitle="Graha & Chandra" color="text-indigo-500" />
+                <SectionTitle icon="🔭" title={t.celestialPositions || "Celestial Positions"} subtitle={t.grahaChandra || "Graha & Chandra"} color="text-indigo-500" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <MiniStatCard icon={Sun} iconColor="text-amber-500" label="Sūrya Rāshi" value={data.attributes?.sun_rashi} />
                     <MiniStatCard icon={Moon} iconColor="text-blue-400" label="Chandra Rāshi" value={data.attributes?.moon_rashi} />
@@ -353,7 +356,7 @@ const Panchangam = () => {
                ═══════════════════════════════════════════════ */}
             {mc && (
                 <div>
-                    <SectionTitle icon="🌙" title="Chandra Chakra" subtitle="Moon Phase & Cycle" color="text-violet-500" />
+                    <SectionTitle icon="🌙" title={t.chandraCycle || "Chandra Chakra"} subtitle={t.moonPhaseCycle || "Moon Phase & Cycle"} color="text-violet-500" />
                     <div className="glass-card border border-white/60 dark:border-white/10 dark:bg-slate-900/60 p-6 relative overflow-hidden">
                         {/* Decoration */}
                         <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-indigo-500/5 to-transparent dark:from-indigo-400/8 rounded-bl-full pointer-events-none" />
@@ -373,7 +376,7 @@ const Panchangam = () => {
                                 {/* Illumination */}
                                 <div>
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[10px] font-bold text-temple-brown/50 dark:text-amber-100/50 uppercase tracking-[0.12em]">Illumination</span>
+                                        <span className="text-[10px] font-bold text-temple-brown/50 dark:text-amber-100/50 uppercase tracking-[0.12em]">{t.illumination || "Illumination"}</span>
                                         <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 font-heading">{mc.illumination}%</span>
                                     </div>
                                     <div className="h-3 bg-slate-200/80 dark:bg-slate-700/80 rounded-full overflow-hidden shadow-inner">
@@ -422,7 +425,7 @@ const Panchangam = () => {
                ═══════════════════════════════════════════════ */}
             {data.auspicious && (data.auspicious.abhijit_muhurtha || data.auspicious.amrit_kalam) && (
                 <div>
-                    <SectionTitle icon={<Leaf className="w-5 h-5 text-emerald-500" />} title="Shubha Kāla" subtitle="Auspicious Windows" color="text-emerald-500" />
+                    <SectionTitle icon={<Leaf className="w-5 h-5 text-emerald-500" />} title={t.shubhaKala || "Shubha Kāla"} subtitle={t.auspiciousWindows || "Auspicious Windows"} color="text-emerald-500" />
                     <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/15 rounded-2xl border border-emerald-100/80 dark:border-emerald-900/30 p-6 shadow-sm relative overflow-hidden">
                         {/* Subtle sparkle pattern */}
                         <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle, #10b981 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
@@ -431,14 +434,14 @@ const Panchangam = () => {
                                 <div className="text-center bg-white/50 dark:bg-slate-900/30 rounded-xl p-4 border border-emerald-100/50 dark:border-emerald-900/20 group">
                                     <span className="block text-[9px] font-bold text-emerald-500 dark:text-emerald-400/70 uppercase tracking-[0.12em] mb-1">Abhijit Muhūrtha</span>
                                     <span className="font-heading font-bold text-lg text-emerald-700 dark:text-emerald-200">{data.auspicious.abhijit_muhurtha}</span>
-                                    <p className="text-[9px] text-emerald-500/50 dark:text-emerald-500/40 mt-1 italic opacity-0 group-hover:opacity-100 transition-opacity">Universally auspicious midday window</p>
+                                    <p className="text-[9px] text-emerald-500/50 dark:text-emerald-500/40 mt-1 italic opacity-0 group-hover:opacity-100 transition-opacity">{t.abhijitDescription || "Universally auspicious midday window"}</p>
                                 </div>
                             )}
                             {data.auspicious.amrit_kalam && (
                                 <div className="text-center bg-white/50 dark:bg-slate-900/30 rounded-xl p-4 border border-emerald-100/50 dark:border-emerald-900/20 group">
                                     <span className="block text-[9px] font-bold text-emerald-500 dark:text-emerald-400/70 uppercase tracking-[0.12em] mb-1">Amṛit Kālam</span>
                                     <span className="font-heading font-bold text-lg text-emerald-700 dark:text-emerald-200">{data.auspicious.amrit_kalam}</span>
-                                    <p className="text-[9px] text-emerald-500/50 dark:text-emerald-500/40 mt-1 italic opacity-0 group-hover:opacity-100 transition-opacity">Nectar time — excellent for new beginnings</p>
+                                    <p className="text-[9px] text-emerald-500/50 dark:text-emerald-500/40 mt-1 italic opacity-0 group-hover:opacity-100 transition-opacity">{t.amritDescription || "Nectar time — excellent for new beginnings"}</p>
                                 </div>
                             )}
                         </div>
@@ -450,7 +453,7 @@ const Panchangam = () => {
                 INAUSPICIOUS TIMES (Red Zone)
                ═══════════════════════════════════════════════ */}
             <div>
-                <SectionTitle icon={<ShieldAlert className="w-5 h-5 text-red-500" />} title="Ashubha Kāla" subtitle="Inauspicious Periods" color="text-red-500" />
+                <SectionTitle icon={<ShieldAlert className="w-5 h-5 text-red-500" />} title={t.ashubhaKala || "Ashubha Kāla"} subtitle={t.inauspiciousPeriods || "Inauspicious Periods"} color="text-red-500" />
                 <div className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/15 rounded-2xl border border-red-100/80 dark:border-red-900/30 p-6 space-y-5 shadow-sm relative overflow-hidden">
                     {/* Subtle background pattern */}
                     <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.04]" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #ef4444 10px, #ef4444 11px)' }} />
@@ -496,7 +499,7 @@ const Panchangam = () => {
                         className="inline-flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-temple-saffron to-amber-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-1 transition-all duration-300 group"
                     >
                         <ScrollText className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                        <span>Generate Daily Sankalpa</span>
+                        <span>{t.generateSankalpa || "Generate Daily Sankalpa"}</span>
                     </button>
                 ) : (
                     <div className="max-w-3xl mx-auto glass-card dark:bg-slate-900/80 p-8 md:p-10 border-t-4 border-temple-saffron animate-in slide-in-from-bottom duration-500 text-left relative shadow-2xl">
@@ -510,7 +513,7 @@ const Panchangam = () => {
 
                         <div className="text-center mb-8">
                             <Sparkles className="w-8 h-8 text-temple-saffron mx-auto mb-3 opacity-70" />
-                            <h3 className="font-heading font-bold text-2xl text-temple-brown dark:text-amber-100">Daily Sankalpa Mantra</h3>
+                            <h3 className="font-heading font-bold text-2xl text-temple-brown dark:text-amber-100">{t.dailySankalpaMantra || "Daily Sankalpa Mantra"}</h3>
                             <div className="h-1 w-16 bg-gradient-to-r from-temple-saffron/30 to-amber-400/30 mx-auto mt-4 rounded-full" />
                         </div>
 
@@ -525,7 +528,7 @@ const Panchangam = () => {
                                 onClick={() => setShowSankalpa(false)}
                                 className="text-[10px] font-bold text-temple-stone/30 dark:text-slate-600 hover:text-temple-saffron uppercase tracking-[0.15em] transition-colors"
                             >
-                                Close Sankalpa
+                                {t.closeSankalpa || "Close Sankalpa"}
                             </button>
                         </div>
                     </div>

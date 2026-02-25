@@ -4,12 +4,16 @@ import sys
 import os
 import webbrowser
 import threading
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Header, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
+from cachetools import TTLCache
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 import io
@@ -78,9 +82,21 @@ app = FastAPI(
     version="0.0.00"
 )
 
+# Rate Limiting Setup
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Idempotency Cache (5 minutes TTL)
+idempotency_cache = TTLCache(maxsize=1000, ttl=300)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        # Add production frontend URL here when deploying
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,6 +110,24 @@ def startup_event():
     """Initialize database tables on app startup."""
     init_database()
     sync_engine.start()
+    
+    # Run yearly event population in background thread to not block startup
+    import threading
+    def _bg_populate():
+        try:
+            from app.database import SessionLocal
+            from app.shaswata_service import populate_yearly_events
+            db = SessionLocal()
+            try:
+                populate_yearly_events(db)
+                print("[BG] Shaswata yearly events populated.")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"[BG] Shaswata population error: {e}")
+    
+    bg_thread = threading.Thread(target=_bg_populate, daemon=True)
+    bg_thread.start()
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -131,12 +165,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    # Check for token in cookies first, fallback to Authorization header
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -155,7 +200,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 # Auth Routes
 # =============================================================================
 
-@app.post("/create-admin", response_model=Token, tags=["Authentication"])
+from fastapi.responses import JSONResponse
+
+@app.post("/create-admin", tags=["Authentication"])
 def create_initial_admin(db: Session = Depends(get_db)):
     """One-time setup endpoint to create the admin user"""
     # Check if admin already exists
@@ -171,10 +218,22 @@ def create_initial_admin(db: Session = Depends(get_db)):
     
     # Generate token
     access_token = create_access_token(data={"sub": new_user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Create response and set HttpOnly cookie
+    response = JSONResponse(content={"message": "Admin created successfully", "token_type": "bearer"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax", # Required for CORS if frontend and backend differ slightly, though strict is better if same domain
+        secure=False, # Set to True in production with HTTPS
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
+    return response
 
-@app.post("/token", response_model=Token, tags=["Authentication"])
-def login_for_access_token(form_data: UserLogin, db: Session = Depends(get_db)):
+@app.post("/token", tags=["Authentication"])
+@limiter.limit("5/minute")
+def login_for_access_token(request: Request, form_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -187,7 +246,24 @@ def login_for_access_token(form_data: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Create response and set HttpOnly cookie
+    response = JSONResponse(content={"message": "Login successful", "token_type": "bearer"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=False, # Set to True in production with HTTPS
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
+    return response
+
+@app.post("/logout", tags=["Authentication"])
+def logout():
+    response = JSONResponse(content={"message": "Successfully logged out"})
+    response.delete_cookie("access_token")
+    return response
 
 # =============================================================================
 # API Routes - User Management
@@ -766,12 +842,25 @@ def export_report_excel(start_date: str, end_date: str, db: Session = Depends(ge
 
 
 @app.post("/book-seva", response_model=TransactionResponse, tags=["Booking"])
-def book_seva(transaction: TransactionCreate, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+def book_seva(
+    request: Request, 
+    transaction: TransactionCreate, 
+    db: Session = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
+):
+    # Check Idempotency Cache
+    if idempotency_key and idempotency_key in idempotency_cache:
+        return idempotency_cache[idempotency_key]
+
     # Security Scan (SQL Sentinel & XSS)
     validate_transaction_payload(transaction)
     
     try:
-        return book_seva_transaction(db=db, transaction=transaction)
+        result = book_seva_transaction(db=db, transaction=transaction)
+        if idempotency_key:
+            idempotency_cache[idempotency_key] = result
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -785,6 +874,7 @@ def list_transactions(
     skip: int = 0,
     limit: int = 200,
     sort_by: str = "time_desc",
+    lang: Optional[str] = "en",
     db: Session = Depends(get_db)
 ):
     """
@@ -795,20 +885,21 @@ def list_transactions(
     - **seva_id**: Filter by specific seva
     - **skip/limit**: Pagination
     - **sort_by**: time_desc, time_asc, amount_desc, amount_asc, name_asc
+    - **lang**: en or kn
     """
     return get_daily_transactions(
         db, date=date, payment_mode=payment_mode, seva_id=seva_id,
-        skip=skip, limit=limit, sort_by=sort_by
+        skip=skip, limit=limit, sort_by=sort_by, lang=lang
     )
 
 
 @app.get("/transactions/stats", tags=["Transactions"])
-def transaction_stats(date: Optional[str] = None, db: Session = Depends(get_db)):
+def transaction_stats(date: Optional[str] = None, lang: Optional[str] = "en", db: Session = Depends(get_db)):
     """
     Get aggregate statistics for a date: totals, payment breakdown,
     seva-wise breakdown, and hourly trend data for charts.
     """
-    return get_daily_stats(db, date)
+    return get_daily_stats(db, date, lang=lang)
 
 
 @app.get("/transactions/export", tags=["Transactions"])
@@ -845,20 +936,46 @@ def export_transactions(date: Optional[str] = None, db: Session = Depends(get_db
 
 
 @app.put("/transactions/{transaction_id}/note", tags=["Transactions"])
-def update_transaction_note(transaction_id: int, note: str = "", db: Session = Depends(get_db)):
+def update_transaction_note(
+    transaction_id: int,
+    note: str = "",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Update the note on a transaction (inline edit from list)."""
     from sqlalchemy import text as sa_text
-    result = db.execute(
-        sa_text("SELECT id FROM transactions WHERE id = :id"),
+    
+    # Fetch current state for audit
+    row = db.execute(
+        sa_text("SELECT id, notes, receipt_no FROM transactions WHERE id = :id"),
         {"id": transaction_id}
     ).fetchone()
-    if not result:
+    if not row:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    old_note = row[1] or ""
+    receipt_no = row[2] or ""
     
     db.execute(
         sa_text("UPDATE transactions SET notes = :note WHERE id = :id"),
         {"id": transaction_id, "note": note}
     )
+    
+    # Immutable audit log with before/after
+    audit = AuditLog(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        resource_type="TRANSACTION",
+        resource_id=str(transaction_id),
+        details=json_lib.dumps({
+            "field": "notes",
+            "receipt_no": receipt_no,
+            "before": old_note,
+            "after": note
+        }, ensure_ascii=False)
+    )
+    db.add(audit)
     db.commit()
     return {"message": "Note updated", "id": transaction_id, "note": note}
 
@@ -1216,7 +1333,7 @@ def legacy_dispatch_adapter(
     Handles ad-hoc dispatch for manual 'Send Prasadam' actions in Search/Calendar view.
     Ensures event exists -> Marks Dispatched -> Logs Communication.
     """
-    if current_user.role.lower() not in ["admin", "clerk"]:
+    if current_user.role.lower() not in ["admin", "Manager"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     try:
@@ -1272,6 +1389,73 @@ def get_comm_history(
         return {"count": len(history), "messages": history}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+@app.get("/shaswata/health", tags=["Shaswata Manager"])
+def get_shaswata_health(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Shaswata Funding Health Check Dashboard.
+    Returns active count, overdue dispatches, missing feedback, and revenue.
+    """
+    from sqlalchemy import text as sa_text
+    
+    try:
+        # 1. Total Active Subscriptions
+        active_count = db.execute(sa_text(
+            "SELECT COUNT(*) FROM shaswata_subscriptions WHERE is_active = true"
+        )).scalar() or 0
+        
+        # 2. Overdue Dispatches (>30 days since last dispatch)
+        overdue_dispatches = db.execute(sa_text("""
+            SELECT COUNT(*) FROM shaswata_subscriptions
+            WHERE is_active = true
+              AND last_dispatch_date IS NOT NULL
+              AND last_dispatch_date + INTERVAL '30 days' <= CURRENT_DATE
+        """)).scalar() or 0
+        
+        # 3. Never Dispatched (active but no dispatch ever)
+        never_dispatched = db.execute(sa_text("""
+            SELECT COUNT(*) FROM shaswata_subscriptions
+            WHERE is_active = true AND last_dispatch_date IS NULL
+        """)).scalar() or 0
+        
+        # 4. Missing Feedback (>90 days since last feedback)
+        missing_feedback = db.execute(sa_text("""
+            SELECT COUNT(*) FROM shaswata_subscriptions
+            WHERE is_active = true
+              AND last_dispatch_date IS NOT NULL
+              AND (last_feedback_date IS NULL
+                   OR last_feedback_date + INTERVAL '90 days' <= CURRENT_DATE)
+        """)).scalar() or 0
+
+        # 5. Total Revenue (amount paid for active subscriptions)
+        total_revenue = db.execute(sa_text("""
+            SELECT COALESCE(SUM(t.amount_paid), 0) FROM transactions t
+            JOIN shaswata_subscriptions ss ON t.devotee_id = ss.devotee_id
+            WHERE ss.is_active = true
+        """)).scalar() or 0
+        
+        # 6. Upcoming this week (subscriptions needing dispatch in next 7 days)
+        upcoming_week = db.execute(sa_text("""
+            SELECT COUNT(*) FROM shaswata_subscriptions
+            WHERE is_active = true
+              AND (last_dispatch_date IS NULL
+                   OR last_dispatch_date + INTERVAL '25 days' <= CURRENT_DATE + INTERVAL '7 days')
+        """)).scalar() or 0
+        
+        return {
+            "active_subscriptions": active_count,
+            "overdue_dispatches": overdue_dispatches,
+            "never_dispatched": never_dispatched,
+            "missing_feedback": missing_feedback,
+            "upcoming_this_week": upcoming_week,
+            "total_revenue": float(total_revenue),
+            "health_score": max(0, 100 - (overdue_dispatches * 5) - (never_dispatched * 3) - (missing_feedback * 2)),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
 # =============================================================================
 # API Routes - Priest Dashboard
@@ -1412,7 +1596,7 @@ def get_daily_sankalpa(date_str: str = None, lang: str = "en", db: Session = Dep
     
     # 4. Calculate Daily Revenue
     revenue_query = text("""
-        SELECT SUM(amount_paid) FROM transactions 
+        SELECT SUM(amount_paid in inr)tansactions 
         WHERE seva_date = :date OR DATE(transaction_date) = :date
     """)
     daily_revenue = db.execute(revenue_query, {"date": target_date}).scalar() or 0
@@ -1436,7 +1620,7 @@ def get_collection_report(start_date: str = None, end_date: str = None, db: Sess
         start = datetime.strptime(start_date, "%d-%m-%Y").date() if start_date else date.today()
         end = datetime.strptime(end_date, "%d-%m-%Y").date() if end_date else start
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use DD-MM-YYYY")
+        raise HTTPException(status_code=400, detail="Invalid date format. Use MM-DD-YYYY")
     
     try:
         query = text("""
@@ -1486,7 +1670,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
         raise HTTPException(status_code=500, detail=f"Export Failed: {str(e)}")
 
     # Create Excel Workbook
-    from openpyxl import Workbook
+    from openpyxl import Notebook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
@@ -1524,7 +1708,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
     # Style Headers
     for col_num, header in enumerate(headers, 1):
         cell = ws_summary.cell(row=6, column=col_num)
-        cell.fill = subheader_fill
+        cell.fill = subheader_autofill
         cell.font = header_font
         cell.alignment = center_align
 
@@ -1546,7 +1730,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
 
     # 2. Seva Breakdown
     ws_summary['D5'] = "TOP SEVAS"
-    ws_summary['D5'].font = Font(bold=True)
+    ws_summary['D5'].font = Font(bold=False)
     
     headers_seva = ["Seva Name", "Count", "Revenue"]
     # Manually place headers at D6
@@ -1595,7 +1779,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
 
     # Fetch Data
     tx_stmt = text("""
-        SELECT t.receipt_no, strftime('%d-%m-%Y %I:%M %p', t.transaction_date), 
+        SELECT t.receipt_no, TO_CHAR(t.transaction_date, 'DD-MM-YYYY HH12:MI AM'), 
                d.full_name_en, sc.name_eng, t.payment_mode, t.amount_paid, t.notes
         FROM transactions t
         JOIN devotees d ON t.devotee_id = d.id
@@ -1679,7 +1863,7 @@ def migrate_legacy_database(
     - CSV: Standard headers
     - PDF: Tables extracted automatically
     """
-    if current_user.role.lower() != "admin":
+    if current_user.role.lower() != "Manager":
         raise HTTPException(status_code=403, detail="Only Admins can rewrite history.")
 
     # Save temp file
@@ -1756,9 +1940,76 @@ def find_date_by_panchangam(
 # Level 17: The Divine Scroll (Thermal Printer Integration)
 # =============================================================================
 from app.printer_service import generate_receipt_image, print_receipt_image
+from app.pdf_receipt import generate_receipt_pdf
 
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import os
+
+# ── PDF Receipt API ─────────────────────────────────────────────────────
+
+@app.post("/receipt/pdf", tags=["Receipts"])
+def generate_pdf_receipt(data: dict, current_user: User = Depends(get_current_user)):
+    """
+    Generate a downloadable PDF receipt from booking data.
+    Returns the PDF as a streaming response.
+    """
+    try:
+        # Add staff name from current user
+        data["staff_name"] = current_user.full_name or current_user.username
+        pdf_bytes = generate_receipt_pdf(data)
+        receipt_no = data.get("receipt_no", "receipt")
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="receipt_{receipt_no}.pdf"'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation did not proceed");
+
+
+@app.get("/receipt/{receipt_no}/pdf", tags=["Receipts"])
+def get_receipt_pdf(
+    receipt_no: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetch transaction by receipt_no and generate a PDF receipt.
+    """
+    from app.models import Transaction, Devotee, SevaCatalog
+    
+    tx = db.query(Transaction).filter(Transaction.receipt_no == receipt_no).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    devotee = db.query(Devotee).filter(Devotee.id == tx.devotee_id).first()
+    seva = db.query(SevaCatalog).filter(SevaCatalog.id == tx.seva_id).first()
+    
+    data = {
+        "receipt_no": tx.receipt_no,
+        "date": tx.transaction_date.strftime("%d-%m-%Y %I:%M %p") if tx.transaction_date else "",
+        "seva_name": seva.name_eng if seva else "Seva",
+        "seva_name_kn": seva.name_kan if seva else "",
+        "devotee_name": devotee.full_name_en if devotee else "-",
+        "gothra": devotee.gothra if devotee else "-",
+        "nakshatra": devotee.nakshatra if devotee else "-",
+        "rashi": devotee.rashi if devotee else "-",
+        "amount": str(tx.amount_paid),
+        "payment_mode": tx.payment_mode or "CASH",
+        "upi_txn_id": tx.upi_transaction_id if hasattr(tx, 'upi_transaction_id') else None,
+        "staff_name": current_user.full_name or current_user.username,
+    }
+    
+    pdf_bytes = generate_receipt_pdf(data)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="receipt_{receipt_no}.pdf"'
+        }
+    )
 
 @app.post("/print/preview", tags=["Device Integration"])
 def preview_receipt(data: dict):

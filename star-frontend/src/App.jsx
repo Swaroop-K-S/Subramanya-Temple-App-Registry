@@ -1,69 +1,69 @@
 /**
  * S.T.A.R. - Subramanya Temple App & Registry
  * ============================================
- * Main Application Component (Omni-UI Edition)
+ * Main Application Component - React Router Edition
  */
 
-import { useState, useEffect } from 'react';
-import { TRANSLATIONS } from './components/translations';
-import {
-  Loader2, Flame, Flower, Home, AlertCircle
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from './context/I18nContext';
 
-// Omni-UI Components (Level 11+ Overhaul)
-import BookingModal from './components/BookingModal';
-import ShaswataForm from './components/ShaswataForm';
+// Auth
+import { useAuth } from './hooks/useAuth';
+
+// Layout Components
+import Sidebar from './components/Sidebar';
+import Navbar from './components/Navbar';
+import GenesisChat from './components/GenesisChat';
+
+// Page Components
+import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import DailyTransactions from './components/DailyTransactions';
 import ReportsDashboard from './components/ReportsDashboard';
+import ShaswataForm from './components/ShaswataForm';
+import ShaswataUnified from './components/ShaswataUnified';
 import Panchangam from './components/Panchangam';
 import Settings from './components/Settings';
-import Login from './components/Login';
-import Sidebar from './components/Sidebar';  // [NEW] Floating Sidebar
-import Navbar from './components/Navbar';    // [NEW] Celestial Navbar
-import GenesisChat from './components/GenesisChat'; // [NEW] Daiva-Setu AI Interface
-import ShaswataUnified from './components/ShaswataUnified'; // [UNIFIED] Shaswata Seva
-import DailyTransactions from './components/DailyTransactions'; // [NEW] Phase 3
+import BookingModal from './components/BookingModal';
 
-import api from './services/api'; // [NEW] API Service
+// ============================================================================
+// Protected Route Wrapper
+// ============================================================================
+function ProtectedRoute({ children, requiredAccess }) {
+  const { isAuthenticated, authLoading, canAccess } = useAuth();
+  const location = useLocation();
 
-function App() {
-  // [AUTH] Security State
-  const [token, setToken] = useState(localStorage.getItem('access_token'));
-  const [user, setUser] = useState(null); // [NEW] User Profile
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-amber-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      </div>
+    );
+  }
 
-  // [I18N] Language State
-  const [lang, setLang] = useState('EN');
-  const t = TRANSLATIONS[lang];
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
-  // Navigation State
-  const [activePage, setActivePage] = useState('home');
+  if (requiredAccess && !canAccess(requiredAccess)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
+
+// ============================================================================
+// App Shell (Layout + Router)
+// ============================================================================
+function AppShell() {
+  const { user, logout } = useAuth();
+  const { lang, setLang } = useTranslation();
+  const navigate = useNavigate();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSeva, setSelectedSeva] = useState(null);
-
-  // [AUTH] Fetch User Profile
-  useEffect(() => {
-    const fetchUser = async () => {
-      if (!token) {
-        setUser(null);
-        return;
-      }
-      try {
-        const response = await api.get('/users/me');
-        setUser(response.data);
-      } catch (err) {
-        console.error("Auth Error", err);
-        // Optional: Logout on 401?
-        if (err.response && err.response.status === 401) {
-          handleLogout();
-        }
-      }
-    };
-    fetchUser();
-  }, [token]);
-
-  // Theme State (Persist Dark Mode preference if needed, handled in Navbar)
 
   // [UI] Parallax Background Logic
   useEffect(() => {
@@ -74,81 +74,40 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    setToken(null);
-    setUser(null);
-    setActivePage('home');
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
-
-  const handleSevaClick = (seva) => {
-    if (seva.is_shaswata) {
-      setActivePage('shaswata');
-    } else {
-      setSelectedSeva(seva);
-      setIsModalOpen(true);
-    }
-  };
-
-  // [RBAC] Access Control Helper
-  const canAccess = (role, page) => {
-    if (!role) return false;
-    if (role === 'admin') return true;
-    // Clerk access
-    if (['home', 'panchangam', 'shaswata', 'dispatch'].includes(page)) return true;
-    return false;
-  };
-
-  // Redirect if trying to access restricted page
-  useEffect(() => {
-    if (user && !canAccess(user.role, activePage)) {
-      setActivePage('home'); // Fallback
-    }
-  }, [user, activePage]);
-
-  if (!token) {
-    return <Login setToken={setToken} />;
-  }
 
   return (
     <div className="min-h-screen transition-colors duration-500 bg-slate-50 dark:!bg-slate-950">
 
       {/* 1. CELESTIAL NAVBAR (Top) */}
-      <Navbar lang={lang} setLang={setLang} user={user} setActivePage={setActivePage} />
+      <Navbar lang={lang} setLang={setLang} user={user} navigate={navigate} />
 
       {/* 2. FLOATING SIDEBAR (Left) */}
       <Sidebar
-        activePage={activePage}
-        setActivePage={setActivePage}
         handleLogout={handleLogout}
         user={user}
+        lang={lang}
       />
 
-      {/* 3. MAIN CONTENT AREA (Padded for Sidebar) */}
+      {/* 3. MAIN CONTENT AREA */}
       <main className="pt-24 pb-12 px-4 md:pl-32 lg:pl-32 transition-all duration-300 max-w-[1600px] mx-auto">
-
-        {/* VIEW ROUTING */}
-
-        {/* A. HOME CATALOG (Merged with Dashboard) */}
-        {activePage === 'home' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <Dashboard
-              onBack={() => { }} // No back action needed on Home
-              lang={lang}
-              isHome={true}
-            />
-          </div>
-        )}
-
-        {/* B. OTHER PAGES */}
-        {activePage === 'daily' && canAccess(user?.role, 'daily') && <DailyTransactions lang={lang} />}
-        {activePage === 'shaswata' && <ShaswataForm onBack={() => setActivePage('home')} />}
-
-        {activePage === 'reports' && canAccess(user?.role, 'reports') && <ReportsDashboard onBack={() => setActivePage('home')} />}
-        {activePage === 'dispatch' && <ShaswataUnified onBack={() => setActivePage('home')} lang={lang} />}
-        {activePage === 'panchangam' && <Panchangam />}
-        {activePage === 'settings' && canAccess(user?.role, 'settings') && <Settings onBack={() => setActivePage('home')} />}
-
+        <Routes>
+          <Route path="/dashboard" element={
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <Dashboard onBack={() => { }} lang={lang} isHome={true} />
+            </div>
+          } />
+          <Route path="/daily" element={<DailyTransactions lang={lang} />} />
+          <Route path="/shaswata" element={<ShaswataForm onBack={() => navigate('/dashboard')} lang={lang} />} />
+          <Route path="/reports" element={<ReportsDashboard onBack={() => navigate('/dashboard')} lang={lang} />} />
+          <Route path="/dispatch" element={<ShaswataUnified onBack={() => navigate('/dashboard')} lang={lang} />} />
+          <Route path="/panchangam" element={<Panchangam lang={lang} />} />
+          <Route path="/settings" element={<Settings onBack={() => navigate('/dashboard')} lang={lang} />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
       </main>
 
       {/* GLOBAL MODALS */}
@@ -161,10 +120,38 @@ function App() {
         />
       )}
 
-      {/* DAIVA-SETU AI ENGINE (Level 15) */}
+      {/* DAIVA-SETU AI ENGINE */}
       <GenesisChat />
-
     </div>
+  );
+}
+
+// ============================================================================
+// Root App Component
+// ============================================================================
+function App() {
+  const { isAuthenticated, authLoading } = useAuth();
+  const { lang } = useTranslation();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-amber-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={
+        isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login lang={lang} />
+      } />
+      <Route path="/*" element={
+        <ProtectedRoute>
+          <AppShell />
+        </ProtectedRoute>
+      } />
+    </Routes>
   );
 }
 

@@ -90,18 +90,34 @@ YOGAS = {
 }
 
 # 11 Karanas (7 movable + 4 fixed)
-KARANAS = ["Bava", "Balava", "Kaulava", "Taitila", "Garija", "Vanija", "Vishti (Bhadra)",
-           "Shakuni", "Chatushpada", "Naga", "Kimstughna"]
+# 11 Karanas (7 movable + 4 fixed)
+KARANAS = {
+    "en": ["Bava", "Balava", "Kaulava", "Taitila", "Garija", "Vanija", "Vishti (Bhadra)",
+           "Shakuni", "Chatushpada", "Naga", "Kimstughna"],
+    "kn": ["ಬವ", "ಬಾಲವ", "ಕೌಲವ", "ತೈತಿಲ", "ಗರಜ", "ವಣಿಜ", "ವಿಷ್ಟಿ (ಭದ್ರಾ)",
+           "ಶಕುನಿ", "ಚತುಷ್ಪಾದ", "ನಾಗ", "ಕಿಂಸ್ತುಘ್ನ"]
+}
 
 # 60-Year Jupiter Cycle (Samvatsaras)
-SAMVATSARAS = [
-    "Prabhava", "Vibhava", "Shukla", "Pramoda", "Prajotpatti", "Angirasa", "Srimukha", "Bhava", "Yuva", "Dhatri",
-    "Ishvara", "Bahudhanya", "Pramathi", "Vikrama", "Vrishaprajna", "Chitrabhanu", "Subhanu", "Tarana", "Parthiva", "Vyaya",
-    "Sarvajit", "Sarvadhari", "Virodhi", "Vikriti", "Khara", "Nandana", "Vijaya", "Jaya", "Manmatha", "Durmukha",
-    "Hevilambi", "Vilambi", "Vikari", "Sharvari", "Plava", "Shubhakrit", "Shobhakrit", "Krodhi", "Viswavasu", "Parabhava",
-    "Plavanga", "Keelaka", "Saumya", "Sadharana", "Virodhikrit", "Paridhavi", "Pramadicha", "Ananda", "Rakshasa", "Nala",
-    "Pingala", "Kalayukthi", "Siddharthi", "Raudra", "Durmathi", "Dundubhi", "Rudhirodgari", "Raktakshi", "Krodhana", "Akshaya"
-]
+# 60-Year Jupiter Cycle (Samvatsaras)
+SAMVATSARAS = {
+    "en": [
+        "Prabhava", "Vibhava", "Shukla", "Pramoda", "Prajotpatti", "Angirasa", "Srimukha", "Bhava", "Yuva", "Dhatri",
+        "Ishvara", "Bahudhanya", "Pramathi", "Vikrama", "Vrishaprajna", "Chitrabhanu", "Subhanu", "Tarana", "Parthiva", "Vyaya",
+        "Sarvajit", "Sarvadhari", "Virodhi", "Vikriti", "Khara", "Nandana", "Vijaya", "Jaya", "Manmatha", "Durmukha",
+        "Hevilambi", "Vilambi", "Vikari", "Sharvari", "Plava", "Shubhakrit", "Shobhakrit", "Krodhi", "Viswavasu", "Parabhava",
+        "Plavanga", "Keelaka", "Saumya", "Sadharana", "Virodhikrit", "Paridhavi", "Pramadicha", "Ananda", "Rakshasa", "Nala",
+        "Pingala", "Kalayukthi", "Siddharthi", "Raudra", "Durmathi", "Dundubhi", "Rudhirodgari", "Raktakshi", "Krodhana", "Akshaya"
+    ],
+    "kn": [
+        "ಪ್ರಭವ", "ವಿಭವ", "ಶುಕ್ಲ", "ಪ್ರಮೋದ", "ಪ್ರಜೋತ್ಪತ್ತಿ", "ಅಂಗಿರಸ", "ಶ್ರೀಮುಖ", "ಬಾವ", "ಯುವ", "ಧಾತ್ರಿ",
+        "ಈಶ್ವರ", "ಬಹುಧಾನ್ಯ", "ಪ್ರಮಾಥಿ", "ವಿಕ್ರಮ", "ವೃಷಪ್ರಜ", "ಚಿತ್ರಭಾನು", "ಸುಭಾನು", "ತಾರಣ", "ಪಾರ್ಥಿವ", "ವ್ಯಯ",
+        "ಸರ್ವಜಿತ್", "ಸರ್ವಧಾರಿ", "ವಿರೋಧಿ", "ವಿಕೃತಿ", "ಖರ", "ನಂದನ", "ವಿಜಯ", "ಜಯ", "ಮನ್ಮಥ", "ದುರ್ಮುಖ",
+        "ಹೇವಿಳಂಬಿ", "ವಿಳಂಬಿ", "ವಿಕಾರಿ", "ಶಾರ್ವರಿ", "ಪ್ಲವ", "ಶುಭಕೃತ್", "ಶೋಭಕೃತ್", "ಕ್ರೋಧಿ", "ವಿಶ್ವಾವಸು", "ಪರಾಭವ",
+        "ಪ್ಲವಂಗ", "ಕೀಲಕ", "ಸೌಮ್ಯ", "ಸಾಧಾರಣ", "ವಿರೋಧಕೃತ್", "ಪರಿದಾವಿ", "ಪ್ರಮಾದೀಚ", "ಆನಂದ", "ರಾಕ್ಷಸ", "ನಳ",
+        "ಪಿಂಗಳ", "ಕಾಳಯುಕ್ತಿ", "ಸಿದ್ಧಾರ್ಥಿ", "ರೌದ್ರ", "ದುರ್ಮತಿ", "ದುಂದುಭಿ", "ರುಧಿರೋದ್ಗಾರಿ", "ರಕ್ತಾಕ್ಷಿ", "ಕ್ರೋಧನ", "ಅಕ್ಷಯ"
+    ]
+}
 
 # 6 Ritus (Seasons)
 RITUS = {
@@ -117,8 +133,13 @@ VASARAS = {
 }
 
 # 12 Rashis (for Sankranti detection)
-RASHIS = ["Mesha", "Vrishabha", "Mithuna", "Karka", "Simha", "Kanya",
-          "Tula", "Vrischika", "Dhanu", "Makara", "Kumbha", "Meena"]
+# 12 Rashis (Zodiac)
+RASHIS = {
+    "en": ["Mesha", "Vrishabha", "Mithuna", "Karka", "Simha", "Kanya",
+           "Tula", "Vrischika", "Dhanu", "Makara", "Kumbha", "Meena"],
+    "kn": ["ಮೇಷ", "ವೃಷಭ", "ಮಿಥುನ", "ಕರ್ಕಾಟಕ", "ಸಿಂಹ", "ಕನ್ಯಾ",
+           "ತುಲಾ", "ವೃಶ್ಚಿಕ", "ಧನು", "ಮಕರ", "ಕುಂಭ", "ಮೀನ"]
+}
 
 # Ayanamsa Values (degrees, approximate for modern dates)
 AYANAMSA_TABLE = {
@@ -292,7 +313,7 @@ class PanchangCalculator:
 
     # ── Sankranti Detection ──────────────────────────────────────────
 
-    def detect_sankranti(self, target_date):
+    def detect_sankranti(self, target_date, lang="en"):
         """
         Detects if the Sun transitions from one Rashi to another on this date.
         Returns the Sankranti name (e.g., 'Makara Sankranti') or None.
@@ -310,7 +331,8 @@ class PanchangCalculator:
         rashi_yesterday = int(self.get_sidereal_lon(ephem.Ecliptic(sun_y).lon) / 30)
 
         if rashi_today != rashi_yesterday:
-            return f"{RASHIS[rashi_today]} Sankranti"
+            s_suffix = "ಸಂಕ್ರಾಂತಿ" if lang == "kn" else "Sankranti"
+            return f"{RASHIS[lang][rashi_today]} {s_suffix}"
         return None
 
     # ═══════════════════════════════════════════════════════════════════
@@ -328,6 +350,7 @@ class PanchangCalculator:
         Returns:
             dict with all Panchangam data.
         """
+        lang = lang.lower()  # Normalize: frontend sends 'EN'/'KN', dict keys are 'en'/'kn'
         # Input Parsing
         if isinstance(target_date, str):
             try:
@@ -419,14 +442,14 @@ class PanchangCalculator:
         # ── Karana ──
         k_index = int(tithi_float * 2)
         if k_index == 0:
-            karana_name = "Kimstughna"
+            karana_name = KARANAS[lang][10] # Kimstughna
         elif k_index >= 58:
-            if k_index == 58: karana_name = "Shakuni"
-            elif k_index == 59: karana_name = "Chatushpada"
-            elif k_index == 60: karana_name = "Naga"
-            else: karana_name = KARANAS[(k_index - 1) % 7]
+            if k_index == 58: karana_name = KARANAS[lang][7] # Shakuni
+            elif k_index == 59: karana_name = KARANAS[lang][8] # Chatushpada
+            elif k_index == 60: karana_name = KARANAS[lang][9] # Naga
+            else: karana_name = KARANAS[lang][(k_index - 1) % 7]
         else:
-            karana_name = KARANAS[(k_index - 1) % 7]
+            karana_name = KARANAS[lang][(k_index - 1) % 7]
 
         # ── Masa & Adhika ──
         obs_date_start = ephem.Date(obs_calc.date)
@@ -460,7 +483,7 @@ class PanchangCalculator:
         if dt_input.month < 4 and final_masa_index >= 9:
             saka_year -= 1
         samvatsara_index = (saka_year + 11) % 60
-        samvatsara_name = SAMVATSARAS[samvatsara_index]
+        samvatsara_name = SAMVATSARAS[lang][samvatsara_index]
 
         # Ritu
         ritu_index = int(final_masa_index / 2) % 6
@@ -468,23 +491,23 @@ class PanchangCalculator:
 
         # Ayana
         if 90 <= s_sid_lon < 270:
-            ayana_name = "Dakshinayana"
+            ayana_name = "Dakshinayana" if lang == "en" else "ದಕ್ಷಿಣಾಯನ"
         else:
-            ayana_name = "Uttarayana"
+            ayana_name = "Uttarayana" if lang == "en" else "ಉತ್ತರಾಯಣ"
 
         # Vasara
         vasara_name = VASARAS[lang][dt_input.weekday()]
 
         # Sun Rashi (for frontend display)
         sun_rashi_index = int(s_sid_lon / 30)
-        sun_rashi = RASHIS[sun_rashi_index % 12]
+        sun_rashi = RASHIS[lang][sun_rashi_index % 12]
 
         # Moon Rashi (for frontend display)
         moon_rashi_index = int(m_sid_lon / 30)
-        moon_rashi = RASHIS[moon_rashi_index % 12]
+        moon_rashi = RASHIS[lang][moon_rashi_index % 12]
 
         # ── Sankranti ──
-        sankranti = self.detect_sankranti(dt_input)
+        sankranti = self.detect_sankranti(dt_input, lang)
 
         # ── Moon Cycle (Phase, Illumination, Next Purnima/Amavasya) ──
         obs_moon = self._make_observer(dt_input, hour=12, minute=0, second=0)  # Noon UTC
@@ -591,9 +614,11 @@ class PanchangCalculator:
         masa_en = MASAS["en"][final_masa_index]
         nakshatra_en = NAKSHATRAS["en"][nakshatra_index]
         paksha_en = paksha
+        samvatsara_en = SAMVATSARAS["en"][samvatsara_index]
+        
         description = (
-            f"Shubhe Shobhane Muhurthe {samvatsara_name} Nama Samvatsare "
-            f"{ayana_name} {RITUS['en'][ritu_index]} Ritau "
+            f"Shubhe Shobhane Muhurthe {samvatsara_en} Nama Samvatsare "
+            f"{ayana_name if lang == 'en' else 'Uttarayana/Dakshinayana'} {RITUS['en'][ritu_index]} Ritau "
             f"{masa_en} Mase {paksha_en} Pakshe {tithi_en} Tithau"
         )
 

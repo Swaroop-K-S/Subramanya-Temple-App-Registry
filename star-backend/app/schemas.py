@@ -92,8 +92,8 @@ class SevaUpdate(BaseModel):
 
 class SevaCreate(BaseModel):
     """Schema for creating a new Seva"""
-    name_eng: str = Field(..., description="Name of the Seva in English")
-    name_kan: Optional[str] = Field(None, description="Name of the Seva in Kannada")
+    name_eng: str = Field(..., max_length=100, description="Name of the Seva in English")
+    name_kan: Optional[str] = Field(None, max_length=100, description="Name of the Seva in Kannada")
     price: float = Field(..., ge=0, description="Price of the Seva")
     is_shaswata: bool = Field(False, description="Is this a Shaswata Seva?")
     is_slot_based: bool = Field(False, description="Is this a Slot-based Seva?")
@@ -106,7 +106,7 @@ class TransactionCreate(BaseModel):
     # Bilingual Name Fields
     devotee_name: str = Field(..., min_length=2, max_length=150, description="Primary display name (backward compat)")
     devotee_name_en: Optional[str] = Field(None, max_length=150, description="English name")
-    devotee_name_kn: Optional[str] = Field(None, description="Kannada name (ಕನ್ನಡ)")
+    devotee_name_kn: Optional[str] = Field(None, max_length=150, description="Kannada name (ಕನ್ನಡ)")
     
     phone_number: str = Field(..., min_length=10, max_length=15, description="Contact phone number")
     
@@ -117,7 +117,7 @@ class TransactionCreate(BaseModel):
     # Bilingual Gothra Fields
     gothra: Optional[str] = Field(None, max_length=50, description="Gotra (backward compat)")
     gothra_en: Optional[str] = Field(None, max_length=50, description="English Gothra")
-    gothra_kn: Optional[str] = Field(None, description="Kannada Gothra")
+    gothra_kn: Optional[str] = Field(None, max_length=100, description="Kannada Gothra")
     
     nakshatra: Optional[str] = Field(None, max_length=30, description="Birth star")
     rashi: Optional[str] = Field(None, max_length=30, description="Zodiac sign")
@@ -159,15 +159,15 @@ class TransactionCreate(BaseModel):
 class DevoteeCreate(BaseModel):
     """Schema for creating a new devotee profile"""
     full_name_en: str = Field(..., min_length=2, max_length=150, description="English Name")
-    full_name_kn: Optional[str] = Field(None, description="Kannada Name (ಕನ್ನಡ)")
+    full_name_kn: Optional[str] = Field(None, max_length=150, description="Kannada Name (ಕನ್ನಡ)")
     phone_number: str = Field(..., min_length=10, max_length=15)
-    gothra_en: Optional[str] = Field(None, description="English Gothra")
-    gothra_kn: Optional[str] = Field(None, description="Kannada Gothra")
-    nakshatra: Optional[str] = None
-    rashi: Optional[str] = None
-    address: Optional[str] = None
-    area: Optional[str] = None
-    pincode: Optional[str] = None
+    gothra_en: Optional[str] = Field(None, max_length=50, description="English Gothra")
+    gothra_kn: Optional[str] = Field(None, max_length=100, description="Kannada Gothra")
+    nakshatra: Optional[str] = Field(None, max_length=50)
+    rashi: Optional[str] = Field(None, max_length=50)
+    address: Optional[str] = Field(None, max_length=500)
+    area: Optional[str] = Field(None, max_length=100)
+    pincode: Optional[str] = Field(None, max_length=10)
 
 
 class ShaswataCreate(BaseModel):
@@ -184,7 +184,7 @@ class ShaswataCreate(BaseModel):
     gothra: Optional[str] = Field(None, max_length=50, description="Gotra")
     nakshatra: Optional[str] = Field(None, max_length=30, description="Birth star")
     rashi: Optional[str] = Field(None, max_length=30, description="Zodiac sign")
-    address: Optional[str] = Field(None, description="Postal address")
+    address: Optional[str] = Field(None, max_length=500, description="Postal address")
     area: Optional[str] = Field(None, max_length=100, description="Area/Locality")
     pincode: Optional[str] = Field(None, max_length=10, description="Pincode")
     
@@ -385,15 +385,15 @@ class ShaswataResponse(BaseModel):
 # =============================================================================
 
 class UserBase(BaseModel):
-    username: str
+    username: str = Field(..., max_length=50)
 
 class UserCreate(UserBase):
-    password: str
-    role: str = "admin"
+    password: str = Field(..., min_length=6, max_length=100)
+    role: str = Field("admin", max_length=20)
 
 class UserLogin(UserBase):
-    username: str
-    password: str
+    username: str = Field(..., max_length=50)
+    password: str = Field(..., max_length=100)
 
 class Token(BaseModel):
     access_token: str

@@ -1,77 +1,164 @@
 """
 S.T.A.R. Backend - Database Configuration
 ==========================================
-SQLAlchemy connection to SQLite database.
-Fully portable - database stored inside the app directory!
+Embedded PostgreSQL via pgserver - ships with the app!
+No separate database installation needed.
+
+Fallback: SQLite for development or if pgserver is unavailable.
 """
 
 import os
 import sys
-from sqlalchemy import create_engine, event
+import atexit
+from sqlalchemy import create_engine, event, text as sa_text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # =============================================================================
-# SQLite Database - Stored Inside App Directory (Portable)
+# Database Engine Selection: Embedded PostgreSQL → SQLite Fallback
 # =============================================================================
 
-def get_database_path():
+# Global reference to pgserver instance (keeps it alive)
+_pg_server = True
+_using_postgres = False
+
+def get_pg_data_dir():
     """
-    Database file lives inside the app's own directory.
-    star-backend/data/star_temple.db
+    Returns a safe directory for PostgreSQL data.
+    IMPORTANT: pgserver requires paths WITHOUT spaces.
+    We use %LOCALAPPDATA%/StarApp/pg_data/ on Windows.
     """
-    # Get the directory where this file (database.py) lives → app/
+    if sys.platform == "win64":
+        local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
+        pg_dir = os.path.join(local_app_data, "StarApp", "pg_data")
+    else:
+        pg_dir = os.path.join(os.path.expanduser("~"), ".starapp", "pg_data")
+    
+    if not os.path.exists(pg_dir):
+        os.makedirs(pg_dir)
+    return pg_dir
+
+
+def get_sqlite_path():
+    """Legacy SQLite path for fallback / migration source."""
     app_dir = os.path.dirname(os.path.abspath(__file__))
-    # Go up one level to star-backend/
     backend_dir = os.path.dirname(app_dir)
-    # Store in star-backend/data/
     data_dir = os.path.join(backend_dir, "data")
-    
-    print(f"DEBUG DB: __file__ = {os.path.abspath(__file__)}")
-    print(f"DEBUG DB: app_dir = {app_dir}")
-    print(f"DEBUG DB: backend_dir = {backend_dir}")
-    print(f"DEBUG DB: data_dir = {data_dir}")
-    
-    # Ensure data directory exists
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
-        
     return os.path.join(data_dir, "star_temple.db")
 
 
-DATABASE_PATH = get_database_path()
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+def create_database_engine():
+    """
+    Try to start embedded PostgreSQL via pgserver.
+    Falls back to SQLite if pgserver is not available.
+    """
+    global _pg_server, _using_postgres
+    
+    try:
+        import pgserver
+        
+        pg_data_dir = get_pg_data_dir()
+        print(f"[DB] Starting embedded PostgreSQL (data: {pg_data_dir})...")
+        
+        _pg_server = pgserver.get_server(pg_data_dir)
+        
+        # Create the star_temple database if it doesn't exist
+        from sqlalchemy import create_engine as _ce
+        temp_engine = _ce(_pg_server.get_uri())  # connects to default 'postgres' db
+        with temp_engine.connect() as conn:
+            conn.execution_options(isolation_level="AUTOCOMMIT")
+            result = conn.execute(sa_text(
+                "SELECT 1 FROM pg_database WHERE datname = 'star_temple'"
+            ))
+            if not result.fetchone():
+                conn.execute(sa_text("CREATE DATABASE star_temple"))
+                print("[DB] Created database 'star_temple'")
+        temp_engine.dispose()
+        
+        # Build the final connection URI for star_temple
+        database_url = _pg_server.get_uri("star_temple")
+        
+        engine = create_engine(
+            database_url,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+            echo=False
+        )
+        
+        _using_postgres = True
+        print(f"[DB]  Embedded PostgreSQL running!")
+        print(f"[DB] Connection: {database_url}")
+        
+        # Register cleanup on app exit
+        atexit.register(_shutdown_pg)
+        
+        return engine, database_url
+        
+    except ImportError:
+        print("[DB] pgserver not installed. Falling back to SQLite.")
+    except Exception as e:
+        print(f"[DB] ⚠️ PostgreSQL startup failed: {e}")
+        print("[DB] Falling back to SQLite...")
+    
+    # =========================================================================
+    # FALLBACK: SQLite
+    # =========================================================================
+    sqlite_path = get_sqlite_path()
+    database_url = f"sqlite:///{sqlite_path}"
+    
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False},
+        echo=False
+    )
+    
+    # Enable foreign keys for SQLite
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    
+    _using_postgres = False
+    print(f"[DB] Using SQLite: {sqlite_path}")
+    
+    return engine, database_url
 
-# Create the SQLAlchemy engine with SQLite-specific settings
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},  # Required for SQLite with FastAPI
-    echo=False  # Set to True for SQL debugging
-)
 
-# Enable foreign keys for SQLite (disabled by default)
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+def _shutdown_pg():
+    """Clean shutdown of embedded PostgreSQL."""
+    global _pg_server
+    if _pg_server:
+        try:
+            print("[DB] Shutting down embedded PostgreSQL...")
+            _pg_server.cleanup()
+            print("[DB] PostgreSQL stopped.")
+        except Exception as e:
+            print(f"[DB] Error stopping PostgreSQL: {e}")
 
-# SessionLocal class - each instance will be a database session
+
+# =============================================================================
+# Initialize Engine & Session
+# =============================================================================
+
+engine, DATABASE_URL = create_database_engine()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base class for our ORM models
 Base = declarative_base()
+
+
+def is_postgres():
+    """Check if we're running on PostgreSQL (vs SQLite fallback)."""
+    return _using_postgres
 
 
 def get_db():
     """
     Dependency function that provides a database session.
     Used with FastAPI's Depends() for automatic session management.
-    
-    Usage in routes:
-        @app.get("/items")
-        def get_items(db: Session = Depends(get_db)):
-            ...
     """
     db = SessionLocal()
     try:
@@ -89,16 +176,46 @@ def init_database():
     from .models import Base as ModelsBase, User
     from passlib.context import CryptContext
     
-    # Create tables (new installs) — does NOT alter existing tables
+    # Create tables
     ModelsBase.metadata.create_all(bind=engine)
-    print(f"[OK] Database initialized at: {DATABASE_PATH}")
     
-    # Migrate existing databases: add missing columns safely
-    from sqlalchemy import text as sa_text
+    db_type = "PostgreSQL" if _using_postgres else "SQLite"
+    print(f"[OK] Database initialized ({db_type})")
+    
+    # PostgreSQL-specific migrations
+    if _using_postgres:
+        _run_pg_migrations()
+    else:
+        _run_sqlite_migrations()
+    
+    # Seed default data
+    _seed_defaults()
+
+
+def _run_pg_migrations():
+    """PostgreSQL-specific migration logic."""
+    try:
+        with engine.connect() as conn:
+            # Create indexes for performance
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_payment_mode ON transactions(payment_mode)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_created_by ON transactions(created_by_user_id)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_date ON shaswata_events(scheduled_date)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_status ON shaswata_events(status)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_sub ON shaswata_events(subscription_id)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_comm_logs_devotee ON communication_logs(devotee_id)"))
+            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_comm_logs_type ON communication_logs(message_type)"))
+            conn.commit()
+            print("[MIGRATE] PostgreSQL indexes ensured.")
+    except Exception as e:
+        print(f"[WARN] PG migration: {e}")
+
+
+def _run_sqlite_migrations():
+    """Legacy SQLite migration logic (for fallback mode)."""
     try:
         with engine.connect() as conn:
             def _add_column_if_missing(table, column, col_type):
-                """Safely add a column to an existing table if it doesn't exist."""
                 cols = conn.execute(sa_text(f"PRAGMA table_info({table})")).fetchall()
                 col_names = [c[1] for c in cols]
                 if column not in col_names:
@@ -110,64 +227,45 @@ def init_database():
             _add_column_if_missing("shaswata_subscriptions", "last_dispatch_date", "DATE")
             _add_column_if_missing("shaswata_subscriptions", "last_feedback_date", "DATE")
             
-            # User: created_at timestamp
-            cols = conn.execute(sa_text(f"PRAGMA table_info(users)")).fetchall()
+            # User: created_at
+            cols = conn.execute(sa_text("PRAGMA table_info(users)")).fetchall()
             col_names = [c[1] for c in cols]
             if "created_at" not in col_names:
                 conn.execute(sa_text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
                 conn.execute(sa_text("UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
                 conn.commit()
-                print(f"[MIGRATE] Added column 'created_at' to 'users'")
 
-            # SevaCatalog: updated_at timestamp
             _add_column_if_missing("seva_catalog", "updated_at", "DATETIME")
-            
-            # Devotee: Address Confirmation Tracking
             _add_column_if_missing("devotees", "address_confirmed", "BOOLEAN DEFAULT 0")
             _add_column_if_missing("devotees", "address_confirmed_at", "DATETIME")
             _add_column_if_missing("devotees", "address_confirmation_sent_at", "DATETIME")
             
-            # Sync Metadata Migration
+            # Sync Metadata
             for tbl in ["transactions", "devotees", "shaswata_subscriptions"]:
                 cols = conn.execute(sa_text(f"PRAGMA table_info({tbl})")).fetchall()
                 col_names = [c[1] for c in cols]
-                
                 if "synced" not in col_names:
                     conn.execute(sa_text(f"ALTER TABLE {tbl} ADD COLUMN synced BOOLEAN DEFAULT 0"))
-                    print(f"[MIGRATE] Added 'synced' to '{tbl}'")
-                    
                 if "last_modified" not in col_names:
                     conn.execute(sa_text(f"ALTER TABLE {tbl} ADD COLUMN last_modified DATETIME"))
                     conn.execute(sa_text(f"UPDATE {tbl} SET last_modified = CURRENT_TIMESTAMP WHERE last_modified IS NULL"))
-                    print(f"[MIGRATE] Added 'last_modified' to '{tbl}'")
-                
-                if "last_modified" not in col_names:
-                    conn.execute(sa_text(f"ALTER TABLE {tbl} ADD COLUMN last_modified DATETIME"))
-                    conn.execute(sa_text(f"UPDATE {tbl} SET last_modified = CURRENT_TIMESTAMP WHERE last_modified IS NULL"))
-                    print(f"[MIGRATE] Added 'last_modified' to '{tbl}'")
-                
                 conn.commit()
 
-            # Ensure 'notes' column exists in transactions
             _add_column_if_missing("transactions", "notes", "TEXT")
+            _add_column_if_missing("shaswata_subscriptions", "communication_preference", "VARCHAR(20) DEFAULT 'WHATSAPP'")
+            _add_column_if_missing("shaswata_subscriptions", "last_address_confirmed_at", "DATE")
             
+            # Soft delete columns
+            for tbl in ["ransactions", "Saswata_events", "Dvotees"]:
+                _add_column_if_missing(tbl, "is_active", "BOOLEAN DEFAULT 1")
             
-            # Performance: Index on transaction_date for fast daily lookups
+            # Indexes
             conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)"))
             conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_payment_mode ON transactions(payment_mode)"))
             conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_transactions_created_by ON transactions(created_by_user_id)"))
             conn.commit()
-            print("[MIGRATE] Ensured performance indexes and Phase 2 columns on transactions")
             
-            # ==================================================================
-            # SHASWATA PHASE 1: New tables & columns for lifecycle tracking
-            # ==================================================================
-            
-            # 1. Add new columns to shaswata_subscriptions
-            _add_column_if_missing("shaswata_subscriptions", "communication_preference", "VARCHAR(20) DEFAULT 'WHATSAPP'")
-            _add_column_if_missing("shaswata_subscriptions", "last_address_confirmed_at", "DATE")
-            
-            # 2. Create shaswata_events table (annual lifecycle tracking)
+            # Shaswata tables (CREATE TABLE IF NOT EXISTS)
             conn.execute(sa_text("""
                 CREATE TABLE IF NOT EXISTS shaswata_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -186,11 +284,6 @@ def init_database():
                     updated_at DATETIME
                 )
             """))
-            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_date ON shaswata_events(scheduled_date)"))
-            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_status ON shaswata_events(status)"))
-            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_shaswata_events_sub ON shaswata_events(subscription_id)"))
-            
-            # 3. Create communication_logs table (message audit trail)
             conn.execute(sa_text("""
                 CREATE TABLE IF NOT EXISTS communication_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,18 +300,20 @@ def init_database():
                     sent_by_user_id INTEGER
                 )
             """))
-            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_comm_logs_devotee ON communication_logs(devotee_id)"))
-            conn.execute(sa_text("CREATE INDEX IF NOT EXISTS idx_comm_logs_type ON communication_logs(message_type)"))
-            
             conn.commit()
-            print("[MIGRATE] Phase 1 Shaswata tables & indexes created successfully")
-            
+            print("[MIGRATE] SQLite migrations complete.")
     except Exception as e:
-        print(f"[WARN] Migration check: {e}")
+        print(f"[WARN] SQLite migration: {e}")
+
+
+def _seed_defaults():
+    """Seed default admin user and sevas if tables are empty."""
+    from .models import User, SevaCatalog, SystemSetting
+    from passlib.context import CryptContext
     
-    # Seed default admin if no users exist
     session = SessionLocal()
     try:
+        # Seed admin
         count = session.query(User).count()
         if count == 0:
             print("[INFO] No users found. Creating default admin...")
@@ -232,12 +327,8 @@ def init_database():
             session.add(admin)
             session.commit()
             print("[OK] Created default user: admin / admin123")
-    except Exception as e:
-        print(f"Error seeding admin: {e}")
-
-    # Seed default Sevas if catalog is empty
-    try:
-        from .models import SevaCatalog
+        
+        # Seed sevas
         count_sevas = session.query(SevaCatalog).count()
         if count_sevas == 0:
             print("[INFO] No sevas found. Seeding default catalog...")
@@ -254,12 +345,8 @@ def init_database():
             session.add_all(default_sevas)
             session.commit()
             print(f"[OK] Seeded {len(default_sevas)} sevas.")
-    except Exception as e:
-        print(f"Error seeding sevas: {e}")
-
-    # Seed default Panchangam system settings if missing
-    try:
-        from .models import SystemSetting
+        
+        # Seed Panchangam settings
         panchang_defaults = [
             SystemSetting(key="temple_lat", value="12.6745", value_type="STRING",
                           description="Temple Latitude (default: Kukke Subramanya)", category="panchang"),
@@ -278,8 +365,8 @@ def init_database():
                 session.add(setting)
         session.commit()
         print("[OK] Ensured Panchangam system settings exist.")
+        
     except Exception as e:
-        print(f"Error seeding panchang settings: {e}")
-
+        print(f"Error seeding defaults: {e}")
     finally:
         session.close()

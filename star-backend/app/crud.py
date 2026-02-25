@@ -226,7 +226,7 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
 def get_daily_transactions(db: Session, date: str = None, 
                            payment_mode: str = None, seva_id: int = None,
                            skip: int = 0, limit: int = 200,
-                           sort_by: str = "time_desc") -> dict:
+                           sort_by: str = "time_desc", lang: str = "en") -> dict:
     """
     Get paginated, filterable transactions for a specific date.
     
@@ -246,7 +246,7 @@ def get_daily_transactions(db: Session, date: str = None,
         date = datetime.now().strftime("%Y-%m-%d")
     
     # Build dynamic WHERE clause
-    where_clauses = ["DATE(t.transaction_date) = :date"]
+    where_clauses = ["DATE(t.transaction_date) = :date", "t.is_active = true"]
     params = {"date": date}
     
     if payment_mode:
@@ -276,8 +276,11 @@ def get_daily_transactions(db: Session, date: str = None,
     ).scalar()
     
     # Fetch paginated data (Phase 2: join users for staff info, devotee for gothra/nakshatra)
+    # Select localized seva name
+    seva_name_col = "s.name_kan" if lang == "kn" else "s.name_eng"
+    
     query = f"""
-        SELECT t.id, t.receipt_no, t.devotee_name, s.name_eng as seva_name,
+        SELECT t.id, t.receipt_no, t.devotee_name, COALESCE({seva_name_col}, s.name_eng) as seva_name,
                t.amount_paid, t.payment_mode, t.transaction_date, t.seva_id,
                t.notes,
                d.phone_number, d.gothra_en, d.nakshatra, d.rashi,
@@ -306,7 +309,7 @@ def get_daily_transactions(db: Session, date: str = None,
     }
 
 
-def get_daily_stats(db: Session, date: str = None) -> dict:
+def get_daily_stats(db: Session, date: str = None, lang: str = "en") -> dict:
     """
     Get aggregate statistics for a specific date — computed in the DB for zero-cost.
     
@@ -326,19 +329,21 @@ def get_daily_stats(db: Session, date: str = None) -> dict:
                 COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0) as cash_total,
                 COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0) as upi_total
             FROM transactions
-            WHERE DATE(transaction_date) = :date
+            WHERE DATE(transaction_date) = :date AND is_active = true
         """),
         {"date": date}
     ).fetchone()
     
     # Seva-wise breakdown
+    seva_name_col = "s.name_kan" if lang == "kn" else "s.name_eng"
+    
     seva_rows = db.execute(
-        text("""
-            SELECT s.name_eng as seva_name, s.id as seva_id, 
+        text(f"""
+            SELECT COALESCE({seva_name_col}, s.name_eng) as seva_name, s.id as seva_id, 
                    COUNT(*) as count, SUM(t.amount_paid) as total
             FROM transactions t
             JOIN seva_catalog s ON t.seva_id = s.id
-            WHERE DATE(t.transaction_date) = :date
+            WHERE DATE(t.transaction_date) = :date AND t.is_active = true
             GROUP BY s.id, s.name_eng
             ORDER BY total DESC
         """),
@@ -348,18 +353,28 @@ def get_daily_stats(db: Session, date: str = None) -> dict:
     seva_breakdown = [dict(zip(seva_keys, row)) for row in seva_rows.fetchall()]
     
     # Hourly trend (for chart)
-    hourly_rows = db.execute(
-        text("""
-            SELECT strftime('%H', transaction_date) as hour, 
+    from .database import is_postgres
+    if is_postgres():
+        hourly_sql = """
+            SELECT EXTRACT(HOUR FROM transaction_date)::INTEGER as hour, 
+                   COUNT(*) as count,
+                   SUM(amount_paid) as total
+            FROM transactions
+            WHERE DATE(transaction_date) = :date
+            GROUP BY EXTRACT(HOUR FROM transaction_date)
+            ORDER BY hour ASC
+        """
+    else:
+        hourly_sql = """
+            SELECT CAST(strftime('%H', transaction_date) AS INTEGER) as hour,
                    COUNT(*) as count,
                    SUM(amount_paid) as total
             FROM transactions
             WHERE DATE(transaction_date) = :date
             GROUP BY strftime('%H', transaction_date)
             ORDER BY hour ASC
-        """),
-        {"date": date}
-    )
+        """
+    hourly_rows = db.execute(text(hourly_sql), {"date": date})
     hourly_keys = hourly_rows.keys()
     hourly_trend = [dict(zip(hourly_keys, row)) for row in hourly_rows.fetchall()]
     
@@ -648,7 +663,7 @@ def log_dispatch(db: Session, subscription_id: int) -> dict:
         db.execute(
             text("""
                 UPDATE shaswata_subscriptions 
-                SET last_dispatch_date = DATE('now'),
+                SET last_dispatch_date = CURRENT_DATE,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :sub_id
             """),
@@ -690,7 +705,7 @@ def log_feedback_sent(db: Session, subscription_id: int) -> dict:
         db.execute(
             text("""
                 UPDATE shaswata_subscriptions 
-                SET last_feedback_date = DATE('now'),
+                SET last_feedback_date = CURRENT_DATE,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :sub_id
             """),
@@ -722,21 +737,39 @@ def get_pending_feedback_subscriptions(db: Session) -> list:
     
     Following DB Integrity: N+1 Prevention with JOIN.
     """
-    query = text("""
-        SELECT 
-            ss.id, d.full_name_en, d.phone_number, d.gothra_en,
-            COALESCE(sc.name_eng, 'Shaswata Seva') as seva_name,
-            ss.last_dispatch_date, ss.last_feedback_date
-        FROM shaswata_subscriptions ss
-        JOIN devotees d ON ss.devotee_id = d.id
-        LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
-        WHERE ss.is_active = 1
-          AND ss.last_dispatch_date IS NOT NULL
-          AND DATE(ss.last_dispatch_date, '+5 days') <= DATE('now')
-          AND (ss.last_feedback_date IS NULL 
-               OR CAST(strftime('%Y', ss.last_feedback_date) AS INTEGER) < CAST(strftime('%Y', 'now') AS INTEGER))
-        ORDER BY ss.last_dispatch_date ASC
-    """)
+    from .database import is_postgres
+    if is_postgres():
+        query = text("""
+            SELECT 
+                ss.id, d.full_name_en, d.phone_number, d.gothra_en,
+                COALESCE(sc.name_eng, 'Shaswata Seva') as seva_name,
+                ss.last_dispatch_date, ss.last_feedback_date
+            FROM shaswata_subscriptions ss
+            JOIN devotees d ON ss.devotee_id = d.id
+            LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
+            WHERE ss.is_active = true
+              AND ss.last_dispatch_date IS NOT NULL
+              AND (ss.last_dispatch_date + INTERVAL '5 days') <= CURRENT_DATE
+              AND (ss.last_feedback_date IS NULL 
+                   OR EXTRACT(YEAR FROM ss.last_feedback_date) < EXTRACT(YEAR FROM CURRENT_DATE))
+            ORDER BY ss.last_dispatch_date ASC
+        """)
+    else:
+        query = text("""
+            SELECT 
+                ss.id, d.full_name_en, d.phone_number, d.gothra_en,
+                COALESCE(sc.name_eng, 'Shaswata Seva') as seva_name,
+                ss.last_dispatch_date, ss.last_feedback_date
+            FROM shaswata_subscriptions ss
+            JOIN devotees d ON ss.devotee_id = d.id
+            LEFT JOIN seva_catalog sc ON ss.seva_id = sc.id
+            WHERE ss.is_active = 1
+              AND ss.last_dispatch_date IS NOT NULL
+              AND DATE(ss.last_dispatch_date, '+5 days') <= DATE('now')
+              AND (ss.last_feedback_date IS NULL 
+                   OR CAST(strftime('%Y', ss.last_feedback_date) AS INTEGER) < CAST(strftime('%Y', 'now') AS INTEGER))
+            ORDER BY ss.last_dispatch_date ASC
+        """)
     
     result = db.execute(query).fetchall()
     
@@ -900,17 +933,30 @@ def get_enhanced_report(db: Session, start_date: str, end_date: str) -> dict:
         ORDER BY d ASC
     """), {"start": start_date, "end": end_date}).fetchall()
 
-    # --- 6. Hourly heatmap ---
-    hourly_rows = db.execute(text("""
-        SELECT CAST(strftime('%H', transaction_date) AS INTEGER) as hour,
-               COUNT(*) as bookings,
-               COALESCE(SUM(amount_paid), 0) as revenue
-        FROM transactions
-        WHERE DATE(transaction_date) >= DATE(:start)
-          AND DATE(transaction_date) <= DATE(:end)
-        GROUP BY hour
-        ORDER BY hour
-    """), {"start": start_date, "end": end_date}).fetchall()
+    from .database import is_postgres
+    if is_postgres():
+        hourly_sql = """
+            SELECT EXTRACT(HOUR FROM transaction_date)::INTEGER as hour,
+                   COUNT(*) as bookings,
+                   COALESCE(SUM(amount_paid), 0) as revenue
+            FROM transactions
+            WHERE DATE(transaction_date) >= DATE(:start)
+              AND DATE(transaction_date) <= DATE(:end)
+            GROUP BY hour
+            ORDER BY hour
+        """
+    else:
+        hourly_sql = """
+            SELECT CAST(strftime('%H', transaction_date) AS INTEGER) as hour,
+                   COUNT(*) as bookings,
+                   COALESCE(SUM(amount_paid), 0) as revenue
+            FROM transactions
+            WHERE DATE(transaction_date) >= DATE(:start)
+              AND DATE(transaction_date) <= DATE(:end)
+            GROUP BY hour
+            ORDER BY hour
+        """
+    hourly_rows = db.execute(text(hourly_sql), {"start": start_date, "end": end_date}).fetchall()
 
     # Build full 24-hour array (0-23)
     hourly_map = {int(r[0]): {"bookings": int(r[1]), "revenue": float(r[2])} for r in hourly_rows}
@@ -923,7 +969,7 @@ def get_enhanced_report(db: Session, start_date: str, end_date: str) -> dict:
     # --- 7. Shaswata vs Daily count ---
     shaswata_row = db.execute(text("""
         SELECT COUNT(*) FROM shaswata_subscriptions
-        WHERE is_active = 1
+        WHERE is_active = true
     """)).fetchone()
     shaswata_active = int(shaswata_row[0]) if shaswata_row else 0
 

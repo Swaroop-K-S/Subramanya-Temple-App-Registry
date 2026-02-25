@@ -28,12 +28,14 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
     const [transaction, setTransaction] = useState(null);
     const t = TRANSLATIONS[lang];
     const receiptRef = useRef();
+    const idempotencyKeyRef = useRef(null); // [NEW] Idempotency Key
     const [receiptData, setReceiptData] = useState(null);
     const [printStatus, setPrintStatus] = useState('idle');
 
     // --- AUTO-FILL LOGIC ---
     useEffect(() => {
         if (!isOpen) {
+            idempotencyKeyRef.current = null;
             setTransaction(null);
             setPrintStatus('idle');
             setFormData({
@@ -45,6 +47,12 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                 upi_transaction_id: '',
                 custom_amount: '',
             });
+        } else if (!idempotencyKeyRef.current) {
+            // Generate a unique token for this specific modal session
+            // Fallback for non-https local dev if crypto.randomUUID is occasionally missing
+            idempotencyKeyRef.current = typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : Math.random().toString(36).substring(2) + Date.now().toString(36);
         }
         const checkPhone = async () => {
             if (formData.phone_number.length === 10) {
@@ -122,7 +130,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                     : parseFloat(seva.price) || 0,
                 upi_transaction_id: formData.payment_mode === 'UPI' ? formData.upi_transaction_id : null
             };
-            const response = await bookSeva(bookingData);
+            const response = await bookSeva(bookingData, idempotencyKeyRef.current);
             setTransaction(response);
 
             // Auto-trigger preview
@@ -224,7 +232,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                         {t?.bookingSuccessful || "Booking Successful!"}
                     </h2>
                     <p className="text-gray-500 mb-4 shrink-0">
-                        Receipt #{transaction.receipt_no}
+                        {t?.receipt || "Receipt"} #{transaction.receipt_no}
                     </p>
 
                     {/* Receipt Preview (Visible + Scrollable) */}
@@ -246,17 +254,17 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                         <div className="h-8 flex items-center justify-center">
                             {printStatus === 'printing' && (
                                 <div className="flex items-center gap-2 text-orange-600 font-bold animate-pulse">
-                                    <Printer size={20} /> <span>Printing...</span>
+                                    <Printer size={20} /> <span>{t?.printing || "Printing..."}</span>
                                 </div>
                             )}
                             {printStatus === 'success' && (
                                 <div className="flex items-center gap-2 text-green-600 font-bold animate-in fade-in slide-in-from-bottom-2">
-                                    <CheckCircle2 size={20} /> <span>Sent to Printer!</span>
+                                    <CheckCircle2 size={20} /> <span>{t?.sentToPrinter || "Sent to Printer!"}</span>
                                 </div>
                             )}
                             {printStatus === 'error' && (
                                 <div className="flex items-center gap-2 text-red-600 font-bold">
-                                    <X size={20} /> <span>Print Failed</span>
+                                    <X size={20} /> <span>{t?.printFailed || "Print Failed"}</span>
                                 </div>
                             )}
                         </div>
@@ -268,14 +276,14 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                 disabled={printStatus === 'printing'}
                                 className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                             >
-                                <Printer size={18} /> Print Again
+                                <Printer size={18} /> {t?.printAgain || "Print Again"}
                             </button>
 
                             <button
                                 onClick={onClose}
                                 className="w-full py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200"
                             >
-                                Close & New
+                                {t?.closeAndNew || "Close & New"}
                             </button>
                         </div>
 
@@ -306,26 +314,26 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                             {lang === 'KN' && seva.name_kan ? seva.name_kan : seva.name_eng}
                         </h2>
                         <span className="inline-block px-3 py-1 bg-orange-200/50 text-orange-800 text-xs font-bold rounded-lg uppercase tracking-wider mb-6">
-                            Verified Seva
+                            {t?.verifiedSeva || "Verified Seva"}
                         </span>
 
                         <div className="space-y-4">
                             <div className="flex items-center gap-3 text-gray-600">
                                 <Calendar className="w-5 h-5 text-orange-400" />
-                                <span className="font-medium text-sm">Valid for {formData.seva_date}</span>
+                                <span className="font-medium text-sm">{t?.validFor || "Valid for"} {formData.seva_date}</span>
                             </div>
                             <div className="flex items-center gap-3 text-gray-600">
                                 <User className="w-5 h-5 text-orange-400" />
-                                <span className="font-medium text-sm">Single Devotee</span>
+                                <span className="font-medium text-sm">{t?.singleDevotee || "Single Devotee"}</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="relative z-10 mt-8">
-                        <p className="text-gray-500 text-xs uppercase font-bold tracking-widest mb-1">Total Amount</p>
+                        <p className="text-gray-500 text-xs uppercase font-bold tracking-widest mb-1">{t?.totalAmount || "Total Amount"}</p>
                         <div className="flex items-center gap-1 text-emerald-600">
                             {allowsCustomAmount() ? (
-                                <span className="text-2xl font-bold text-emerald-500">Custom Amount</span>
+                                <span className="text-2xl font-bold text-emerald-500">{t?.customAmount || "Custom Amount"}</span>
                             ) : (
                                 <>
                                     <IndianRupee className="w-6 h-6" />
@@ -339,7 +347,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                 {/* Right Column: Input Form */}
                 <div className="w-full md:w-2/3 p-8 flex flex-col h-full overflow-hidden">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-gray-700">Devotee Details</h3>
+                        <h3 className="text-lg font-bold text-gray-700">{t?.devoteeDetails || "Devotee Details"}</h3>
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                             <X className="w-6 h-6 text-gray-400 hover:text-red-500" />
                         </button>
@@ -359,7 +367,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                     value={formData.phone_number}
                                     onChange={handleInputChange}
                                     className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                                    placeholder="Phone Number"
+                                    placeholder={t?.phone || "Phone Number"}
                                     maxLength={10}
                                     required
                                 />
@@ -387,7 +395,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
                                 <span>{t?.name || "Devotee Name"}</span>
-                                <span className="text-orange-500">{lang === 'KN' ? 'English → Kannada' : 'English'}</span>
+                                <span className="text-orange-500">{lang === 'KN' ? (t?.englishToKannada || 'English → Kannada') : (t?.english || 'English')}</span>
                             </label>
                             <div className="relative">
                                 <User className="absolute left-3 top-3.5 text-gray-400 z-10 w-5 h-5" />
@@ -399,7 +407,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                         value={formData.devotee_name}
                                         onChangeText={(text) => setFormData(prev => ({ ...prev, devotee_name: text }))}
                                         lang="kn"
-                                        placeholder="Type Name..."
+                                        placeholder={t?.typeName || "Type Name..."}
                                         containerStyles={{ position: 'relative' }}
                                         activeItemStyles={{ backgroundColor: '#f97316', color: 'white' }}
                                     />
@@ -409,7 +417,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                         value={formData.devotee_name}
                                         onChange={handleInputChange}
                                         className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                                        placeholder="Enter Name"
+                                        placeholder={t?.enterName || "Enter Name"}
                                         required
                                     />
                                 )}
@@ -429,7 +437,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                     onChange={handleInputChange}
                                     className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none transition-all text-gray-700 font-medium cursor-pointer hover:bg-gray-100"
                                 >
-                                    <option value="">{lang === 'KN' ? 'ಗೋತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ...' : 'Select Gothra...'}</option>
+                                    <option value="">{t?.selectGothra || "Select Gothra..."}</option>
                                     {GOTRAS.map(g => (
                                         <option key={g.en} value={g.en}>
                                             {lang === 'KN' ? `${g.kn} (${g.en})` : g.en}
@@ -450,14 +458,14 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                             <div className="relative">
                                 <Star className="absolute left-3 top-3.5 text-gray-400 w-5 h-5 pointer-events-none" />
                                 <select name="nakshatra" value={formData.nakshatra} onChange={handleInputChange} className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none">
-                                    <option value="">{lang === 'KN' ? 'ನಕ್ಷತ್ರ' : 'Nakshatra'}</option>
+                                    <option value="">{t?.nakshatra || "Nakshatra"}</option>
                                     {NAKSHATRAS.map(n => <option key={n.en} value={n.en}>{lang === 'KN' ? n.kn : n.en}</option>)}
                                 </select>
                             </div>
                             <div className="relative">
                                 <Moon className="absolute left-3 top-3.5 text-gray-400 w-5 h-5 pointer-events-none" />
                                 <select name="rashi" value={formData.rashi} onChange={handleInputChange} className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none">
-                                    <option value="">{lang === 'KN' ? 'ರಾಶಿ' : 'Rashi'}</option>
+                                    <option value="">{t?.rashi || "Rashi"}</option>
                                     {RASHIS.map(r => <option key={r.en} value={r.en}>{lang === 'KN' ? r.kn : r.en}</option>)}
                                 </select>
                             </div>
@@ -481,8 +489,8 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                         {allowsCustomAmount() && (
                             <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-                                    <span>{lang === 'KN' ? 'ಇಚ್ಛೆಯ ಮೊತ್ತ' : 'Custom Amount'}</span>
-                                    <span className="text-emerald-500 font-normal">{lang === 'KN' ? 'ಐಚ್ಛಿಕ' : 'Optional'}</span>
+                                    <span>{t?.customAmount || "Custom Amount"}</span>
+                                    <span className="text-emerald-500 font-normal">{t?.optional || "Optional"}</span>
                                 </label>
                                 <div className="relative">
                                     <IndianRupee className="absolute left-3 top-3.5 text-emerald-500 w-5 h-5" />
@@ -494,10 +502,10 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                         min="1"
                                         step="1"
                                         className="w-full pl-10 pr-4 py-3 bg-emerald-50 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all text-emerald-800 font-bold text-lg placeholder-emerald-300"
-                                        placeholder="Enter your amount (₹)"
+                                        placeholder={t?.enterAmount || "Enter your amount (₹)"}
                                     />
                                 </div>
-                                <p className="text-xs text-gray-400">Enter the amount you wish to donate</p>
+                                <p className="text-xs text-gray-400">{t?.donateHint || "Enter the amount you wish to donate"}</p>
                             </div>
                         )}
 
@@ -505,7 +513,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                         {formData.payment_mode === 'UPI' && (
                             <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    UPI Transaction ID <span className="text-red-500">*</span>
+                                    {t?.upiTransactionId || "UPI Transaction ID"} <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <input
@@ -513,13 +521,13 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                                         value={formData.upi_transaction_id}
                                         onChange={handleInputChange}
                                         className="w-full px-4 py-3 bg-purple-50 border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all font-mono text-purple-800 placeholder-purple-300"
-                                        placeholder="Enter UPI Transaction ID (e.g., 123456789012)"
+                                        placeholder={t?.enterUpiId || "Enter UPI Transaction ID (e.g., 123456789012)"}
                                         required
                                         minLength={6}
                                         maxLength={50}
                                     />
                                 </div>
-                                <p className="text-xs text-gray-400">Enter the 12-digit UTR number from your payment app</p>
+                                <p className="text-xs text-gray-400">{t?.upiHint || "Enter the 12-digit UTR number from your payment app"}</p>
                             </div>
                         )}
 
@@ -534,7 +542,7 @@ function BookingModal({ isOpen, onClose, seva, lang = 'EN' }) {
                             >
                                 {loading ? <Loader2 className="animate-spin" /> : (
                                     <>
-                                        <span>CONFIRM BOOKING</span>
+                                        <span>{t?.confirmBooking || "CONFIRM BOOKING"}</span>
                                         <ArrowRight className="w-5 h-5" />
                                     </>
                                 )}

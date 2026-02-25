@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Calendar, BarChart3, IndianRupee, Settings, LogOut, Flower, Truck, ScrollText } from 'lucide-react';
+import { TRANSLATIONS } from './translations';
 
-const Sidebar = ({ activePage, setActivePage, handleLogout, user }) => {
+const Sidebar = ({ handleLogout, user, lang = 'EN' }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const location = useLocation();
+    const navigate = useNavigate();
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
 
     const menuItems = [
-        { id: 'home', icon: Home, label: 'Home', allowed: ['admin', 'clerk'] },
-        { id: 'panchangam', icon: Calendar, label: 'Panchangam', allowed: ['admin', 'clerk'] },
-        { id: 'daily', icon: ScrollText, label: 'Daily Txns', allowed: ['admin'] },
-        { id: 'reports', icon: IndianRupee, label: 'Reports', allowed: ['admin'] },
-        { id: 'dispatch', icon: Truck, label: 'Shaswata Seva', allowed: ['admin', 'clerk'] },
-        { id: 'settings', icon: Settings, label: 'Settings', allowed: ['admin'] }
+        { id: 'home', path: '/dashboard', icon: Home, label: t.home || 'Home', allowed: ['admin', 'clerk'] },
+        { id: 'panchangam', path: '/panchangam', icon: Calendar, label: t.panchangam || 'Panchangam', allowed: ['admin', 'clerk'] },
+        { id: 'daily', path: '/daily', icon: ScrollText, label: t.dailyTxns || 'Daily Txns', allowed: ['admin'] },
+        { id: 'reports', path: '/reports', icon: IndianRupee, label: t.reports || 'Reports', allowed: ['admin'] },
+        { id: 'dispatch', path: '/dispatch', icon: Truck, label: t.dispatch || 'Shaswata Seva', allowed: ['admin', 'clerk'] },
+        { id: 'settings', path: '/settings', icon: Settings, label: t.settings || 'Settings', allowed: ['admin'] }
     ];
 
     // Filter items based on user role
@@ -42,14 +47,14 @@ const Sidebar = ({ activePage, setActivePage, handleLogout, user }) => {
                     <Flower className="text-white w-6 h-6" />
                 </div>
 
-                {/* Navigation Items - Magnification Physics */}
+                {/* Navigation Items */}
                 <nav className="flex flex-col gap-3">
                     {filteredItems.map((item) => {
-                        const isActive = activePage === item.id;
+                        const isActive = location.pathname === item.path;
                         return (
                             <button
                                 key={item.id}
-                                onClick={() => setActivePage(item.id)}
+                                onClick={() => navigate(item.path)}
                                 className={`
                                     relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300 group
                                     ${isActive

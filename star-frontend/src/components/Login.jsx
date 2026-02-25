@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Flower, Lock, User, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { TRANSLATIONS } from './translations';
+import { useAuth } from '../hooks/useAuth';
 
-const Login = ({ setToken }) => {
+const Login = ({ lang = 'EN' }) => {
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const navigate = useNavigate();
+    const auth = useAuth();
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -21,6 +25,7 @@ const Login = ({ setToken }) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
+                credentials: 'include' // Required to receive and send HttpOnly cookies
             });
 
             const data = await response.json();
@@ -31,9 +36,9 @@ const Login = ({ setToken }) => {
 
             // Success Animation Trigger
             setSuccess(true);
-            setTimeout(() => {
-                localStorage.setItem('access_token', data.access_token);
-                setToken(data.access_token);
+            setTimeout(async () => {
+                // Cookie is set — now fetch user profile via auth hook
+                await auth.login();
                 navigate('/dashboard');
             }, 800);
 
@@ -64,10 +69,10 @@ const Login = ({ setToken }) => {
                         </div>
 
                         <h1 className="text-3xl font-black text-white font-heading tracking-wide mb-2 drop-shadow-md">
-                            S.T.A.R. Portal
+                            {t.starPortal || "S.T.A.R. Portal"}
                         </h1>
                         <p className="text-amber-100/70 text-sm font-medium tracking-widest uppercase">
-                            Subramanya Temple Registry
+                            {t.subramanyaTempleRegistry || "Subramanya Temple Registry"}
                         </p>
                     </div>
 
@@ -90,10 +95,10 @@ const Login = ({ setToken }) => {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     className="peer w-full pl-12 pr-4 py-3.5 bg-black/20 hover:bg-black/30 border border-white/10 rounded-xl text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-inner"
-                                    placeholder="Username"
+                                    placeholder={t.username || "Username"}
                                 />
                                 <label className="absolute left-12 top-3.5 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-amber-400 peer-focus:bg-slate-900 peer-focus:px-1 peer-focus:rounded-sm cursor-text">
-                                    Username
+                                    {t.username || "Username"}
                                 </label>
                                 <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-500 group-hover:text-amber-400 peer-focus:text-amber-400 transition-colors" />
                             </div>
@@ -106,10 +111,10 @@ const Login = ({ setToken }) => {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="peer w-full pl-12 pr-4 py-3.5 bg-black/20 hover:bg-black/30 border border-white/10 rounded-xl text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-inner"
-                                    placeholder="Password"
+                                    placeholder={t.password || "Password"}
                                 />
                                 <label className="absolute left-12 top-3.5 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-amber-400 peer-focus:bg-slate-900 peer-focus:px-1 peer-focus:rounded-sm cursor-text">
-                                    Password
+                                    {t.password || "Password"}
                                 </label>
                                 <Lock className="absolute left-4 top-3.5 h-5 w-5 text-gray-500 group-hover:text-amber-400 peer-focus:text-amber-400 transition-colors" />
                             </div>
@@ -129,17 +134,17 @@ const Login = ({ setToken }) => {
                                         success ? (
                                             <>
                                                 <CheckCircle2 className="w-6 h-6 animate-bounce" />
-                                                <span className="text-lg">Access Granted</span>
+                                                <span className="text-lg">{t.accessGranted || "Access Granted"}</span>
                                             </>
                                         ) : (
                                             <>
                                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                                <span className="tracking-widest opacity-90">VERIFYING...</span>
+                                                <span className="tracking-widest opacity-90">{t.verifying || "VERIFYING..."}</span>
                                             </>
                                         )
                                     ) : (
                                         <>
-                                            <span>Start Session</span>
+                                            <span>{t.startSession || "Start Session"}</span>
                                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                                         </>
                                     )}
@@ -157,7 +162,7 @@ const Login = ({ setToken }) => {
                     <div className="px-10 py-5 bg-black/20 border-t border-white/5 flex justify-between items-center text-xs text-amber-100/40">
                         <span className="font-mono tracking-widest">V 2.0.0 (OMNI)</span>
                         <div className="flex gap-2 items-center">
-                            <Lock className="w-3 h-3" /> Encrypted Protocol
+                            <Lock className="w-3 h-3" /> {t.encryptedProtocol || "Encrypted Protocol"}
                         </div>
                     </div>
                 </div>

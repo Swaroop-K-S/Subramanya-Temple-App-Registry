@@ -118,7 +118,7 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-bold tracking-widest text-temple-saffron uppercase">
-                                Divine Offerings
+                                {t.divineOfferings || "Divine Offerings"}
                             </span>
                             <div className="h-px w-12 bg-temple-saffron/30"></div>
                         </div>
@@ -135,7 +135,7 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                         <div className="absolute -inset-1 bg-gradient-to-r from-temple-gold to-temple-saffron rounded-2xl opacity-0 group-focus-within:opacity-20 transition-opacity duration-500 blur-lg"></div>
                         <OmniInput
                             icon={Search}
-                            placeholder="Find Seva..."
+                            placeholder={t.findSeva || "Find Seva..."}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="bg-white/70 dark:bg-slate-900/70"
@@ -143,14 +143,14 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                     </div>
                     <div className="w-full md:w-48 hidden md:block">
                         <OmniDropdown
-                            label="Category"
+                            label={t.category || "Category"}
                             value={categoryFilter}
                             onChange={setCategoryFilter}
                             options={[
-                                { label: 'All Sevas', value: 'ALL' },
-                                { label: 'Archana', value: 'ARCHANA' },
-                                { label: 'Abhisheka', value: 'ABHISHEKA' },
-                                { label: 'Homa', value: 'HOMA' },
+                                { label: t.allSevas || 'All Sevas', value: 'ALL' },
+                                { label: t.archana || 'Archana', value: 'ARCHANA' },
+                                { label: t.abhishekaFilter || 'Abhisheka', value: 'ABHISHEKA' },
+                                { label: t.homaFilter || 'Homa', value: 'HOMA' },
                             ]}
                         />
                     </div>
@@ -240,7 +240,7 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                                         <div className="flex items-end justify-between mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
                                             <div className="flex flex-col">
                                                 <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-1">
-                                                    Dakshina
+                                                    {t.dakshina || "Dakshina"}
                                                 </span>
                                                 <div className="flex items-center gap-1 font-display font-bold text-2xl text-temple-green dark:text-temple-green">
                                                     {/* Show 'Custom' for General/Anna Dhana sevas */}
@@ -248,7 +248,7 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                                                         seva.name_eng?.toLowerCase().includes('anna') ||
                                                         seva.name_eng?.toLowerCase().includes('nidhi') ||
                                                         seva.name_eng?.toLowerCase().includes('samanya')) ? (
-                                                        <span className="text-lg">Custom</span>
+                                                        <span className="text-lg">{t.customAmount || "Custom"}</span>
                                                     ) : (
                                                         <>
                                                             <span className="text-lg">₹</span>
@@ -270,10 +270,10 @@ const Dashboard = ({ onBack, lang = 'EN', isHome = false }) => {
                             <Search size={40} className="opacity-50" />
                         </div>
                         <h3 className="text-xl font-heading font-bold text-slate-600 dark:text-slate-300 mb-2">
-                            No offerings found
+                            {t.noOfferingsFound || "No offerings found"}
                         </h3>
                         <p className="max-w-xs text-center">
-                            Try adjusting your search terms or category filters.
+                            {t.tryAdjusting || "Try adjusting your search terms or category filters."}
                         </p>
                     </div>
                 )}

@@ -1,0 +1,12 @@
+DEBUG DB: __file__ = C:\Users\swaro\Desktop\Subramanya Temple App & Registry\star-backend\app\database.py
+DEBUG DB: app_dir = C:\Users\swaro\Desktop\Subramanya Temple App & Registry\star-backend\app
+DEBUG DB: backend_dir = C:\Users\swaro\Desktop\Subramanya Temple App & Registry\star-backend
+DEBUG DB: data_dir = C:\Users\swaro\Desktop\Subramanya Temple App & Registry\star-backend\data
+(1, 'Kunkuma Archane', 'ಕುಂಕುಮ ಅರ್ಚನೆ', True)
+(2, 'Panchambruta Abhisheka', 'ಪಂಚಾಮೃತ ಅಭಿಷೇಕ', True)
+(3, 'Ksheera Abhisheka', 'ಕ್ಷೀರಾಭಿಷೇಕ', True)
+(4, 'Rudra Abhisheka', 'ರುದ್ರ ಅಭಿಷೇಕ', True)
+(5, 'Anna Dhana Nidhi', 'ಅನ್ನ ದಾನ ನಿಧಿ', True)
+(6, 'General', 'ಸಾಮಾನ್ಯ', True)
+(7, 'Rajata Ashtottara Seva', 'ರಜತ ಅಷ್ಟೋತ್ತರ ಸೇವೆ', True)
+(8, 'Shaswata Brahmachari Pooja', 'ಶಾಶ್ವತ ಬ್ರಹ್ಮಚಾರಿ ಪೂಜೆ', True)

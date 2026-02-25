@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { ReceiptPreview } from './ReceiptPreview';
+import { TRANSLATIONS } from './translations';
 import html2canvas from 'html2canvas';
 
 // ─────────────────────────────────────────────────
@@ -86,6 +87,7 @@ const Toast = ({ message, visible }) => (
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════
 const DailyTransactions = ({ lang = 'EN' }) => {
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
     const navigate = useNavigate();
 
     // DATA STATE
@@ -140,10 +142,11 @@ const DailyTransactions = ({ lang = 'EN' }) => {
             });
             if (paymentFilter) params.set('payment_mode', paymentFilter);
             if (sevaFilter) params.set('seva_id', sevaFilter);
+            params.set('lang', lang.toLowerCase());
 
             const [txRes, statsRes] = await Promise.all([
                 api.get(`/transactions?${params}`),
-                api.get(`/transactions/stats?date=${selectedDate}`)
+                api.get(`/transactions/stats?date=${selectedDate}&lang=${lang.toLowerCase()}`)
             ]);
 
             const txData = txRes.data;
@@ -157,7 +160,7 @@ const DailyTransactions = ({ lang = 'EN' }) => {
         } finally {
             setLoading(false);
         }
-    }, [selectedDate, page, paymentFilter, sevaFilter, sortBy]);
+    }, [selectedDate, page, paymentFilter, sevaFilter, sortBy, lang]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
     useEffect(() => { api.get('/sevas').then(r => setSevas(r.data || [])).catch(() => { }); }, []);
@@ -316,7 +319,7 @@ const DailyTransactions = ({ lang = 'EN' }) => {
                         <ArrowLeft />
                     </button>
                     <div>
-                        <h1 className="text-3xl font-black text-slate-800 dark:text-white">Daily Transactions</h1>
+                        <h1 className="text-3xl font-black text-slate-800 dark:text-white">{t.dailyTransactionsHeader}</h1>
                         <p className="text-slate-500 text-sm flex items-center gap-2">
                             {formatDate(selectedDate)}
                             {isToday && <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-[10px] font-bold uppercase">Today</span>}
@@ -343,7 +346,7 @@ const DailyTransactions = ({ lang = 'EN' }) => {
 
                     {!isToday && (
                         <button onClick={() => { setSelectedDate(new Date().toISOString().split('T')[0]); setPage(1); }}
-                            className="px-3 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition-colors shadow-sm">Today</button>
+                            className="px-3 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition-colors shadow-sm">{t.today}</button>
                     )}
 
                     {/* Density Toggle */}
@@ -359,22 +362,22 @@ const DailyTransactions = ({ lang = 'EN' }) => {
 
             {/* ─── STATS CARDS ─── */}
             <div className="max-w-7xl mx-auto mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard icon={IndianRupee} label="Total Collection"
+                <StatCard icon={IndianRupee} label={t.totalCollection}
                     value={`₹ ${(stats?.total_amount || 0).toLocaleString()}`}
-                    subtext={`${stats?.booking_count || 0} Bookings`}
+                    subtext={`${stats?.booking_count || 0} ${t.bookings || "Bookings"}`}
                     gradient="bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-orange-200 dark:shadow-none" />
-                <StatCard icon={Banknote} label="Cash"
+                <StatCard icon={Banknote} label={t.cashOnly}
                     value={`₹ ${(stats?.cash_total || 0).toLocaleString()}`}
                     gradient="bg-white dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700"
                     iconColor="text-green-500" />
-                <StatCard icon={CreditCard} label="UPI"
+                <StatCard icon={CreditCard} label={t.upiOnly}
                     value={`₹ ${(stats?.upi_total || 0).toLocaleString()}`}
                     gradient="bg-white dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700"
                     iconColor="text-purple-500" />
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-lg min-h-[120px]">
                     <div className="flex items-center gap-2 mb-2">
                         <TrendingUp size={16} className="text-orange-500" />
-                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Hourly Trend</p>
+                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{t.hourlyTrend}</p>
                     </div>
                     <div className="h-20"><HourlyChart data={stats?.hourly_trend} /></div>
                 </div>
@@ -392,18 +395,18 @@ const DailyTransactions = ({ lang = 'EN' }) => {
                 </div>
                 <select value={paymentFilter} onChange={(e) => { setPaymentFilter(e.target.value); setPage(1); }}
                     className="px-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none text-sm font-medium cursor-pointer focus:ring-2 focus:ring-orange-500/50">
-                    <option value="">All Payments</option>
-                    <option value="CASH">💵 Cash Only</option>
-                    <option value="UPI">📱 UPI Only</option>
+                    <option value="">{t.allPayments}</option>
+                    <option value="CASH">{t.cashOnly}</option>
+                    <option value="UPI">{t.upiOnly}</option>
                 </select>
                 <select value={sevaFilter} onChange={(e) => { setSevaFilter(e.target.value); setPage(1); }}
                     className="px-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 outline-none text-sm font-medium cursor-pointer focus:ring-2 focus:ring-orange-500/50">
-                    <option value="">All Sevas</option>
+                    <option value="">{t.allSevas}</option>
                     {sevas.map(s => <option key={s.id} value={s.id}>{s.name_eng}</option>)}
                 </select>
                 <button onClick={handleExport}
                     className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors font-bold text-sm shadow-sm">
-                    <Download size={16} /> Export CSV
+                    <Download size={16} /> {t.exportCSV}
                 </button>
             </div>
 
@@ -434,22 +437,22 @@ const DailyTransactions = ({ lang = 'EN' }) => {
                                     <input type="checkbox" checked={allSelected} onChange={toggleSelectAll}
                                         className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer" />
                                 </th>
-                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider`}>Receipt #</th>
+                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider`}>{t.receiptNo}</th>
                                 <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-orange-500 transition-colors select-none`}
                                     onClick={() => toggleSort('time')}>
-                                    <span className="flex items-center gap-1">Time <SortIcon column="time" current={sortBy} /></span>
+                                    <span className="flex items-center gap-1">{t.time} <SortIcon column="time" current={sortBy} /></span>
                                 </th>
                                 <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-orange-500 transition-colors select-none`}
                                     onClick={() => toggleSort('name')}>
-                                    <span className="flex items-center gap-1">Devotee <SortIcon column="name" current={sortBy} /></span>
+                                    <span className="flex items-center gap-1">{t.devotee} <SortIcon column="name" current={sortBy} /></span>
                                 </th>
-                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider`}>Seva</th>
+                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider`}>{t.seva}</th>
                                 <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-orange-500 transition-colors select-none`}
                                     onClick={() => toggleSort('amount')}>
-                                    <span className="flex items-center justify-end gap-1">Amount <SortIcon column="amount" current={sortBy} /></span>
+                                    <span className="flex items-center justify-end gap-1">{t.amount} <SortIcon column="amount" current={sortBy} /></span>
                                 </th>
-                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider text-center`}>Staff</th>
-                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider text-center`}>Actions</th>
+                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider text-center`}>{t.staffColumn}</th>
+                                <th className={`${cellPad} text-xs font-bold text-slate-400 uppercase tracking-wider text-center`}>{t.actions}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -458,8 +461,8 @@ const DailyTransactions = ({ lang = 'EN' }) => {
                             ) : filtered.length === 0 ? (
                                 <tr><td colSpan="8" className="p-16 text-center">
                                     <Calendar size={40} className="inline text-slate-300 dark:text-slate-600 mb-2" />
-                                    <p className="text-slate-400 font-medium">No transactions found</p>
-                                    <p className="text-slate-400 text-sm">Try different filters</p>
+                                    <p className="text-slate-400 font-medium">{t.noTransactions}</p>
+                                    <p className="text-slate-400 text-sm">{t.tryFilters}</p>
                                 </td></tr>
                             ) : (
                                 filtered.map((t) => {

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sun, Moon, Languages, Bell, Search, Flower, MapPin, ChevronRight, X } from 'lucide-react';
 import { useTempleTime } from '../context/TimeContext';
+import { TRANSLATIONS } from './translations';
 import api from '../services/api';
 
-const Navbar = ({ lang, setLang, user, setActivePage }) => {
+const Navbar = ({ lang, setLang, user, navigate }) => {
+    const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
     const [isDark, setIsDark] = useState(false);
     const { formattedTime } = useTempleTime();
 
@@ -62,7 +64,7 @@ const Navbar = ({ lang, setLang, user, setActivePage }) => {
 
     const handleGoToDispatch = () => {
         setNotifOpen(false);
-        if (setActivePage) setActivePage('dispatch');
+        if (navigate) navigate('/dispatch');
     };
 
     return (
@@ -72,7 +74,7 @@ const Navbar = ({ lang, setLang, user, setActivePage }) => {
             <div className="pointer-events-auto mt-2">
                 <div className="hidden md:flex flex-col animate-in slide-in-from-top-4 fade-in duration-700">
                     <span className="text-[11px] uppercase font-bold tracking-[0.2em] text-slate-400 mb-1 pl-1">
-                        Current Alignment
+                        {t.currentAlignment}
                     </span>
                     <span className="text-2xl font-black text-slate-800 dark:text-temple-sand font-heading drop-shadow-sm tracking-tight">
                         {formattedTime}

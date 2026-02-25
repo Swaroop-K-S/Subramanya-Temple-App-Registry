@@ -273,12 +273,12 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                     <div>
                         <h2 className="text-2xl font-black text-white flex items-center gap-3">
                             <Sparkles className="text-amber-400 fill-amber-400" />
-                            {lang === 'KN' ? 'ಶಾಶ್ವತ ಸೇವೆ' : 'Shaswata Seva'}
+                            {t.shaswataSeva || 'Shaswata Seva'}
                         </h2>
                         <p className="text-amber-100/60 text-sm font-medium">
-                            {step === 1 && "Step 1: Devotee Details"}
-                            {step === 2 && "Step 2: Ritual Selection"}
-                            {step === 3 && "Registration Complete"}
+                            {step === 1 && (t.step1DevoteeDetails || "Step 1: Devotee Details")}
+                            {step === 2 && (t.step2RitualSelection || "Step 2: Ritual Selection")}
+                            {step === 3 && (t.registrationComplete || "Registration Complete")}
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-white/60 hover:text-white transition-colors">
@@ -295,7 +295,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                             {/* Name */}
                             <div>
                                 <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                    {lang === 'KN' ? 'ಹೆಸರು (Name)' : 'Devotee Name'}
+                                    {t.devoteeName || (lang === 'KN' ? 'ಹೆಸರು (Name)' : 'Devotee Name')}
                                 </label>
                                 <div className={`relative group transition-all rounded-xl ${errors.devotee_name ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
@@ -313,7 +313,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                             value={formData.devotee_name}
                                             onChange={(e) => handleInputChange('devotee_name', e.target.value)}
                                             className="w-full pl-12 pr-4 py-4 bg-transparent border-none outline-none text-white placeholder:text-white/20 font-medium text-lg"
-                                            placeholder="Enter full name"
+                                            placeholder={t.enterName || "Enter full name"}
                                         />
                                     )}
                                 </div>
@@ -323,7 +323,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ದೂರವಾಣಿ (Phone)' : 'Mobile Number'}
+                                        {t.mobileNumber || (lang === 'KN' ? 'ದೂರವಾಣಿ (Phone)' : 'Mobile Number')}
                                     </label>
                                     <div className={`relative group rounded-xl ${errors.phone ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
                                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
@@ -339,7 +339,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ಗೋತ್ರ (Gothra)' : 'Gothra'}
+                                        {t.gothra || (lang === 'KN' ? 'ಗೋತ್ರ (Gothra)' : 'Gothra')}
                                     </label>
                                     <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
                                         <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 pointer-events-none z-10" size={20} />
@@ -348,7 +348,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                             onChange={(e) => handleInputChange('gothra', e.target.value)}
                                             className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
                                         >
-                                            <option value="" className="bg-slate-800 text-white">{lang === 'KN' ? 'ಗೋತ್ರ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Gothra...'}</option>
+                                            <option value="" className="bg-slate-800 text-white">{t.selectGothra || (lang === 'KN' ? 'ಗೋತ್ರ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Gothra...')}</option>
                                             {GOTRAS.map(g => (
                                                 <option key={g.en} value={g.en} className="bg-slate-800 text-white">
                                                     {lang === 'KN' ? `${g.kn} (${g.en})` : g.en}
@@ -370,7 +370,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 {/* Rashi (Zodiac) */}
                                 <div>
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ರಾಶಿ (Rashi)' : 'Rashi / Zodiac'}
+                                        {t.rashiZodiac || (lang === 'KN' ? 'ರಾಶಿ (Rashi)' : 'Rashi / Zodiac')}
                                     </label>
                                     <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
                                         <Moon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 pointer-events-none z-10" size={20} />
@@ -379,7 +379,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                             onChange={(e) => handleInputChange('rashi', e.target.value)}
                                             className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
                                         >
-                                            <option value="" className="bg-slate-800 text-white">{lang === 'KN' ? 'ರಾಶಿ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Rashi...'}</option>
+                                            <option value="" className="bg-slate-800 text-white">{t.selectRashi || (lang === 'KN' ? 'ರಾಶಿ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Rashi...')}</option>
                                             {RASHIS.map(r => (
                                                 <option key={r.en} value={r.en} className="bg-slate-800 text-white">
                                                     {lang === 'KN' ? `${r.kn} (${r.en})` : r.en}
@@ -396,7 +396,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 {/* Nakshatra (Birth Star) */}
                                 <div>
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ನಕ್ಷತ್ರ (Nakshatra)' : 'Nakshatra / Birth Star'}
+                                        {t.nakshatraBirthStar || (lang === 'KN' ? 'ನಕ್ಷತ್ರ (Nakshatra)' : 'Nakshatra / Birth Star')}
                                     </label>
                                     <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
                                         <Star className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 pointer-events-none z-10" size={20} />
@@ -405,7 +405,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                             onChange={(e) => handleInputChange('nakshatra', e.target.value)}
                                             className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
                                         >
-                                            <option value="" className="bg-slate-800 text-white">{lang === 'KN' ? 'ನಕ್ಷತ್ರ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Nakshatra...'}</option>
+                                            <option value="" className="bg-slate-800 text-white">{t.selectNakshatra || (lang === 'KN' ? 'ನಕ್ಷತ್ರ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Nakshatra...')}</option>
                                             {NAKSHATRAS.map(n => (
                                                 <option key={n.en} value={n.en} className="bg-slate-800 text-white">
                                                     {lang === 'KN' ? `${n.kn} (${n.en})` : n.en}
@@ -425,7 +425,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="md:col-span-2">
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ವಿಳಾಸ (Address)' : 'Street Address'}
+                                        {t.streetAddress || (lang === 'KN' ? 'ವಿಳಾಸ (Address)' : 'Street Address')}
                                     </label>
                                     <div className={`relative bg-white/5 focus-within:bg-white/10 rounded-xl ${errors.address ? VARIANTS.INPUT_ERROR : ''}`}>
                                         <textarea
@@ -440,7 +440,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 {/* Area */}
                                 <div>
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ಬಡಾವಣೆ (Area)' : 'Area / Locality'}
+                                        {t.areaLocality || (lang === 'KN' ? 'ಬಡಾವಣೆ (Area)' : 'Area / Locality')}
                                     </label>
                                     <div className={`relative group rounded-xl ${errors.area ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
                                         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400" size={20} />
@@ -456,7 +456,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 {/* Pincode */}
                                 <div>
                                     <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                        {lang === 'KN' ? 'ಪಿನ್ ಕೋಡ್ (Pincode)' : 'Pincode'}
+                                        {t.pincode || (lang === 'KN' ? 'ಪಿನ್ ಕೋಡ್ (Pincode)' : 'Pincode')}
                                     </label>
                                     <div className={`relative group rounded-xl ${errors.pincode ? VARIANTS.INPUT_ERROR : 'bg-white/5 focus-within:bg-white/10'}`}>
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-mono text-sm">#</div>
@@ -475,7 +475,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                             {/* 8-Point Grid: p-4, gap-6 | Deep Glass: bg-white/5 */}
                             <div>
                                 <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                    {lang === 'KN' ? 'ಸಂದರ್ಭ (Occasion)' : 'Purpose / Occasion'}
+                                    {t.purposeOccasion || (lang === 'KN' ? 'ಸಂದರ್ಭ (Occasion)' : 'Purpose / Occasion')}
                                 </label>
                                 <div className="relative group bg-white/5 focus-within:bg-white/10 rounded-xl">
                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl pointer-events-none">
@@ -489,7 +489,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                         className="w-full pl-12 pr-10 py-4 bg-transparent border-none outline-none text-white font-medium text-lg appearance-none cursor-pointer"
                                     >
                                         <option value="" className="bg-slate-800 text-white">
-                                            {lang === 'KN' ? 'ಸಂದರ್ಭ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Occasion...'}
+                                            {t.selectOccasion || (lang === 'KN' ? 'ಸಂದರ್ಭ ಆಯ್ಕೆಮಾಡಿ...' : 'Select Occasion...')}
                                         </option>
                                         {OCCASIONS.map(o => (
                                             <option key={o.en} value={o.en} className="bg-slate-800 text-white">
@@ -506,7 +506,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 </div>
                                 {/* Helper Text */}
                                 <p className="text-xs text-white/40 mt-2 pl-1">
-                                    {lang === 'KN' ? 'ಯಾವ ಸಂದರ್ಭಕ್ಕಾಗಿ ಈ ಪೂಜೆ?' : 'Why is this pooja being performed?'}
+                                    {t.occasionHelper || (lang === 'KN' ? 'ಯಾವ ಸಂದರ್ಭಕ್ಕಾಗಿ ಈ ಪೂಜೆ?' : 'Why is this pooja being performed?')}
                                 </p>
                             </div>
                         </div>
@@ -521,8 +521,8 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                     className="p-6 rounded-2xl border transition-all text-left bg-amber-500/20 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.2)]"
                                 >
                                     <Star className="mb-3 text-amber-400 fill-amber-400" size={32} />
-                                    <h3 className="text-white font-bold text-lg mb-1">General Seva</h3>
-                                    <p className="text-white/60 text-xs">Pick any date</p>
+                                    <h3 className="text-white font-bold text-lg mb-1">{t.generalSeva || "General Seva"}</h3>
+                                    <p className="text-white/60 text-xs">{t.pickAnyDate || "Pick any date"}</p>
                                     <div className="mt-3 text-amber-400 font-bold text-xl">₹5,000</div>
                                 </div>
                             </div>
@@ -535,13 +535,13 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                             onClick={() => handleSevaChange('calendar', 'GREGORIAN')}
                                             className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${sevaDetails.calendar === 'GREGORIAN' ? 'bg-amber-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
                                         >
-                                            <Calendar size={16} /> English Date
+                                            <Calendar size={16} /> {t.englishDate || "English Date"}
                                         </button>
                                         <button
                                             onClick={() => handleSevaChange('calendar', 'LUNAR')}
                                             className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${sevaDetails.calendar === 'LUNAR' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
                                         >
-                                            <Moon size={16} /> Hindu Tithi
+                                            <Moon size={16} /> {t.hinduTithi || "Hindu Tithi"}
                                         </button>
                                     </div>
 
@@ -571,7 +571,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                                     onChange={(e) => handleDateChange('masa', e.target.value)}
                                                     className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none text-xs focus:border-amber-500"
                                                 >
-                                                    <option value="">Month</option>
+                                                    <option value="">{t.month || "Month"}</option>
                                                     {MASAS.map(m => <option key={m.en} value={m.en}>{m.en}</option>)}
                                                 </select>
                                                 <select
@@ -579,7 +579,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                                     onChange={(e) => handleDateChange('paksha', e.target.value)}
                                                     className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none text-xs focus:border-amber-500"
                                                 >
-                                                    <option value="">Paksha</option>
+                                                    <option value="">{t.paksha || "Paksha"}</option>
                                                     {PAKSHAS_BILINGUAL.map(p => <option key={p.en} value={p.en}>{p.en}</option>)}
                                                 </select>
                                                 <select
@@ -587,7 +587,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                                     onChange={(e) => handleDateChange('tithi', e.target.value)}
                                                     className="bg-black/20 text-white p-3 rounded-xl border border-white/10 outline-none text-xs focus:border-amber-500"
                                                 >
-                                                    <option value="">Tithi</option>
+                                                    <option value="">{t.tithi || "Tithi"}</option>
                                                     {TITHIS_BILINGUAL.map(t => <option key={t.en} value={t.en}>{t.en}</option>)}
                                                 </select>
                                             </div>
@@ -599,7 +599,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                             {/* Payment Mode Selector */}
                             <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
                                 <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-4 block">
-                                    Payment Mode
+                                    {t.paymentModeLabel || "Payment Mode"}
                                 </label>
                                 <div className="grid grid-cols-5 gap-2">
                                     {['CASH', 'UPI', 'CHEQUE', 'NEFT', 'RTGS'].map(mode => (
@@ -621,16 +621,16 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 {sevaDetails.payment_mode === 'UPI' && (
                                     <div className="mt-4 animate-in slide-in-from-top-2 duration-200">
                                         <label className="text-xs font-bold text-amber-100/80 uppercase tracking-widest mb-2 block">
-                                            UPI Transaction ID <span className="text-red-400">*</span>
+                                            {t.upiTransactionId || "UPI Transaction ID"} <span className="text-red-400">*</span>
                                         </label>
                                         <input
                                             value={sevaDetails.upi_transaction_id}
                                             onChange={(e) => handleSevaChange('upi_transaction_id', e.target.value)}
                                             className="w-full px-4 py-3 bg-purple-900/30 border-2 border-purple-500/30 rounded-xl text-white font-mono placeholder:text-purple-300/40 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
-                                            placeholder="Enter UTR Number (e.g., 123456789012)"
+                                            placeholder={t.enterUtrNumber || "Enter UTR Number (e.g., 123456789012)"}
                                             maxLength={50}
                                         />
-                                        <p className="text-xs text-white/40 mt-2">Enter the 12-digit UTR number from your payment app</p>
+                                        <p className="text-xs text-white/40 mt-2">{t.utrHint || "Enter the 12-digit UTR number from your payment app"}</p>
                                     </div>
                                 )}
                             </div>
@@ -648,18 +648,18 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                     <path fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
                                 </svg>
                             </div>
-                            <h2 className="text-3xl font-black text-white mb-2">Registration Complete!</h2>
+                            <h2 className="text-3xl font-black text-white mb-2">{t.registrationCompleteTitle || "Registration Complete!"}</h2>
                             <p className="text-white/60 mb-8">
-                                May Lord Subramanya bless your family.
+                                {t.blessingMessage || "May Lord Subramanya bless your family."}
                             </p>
                             <div className="bg-white/10 p-6 rounded-2xl w-full max-w-sm border border-white/10 mx-auto mb-6">
                                 <div className="flex justify-between text-white/70 mb-2">
-                                    <span>Receipt ID</span>
+                                    <span>{t.receiptId || "Receipt ID"}</span>
                                     <span className="font-mono font-bold text-white">#{receiptId}</span>
                                 </div>
                                 <div className="border-t border-white/10 my-2"></div>
                                 <div className="flex justify-between text-amber-400 font-bold text-lg">
-                                    <span>Total Paid</span>
+                                    <span>{t.totalPaid || "Total Paid"}</span>
                                     <span>₹5,000</span>
                                 </div>
                             </div>
@@ -670,7 +670,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-105 transition-all flex items-center gap-3"
                             >
                                 <Sparkles size={20} />
-                                Print A4 Certificate
+                                {t.printA4Certificate || "Print A4 Certificate"}
                             </button>
                         </div>
                     )}
@@ -692,7 +692,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                     <div className="p-6 bg-black/20 border-t border-white/5 flex justify-between">
                         {step > 1 ? (
                             <button onClick={prevStep} className="px-6 py-3 rounded-xl font-bold text-white/70 hover:bg-white/10 transition-all flex items-center gap-2">
-                                <ArrowLeft size={18} /> Back
+                                <ArrowLeft size={18} /> {t.back || "Back"}
                             </button>
                         ) : <div></div>}
 
@@ -702,14 +702,14 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                 disabled={loading}
                                 className="px-8 py-3 rounded-xl font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-105 transition-all flex items-center gap-2"
                             >
-                                {loading ? <Loader2 className="animate-spin" /> : <><ShieldCheck size={18} /> Confirm & Pay</>}
+                                {loading ? <Loader2 className="animate-spin" /> : <><ShieldCheck size={18} /> {t.confirmAndPay || "Confirm & Pay"}</>}
                             </button>
                         ) : (
                             <button
                                 onClick={nextStep}
                                 className="px-8 py-3 rounded-xl font-bold bg-amber-500 text-black shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-105 transition-all flex items-center gap-2"
                             >
-                                Next Step <ArrowRight size={18} />
+                                {t.nextStep || "Next Step"} <ArrowRight size={18} />
                             </button>
                         )}
                     </div>
@@ -717,7 +717,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                 {step === 3 && (
                     <div className="p-6 bg-black/20 border-t border-white/5 text-center">
                         <button onClick={onClose} className="text-white/50 hover:text-white font-bold transition-colors">
-                            Close Window
+                            {t.closeWindow || "Close Window"}
                         </button>
                     </div>
                 )}
