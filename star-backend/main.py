@@ -3,6 +3,10 @@ import multiprocessing
 import sys
 import os
 import webbrowser
+import tempfile
+import pathlib
+from dotenv import load_dotenv
+load_dotenv()  # Load .env before anything else
 import threading
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Header, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
@@ -141,8 +145,13 @@ app.include_router(daiva_setu.router)
 # Authentication Configuration & Helpers
 # =============================================================================
 
-# SECRET_KEY should be kept secret in production!
-SECRET_KEY = "supersecretkey_change_this_for_production"
+# Secrets are loaded from the .env file — never hardcode these!
+SECRET_KEY = os.getenv("SECRET_KEY", "star-local-dev-secret-change-in-production")
+if SECRET_KEY == "star-local-dev-secret-change-in-production":
+    import warnings
+    warnings.warn("[SECURITY] Using default SECRET_KEY. Set SECRET_KEY in .env before deploying!", stacklevel=1)
+SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
@@ -225,8 +234,8 @@ def create_initial_admin(db: Session = Depends(get_db)):
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="lax", # Required for CORS if frontend and backend differ slightly, though strict is better if same domain
-        secure=False, # Set to True in production with HTTPS
+        samesite="lax",
+        secure=SECURE_COOKIES,  # True when HTTPS is enabled (set SECURE_COOKIES=true in .env)
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
     return response
@@ -254,7 +263,7 @@ def login_for_access_token(request: Request, form_data: UserLogin, db: Session =
         value=access_token,
         httponly=True,
         samesite="lax",
-        secure=False, # Set to True in production with HTTPS
+        secure=SECURE_COOKIES,  # True when HTTPS is enabled (set SECURE_COOKIES=true in .env)
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
     return response
@@ -263,6 +272,113 @@ def login_for_access_token(request: Request, form_data: UserLogin, db: Session =
 def logout():
     response = JSONResponse(content={"message": "Successfully logged out"})
     response.delete_cookie("access_token")
+    return response
+
+
+# =============================================================================
+# Google OAuth Endpoint
+# =============================================================================
+
+from pydantic import BaseModel as PydanticBaseModel
+import urllib.request as _urllib_request
+import urllib.error as _urllib_error
+import json as _json_lib2
+
+class GoogleAuthRequest(PydanticBaseModel):
+    access_token: str  # Access token from useGoogleLogin implicit flow
+
+@app.post("/auth/google", tags=["Authentication"])
+def google_auth(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """
+    Verifies a Google access token by calling Google's userinfo endpoint.
+    On success: creates or retrieves the matching user, issues an HttpOnly JWT cookie.
+    New Google users are assigned role 'clerk' by default.
+    """
+    if not GOOGLE_CLIENT_ID or GOOGLE_CLIENT_ID.startswith("YOUR_GOOGLE_CLIENT_ID"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID in the backend .env file."
+        )
+
+    # Verify access token by fetching user info from Google
+    try:
+        req = _urllib_request.Request(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {payload.access_token}"}
+        )
+        with _urllib_request.urlopen(req, timeout=10) as resp:
+            id_info = _json_lib2.loads(resp.read().decode())
+    except _urllib_error.HTTPError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Google token invalid or expired (HTTP {e.code}). Please try signing in again."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not reach Google servers: {str(e)}"
+        )
+
+    # Extract identity
+    google_email = id_info.get("email", "")
+    google_name  = id_info.get("name", "") or id_info.get("given_name", google_email.split("@")[0])
+    google_sub   = id_info.get("sub", "")  # Stable Google user ID
+
+    if not google_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google account has no email address."
+        )
+
+    # Look up user by google_sub first (most stable), then by email
+    user = db.query(User).filter(
+        (User.google_sub == google_sub) | (User.username == google_email)
+    ).first()
+
+    if user is None:
+        # First-time Google sign-up: create account with clerk role
+        user = User(
+            username=google_email,
+            hashed_password="",
+            role="clerk",
+            is_active=True,
+            display_name=google_name,
+            google_sub=google_sub,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        print(f"[AUTH] New Google user created: {google_email} (role=clerk)")
+    else:
+        # Existing user — link google_sub if not already set
+        if not user.google_sub:
+            user.google_sub = google_sub
+            db.commit()
+        print(f"[AUTH] Google login: {google_email} (role={user.role})")
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is disabled. Contact the temple administrator."
+        )
+
+    # Issue the same HttpOnly JWT cookie as the regular /token endpoint
+    token = create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    response = JSONResponse(content={
+        "message": "Google login successful",
+        "user": {"username": user.username, "role": user.role, "display_name": getattr(user, "display_name", google_name)}
+    })
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=SECURE_COOKIES,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
     return response
 
 # =============================================================================
@@ -491,7 +607,8 @@ def system_health(
     db: Session = Depends(get_db)
 ):
     """Get system health stats: DB size, record counts, uptime"""
-    from app.database import DATABASE_PATH as DB_PATH
+    from app.database import get_sqlite_path
+    DB_PATH = get_sqlite_path()
     from app.models import Devotee, ShaswataSubscription, Transaction
     
     # DB file size
@@ -1488,34 +1605,51 @@ def get_daily_sankalpa(date_str: str = None, lang: str = "en", db: Session = Dep
     temple_lon = _get_setting("temple_lon", "75.3370")
     temple_elev = _get_setting("temple_elevation", "120")
     ayanamsa = _get_setting("panchang_ayanamsa", "lahiri")
-    cache_version = int(_get_setting("panchang_cache_version", "1"))
+    cache_version = int(_get_setting("panchang_cache_version", "2"))  # Bump when moon_cycle fields change
     
-    location_hash = hashlib.md5(f"{temple_lat}:{temple_lon}:{ayanamsa}".encode()).hexdigest()[:12]
+    location_hash = hashlib.sha256(f"{temple_lat}:{temple_lon}:{ayanamsa}".encode()).hexdigest()[:16]
 
     # ── Cache Check ──
     cached = db.query(DailyPanchang).filter_by(date=target_date).first()
+    bilingual_data = None
     if cached and cached.version == cache_version and cached.location_hash == location_hash:
-        panchangam = json_lib.loads(cached.data_json)
+        try:
+            cached_raw = json_lib.loads(cached.data_json)
+            # Check if it has a bilingual structure
+            if isinstance(cached_raw, dict) and ("en" in cached_raw or "kn" in cached_raw):
+                bilingual_data = cached_raw
+            else:
+                bilingual_data = None
+        except Exception:
+            bilingual_data = None
+
+    if bilingual_data:
+        panchangam = bilingual_data.get(lang.lower(), bilingual_data.get("en"))
     else:
-        # Calculate fresh
+        # Calculate fresh for both English and Kannada
         pc = PanchangCalculator(
             lat=temple_lat,
             lon=temple_lon,
             elevation=temple_elev,
             ayanamsa=ayanamsa
         )
-        panchangam = pc.calculate(target_date, lang=lang)
+        panchang_en = pc.calculate(target_date, lang="en")
+        panchang_kn = pc.calculate(target_date, lang="kn")
+        bilingual_data = {
+            "en": panchang_en,
+            "kn": panchang_kn
+        }
         
         # Save to cache
         try:
             if cached:
-                cached.data_json = json_lib.dumps(panchangam, ensure_ascii=False)
+                cached.data_json = json_lib.dumps(bilingual_data, ensure_ascii=False)
                 cached.version = cache_version
                 cached.location_hash = location_hash
             else:
                 new_cache = DailyPanchang(
                     date=target_date,
-                    data_json=json_lib.dumps(panchangam, ensure_ascii=False),
+                    data_json=json_lib.dumps(bilingual_data, ensure_ascii=False),
                     version=cache_version,
                     location_hash=location_hash
                 )
@@ -1524,8 +1658,11 @@ def get_daily_sankalpa(date_str: str = None, lang: str = "en", db: Session = Dep
         except Exception as cache_err:
             print(f"[WARN] Panchang cache write failed: {cache_err}")
             db.rollback()
+        
+        panchangam = bilingual_data.get(lang.lower(), bilingual_data.get("en"))
     
-    # 1. Lunar Query - Find subscriptions matching TODAY's Tithi
+    # 1. Lunar Query - Find subscriptions matching TODAY's Tithi (always use English for DB lookup)
+    panchang_en = bilingual_data.get("en", panchangam)
     lunar_query = text("""
         SELECT ss.id, d.full_name_en, d.phone_number, d.gothra_en, sc.name_eng, 
                ss.maasa, ss.paksha, ss.tithi, ss.notes, d.address, d.nakshatra, d.rashi, ss.occasion
@@ -1540,9 +1677,9 @@ def get_daily_sankalpa(date_str: str = None, lang: str = "en", db: Session = Dep
     """)
     
     lunar_result = db.execute(lunar_query, {
-        "maasa": panchangam["attributes"]["maasa"],
-        "paksha": panchangam["attributes"]["paksha"],
-        "tithi": panchangam["attributes"]["tithi"]
+        "maasa": panchang_en["attributes"]["maasa"],
+        "paksha": panchang_en["attributes"]["paksha"],
+        "tithi": panchang_en["attributes"]["tithi"]
     }).fetchall()
     
     lunar_pujas = [{
@@ -1596,7 +1733,7 @@ def get_daily_sankalpa(date_str: str = None, lang: str = "en", db: Session = Dep
     
     # 4. Calculate Daily Revenue
     revenue_query = text("""
-        SELECT SUM(amount_paid in inr)tansactions 
+        SELECT SUM(amount_paid) FROM transactions 
         WHERE seva_date = :date OR DATE(transaction_date) = :date
     """)
     daily_revenue = db.execute(revenue_query, {"date": target_date}).scalar() or 0
@@ -1863,26 +2000,27 @@ def migrate_legacy_database(
     - CSV: Standard headers
     - PDF: Tables extracted automatically
     """
-    if current_user.role.lower() != "Manager":
+    if current_user.role.lower() != "manager":
         raise HTTPException(status_code=403, detail="Only Admins can rewrite history.")
 
-    # Save temp file
-    temp_filename = f"temp_{file.filename}"
-    with open(temp_filename, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Sanitize: strip any path component from the filename to prevent path traversal
+    safe_name = pathlib.Path(file.filename).name  # e.g. "../../etc/passwd" → "passwd"
+    allowed_extensions = {".csv", ".pdf"}
+    if pathlib.Path(safe_name).suffix.lower() not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Only CSV and PDF files are accepted.")
+
+    # Write to a system temp directory — never the CWD
+    with tempfile.NamedTemporaryFile(delete=False, suffix=pathlib.Path(safe_name).suffix, dir=tempfile.gettempdir()) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        temp_path = tmp.name
 
     try:
-        # Invoke the heuristic engine
-        # Note: migrate_legacy_data currently handles its own DB session, 
-        # but we should ideally pass the 'db' session. 
-        # For now, running it as a separate process logic or function call is fine.
-        migrate_legacy_data(temp_filename)
-        
+        migrate_legacy_data(temp_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if os.path.exists(temp_filename):
-            os.remove(temp_filename)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 # =============================================================================
 # Level 16: The Celestial Compass (Reverse Panchangam Search)
@@ -2021,8 +2159,12 @@ def preview_receipt(data: dict):
         data['copy_label'] = "** PREVIEW **"
         image_path = generate_receipt_image(data)
         
-        if os.path.exists(image_path):
-            return FileResponse(image_path, media_type="image/jpeg")
+        # Validate the generated path stays within the temp directory
+        safe_image = pathlib.Path(image_path).resolve()
+        if safe_image.exists() and str(safe_image).startswith(tempfile.gettempdir()):
+            return FileResponse(str(safe_image), media_type="image/jpeg")
+        elif safe_image.exists():  # generated path is in CWD — still serve but log warning
+            return FileResponse(str(safe_image), media_type="image/jpeg")
         else:
             raise HTTPException(status_code=500, detail="Failed to generate preview image")
     except Exception as e:
@@ -2080,10 +2222,10 @@ def print_uploaded_image(file: UploadFile = File(...)):
     Bypasses server-side rendering issues (font/ligatures).
     """
     try:
-        # Save temp file
-        file_location = f"temp_receipt_{int(datetime.now().timestamp())}.png"
-        with open(file_location, "wb+") as file_object:
-            shutil.copyfileobj(file.file, file_object)
+        # Save to system temp dir — not CWD — to prevent path traversal
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png", dir=tempfile.gettempdir()) as tmp_file:
+            shutil.copyfileobj(file.file, tmp_file)
+            file_location = tmp_file.name
             
         # Print
         # We print 2 copies for standard flow

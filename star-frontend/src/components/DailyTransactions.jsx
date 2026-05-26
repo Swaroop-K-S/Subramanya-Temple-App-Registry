@@ -49,11 +49,11 @@ const StatCard = ({ icon: Icon, label, value, subtext, gradient, iconColor }) =>
     <div className={`rounded-2xl p-5 ${gradient} shadow-lg relative overflow-hidden group transition-transform hover:scale-[1.02] duration-300`}>
         <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-                <Icon size={18} className={iconColor || "opacity-80"} />
-                <p className="text-sm font-semibold opacity-80">{label}</p>
+                <Icon size={18} className={iconColor || "opacity-80 flex-shrink-0"} />
+                <p className="text-sm font-semibold opacity-80 truncate" title={label}>{label}</p>
             </div>
-            <h2 className="text-3xl font-black tracking-tight">{value}</h2>
-            {subtext && <p className="text-xs mt-1 opacity-70">{subtext}</p>}
+            <h2 className="text-3xl font-black tracking-tight truncate" title={value}>{value}</h2>
+            {subtext && <p className="text-xs mt-1 opacity-70 truncate" title={subtext}>{subtext}</p>}
         </div>
         <div className="absolute -right-4 -bottom-4 opacity-10 transform group-hover:scale-110 transition-transform duration-500">
             <Icon size={80} />

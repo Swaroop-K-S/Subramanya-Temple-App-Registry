@@ -93,7 +93,7 @@ function AppShell() {
       />
 
       {/* 3. MAIN CONTENT AREA */}
-      <main className="pt-24 pb-12 px-4 md:pl-32 lg:pl-32 transition-all duration-300 max-w-[1600px] mx-auto">
+      <main className="pt-32 pb-12 px-4 md:pl-32 lg:pl-32 transition-all duration-300 max-w-[1600px] mx-auto">
         <Routes>
           <Route path="/dashboard" element={
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">

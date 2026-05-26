@@ -4,6 +4,8 @@ import win32print
 import win32ui
 from PIL import Image, ImageDraw, ImageFont, ImageWin
 from datetime import datetime
+import tempfile
+import re
 
 # Configuration
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "printer_config.json")
@@ -162,9 +164,15 @@ def generate_receipt_image(data):
         g.add_separator()
         g.add_text_centered(data.get('copy_label'), g.font_small)
     
-    # Generate unique filename
-    filename = f"receipt_{data.get('receipt_no', 'temp')}_{int(datetime.now().timestamp())}.jpg"
-    return g.save(filename)
+    # Sanitize receipt_no to prevent path traversal via the filename
+    raw_receipt_no = str(data.get('receipt_no', 'temp'))
+    safe_receipt_no = re.sub(r'[^a-zA-Z0-9_-]', '', raw_receipt_no)
+    
+    # Strictly save to the system temp directory
+    filename = f"receipt_{safe_receipt_no}_{int(datetime.now().timestamp())}.jpg"
+    full_path = os.path.join(tempfile.gettempdir(), filename)
+    
+    return g.save(full_path)
 
 def print_receipt_image(image_path):
     try:

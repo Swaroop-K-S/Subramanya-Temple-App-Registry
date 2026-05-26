@@ -231,14 +231,14 @@ def mark_event_dispatched(db: Session, event_id: int, dispatch_ref: str = None,
             dispatch_date = :today, 
             dispatch_ref = :ref,
             dispatch_method = :method,
-            updated_at = CURRENT_TIMESTAMP
+            last_modified = CURRENT_TIMESTAMP
         WHERE id = :eid
     """), {"today": today_str, "ref": dispatch_ref, "method": dispatch_method, "eid": event_id})
     
     # Also update parent subscription's last_dispatch_date
     db.execute(text("""
         UPDATE shaswata_subscriptions 
-        SET last_dispatch_date = :today, updated_at = CURRENT_TIMESTAMP
+        SET last_dispatch_date = :today, last_modified = CURRENT_TIMESTAMP
         WHERE id = :sub_id
     """), {"today": today_str, "sub_id": event[1]})
     
@@ -287,7 +287,7 @@ def record_delivery_feedback(db: Session, event_id: int, received: bool,
             delivery_checked_at = :today,
             delivery_notes = :notes,
             status = CASE WHEN :received THEN 'DELIVERED' ELSE status END,
-            updated_at = CURRENT_TIMESTAMP
+            last_modified = CURRENT_TIMESTAMP
         WHERE id = :eid
     """), {"status": status, "today": today_str, "notes": notes, "received": received, "eid": event_id})
     

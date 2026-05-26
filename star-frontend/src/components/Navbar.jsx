@@ -3,10 +3,12 @@ import { Sun, Moon, Languages, Bell, Search, Flower, MapPin, ChevronRight, X } f
 import { useTempleTime } from '../context/TimeContext';
 import { TRANSLATIONS } from './translations';
 import api from '../services/api';
+import { useTheme } from '../context/ThemeContext';
 
 const Navbar = ({ lang, setLang, user, navigate }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
-    const [isDark, setIsDark] = useState(false);
+    const { theme, toggleTheme } = useTheme();
+    const isDark = theme === 'dark';
     const { formattedTime } = useTempleTime();
 
     // === NOTIFICATION STATE ===
@@ -14,15 +16,6 @@ const Navbar = ({ lang, setLang, user, navigate }) => {
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifLoading, setNotifLoading] = useState(false);
     const notifRef = useRef(null);
-
-    // Theme Toggle Logic
-    useEffect(() => {
-        if (isDark) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    }, [isDark]);
 
     // === FETCH TOMORROW'S PUJAS (Notification Data Source) ===
     useEffect(() => {
@@ -235,7 +228,7 @@ const Navbar = ({ lang, setLang, user, navigate }) => {
 
                 {/* Celestial Theme Switcher (Rolling Physics) */}
                 <button
-                    onClick={() => setIsDark(!isDark)}
+                    onClick={toggleTheme}
                     className="relative w-20 h-10 rounded-full bg-slate-200 dark:bg-slate-700 shadow-inner transition-colors duration-500 overflow-hidden group hover:shadow-md active:scale-95"
                     title="Toggle Cosmic Mode"
                 >

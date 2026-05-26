@@ -563,10 +563,22 @@ class PanchangCalculator:
                 moon_phase_name = "Nearly New"
                 moon_phase_en = "Nearly New"
 
+        # Moon-Sun elongation angle: 0° = New Moon, 180° = Full Moon, 270° = Last Quarter
+        # This is the true astronomical angle that drives which side of the moon is lit
+        elongation_deg = round((diff % 360), 2)  # diff = (moon_lon - sun_lon) mod 360
+
+        # Days since last new moon (for cycle progress)
+        prev_new_dt = ephem.Date(prev_new).datetime()
+        days_since_new = (dt_input.date() - prev_new_dt.date()).days
+
         moon_cycle = {
             "phase": moon_phase_name,
             "phase_en": moon_phase_en,
             "illumination": moon_illumination,
+            "elongation": elongation_deg,        # 0-360 degrees (key for SVG rendering)
+            "tithi_number": tithi_index + 1,      # 1-30
+            "paksha": paksha if lang == "en" else paksha_kn,
+            "days_since_new_moon": days_since_new,
             "next_purnima": next_full_dt.strftime("%Y-%m-%d"),
             "next_amavasya": next_new_dt.strftime("%Y-%m-%d"),
             "days_to_purnima": days_to_purnima,

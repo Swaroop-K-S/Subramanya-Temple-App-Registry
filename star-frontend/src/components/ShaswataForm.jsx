@@ -493,7 +493,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                                         </option>
                                         {OCCASIONS.map(o => (
                                             <option key={o.en} value={o.en} className="bg-slate-800 text-white">
-                                                {lang === 'KN' ? `${o.icon} ${o.kn} (${o.en})` : `${o.icon} ${o.en}`}
+                                                {lang === 'KN' ? `${o.kn} (${o.en})` : o.en}
                                             </option>
                                         ))}
                                     </select>

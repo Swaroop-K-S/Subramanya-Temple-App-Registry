@@ -103,7 +103,7 @@ def get_or_create_devotee(db: Session, name_en: str, phone: str,
                     address = COALESCE(:address, address),
                     area = COALESCE(:area, area),
                     pincode = COALESCE(:pincode, pincode),
-                    updated_at = CURRENT_TIMESTAMP
+                    last_modified = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
             {"name_en": name_en, "name_kn": name_kn, "gothra_en": gothra_en, 
@@ -183,10 +183,10 @@ def create_transaction(db: Session, transaction: TransactionCreate, user_id: int
             text("""
                 INSERT INTO transactions 
                 (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
-                 devotee_name, created_by_user_id, transaction_date, seva_date)
+                 devotee_name, created_by_user_id, transaction_date, seva_date, is_active)
                 VALUES 
                 (:receipt_no, :devotee_id, :seva_id, :amount_paid, :payment_mode,
-                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date)
+                 :devotee_name, :user_id, CURRENT_TIMESTAMP, :seva_date, 1)
             """),
             {
                 "receipt_no": receipt_no,
@@ -246,7 +246,7 @@ def get_daily_transactions(db: Session, date: str = None,
         date = datetime.now().strftime("%Y-%m-%d")
     
     # Build dynamic WHERE clause
-    where_clauses = ["DATE(t.transaction_date) = :date", "t.is_active = true"]
+    where_clauses = ["DATE(t.transaction_date) = :date", "(t.is_active = true OR t.is_active = 1 OR t.is_active IS NULL)"]
     params = {"date": date}
     
     if payment_mode:
@@ -329,7 +329,7 @@ def get_daily_stats(db: Session, date: str = None, lang: str = "en") -> dict:
                 COALESCE(SUM(CASE WHEN payment_mode = 'CASH' THEN amount_paid ELSE 0 END), 0) as cash_total,
                 COALESCE(SUM(CASE WHEN payment_mode = 'UPI' THEN amount_paid ELSE 0 END), 0) as upi_total
             FROM transactions
-            WHERE DATE(transaction_date) = :date AND is_active = true
+            WHERE DATE(transaction_date) = :date AND (is_active = true OR is_active = 1 OR is_active IS NULL)
         """),
         {"date": date}
     ).fetchone()
@@ -343,7 +343,7 @@ def get_daily_stats(db: Session, date: str = None, lang: str = "en") -> dict:
                    COUNT(*) as count, SUM(t.amount_paid) as total
             FROM transactions t
             JOIN seva_catalog s ON t.seva_id = s.id
-            WHERE DATE(t.transaction_date) = :date AND t.is_active = true
+            WHERE DATE(t.transaction_date) = :date AND (t.is_active = true OR t.is_active = 1 OR t.is_active IS NULL)
             GROUP BY s.id, s.name_eng
             ORDER BY total DESC
         """),
@@ -526,10 +526,10 @@ def create_shaswata_subscription(db: Session, subscription: ShaswataCreate, user
                 text("""
                     INSERT INTO transactions 
                     (receipt_no, devotee_id, seva_id, amount_paid, payment_mode, 
-                     devotee_name, created_by_user_id, transaction_date, notes)
+                     devotee_name, created_by_user_id, transaction_date, notes, is_active)
                     VALUES 
                     (:receipt_no, :devotee_id, :seva_id, :amount, :payment_mode,
-                     :devotee_name, :user_id, CURRENT_TIMESTAMP, :notes)
+                     :devotee_name, :user_id, CURRENT_TIMESTAMP, :notes, 1)
                 """),
                 {
                     "receipt_no": receipt_no,
@@ -664,7 +664,7 @@ def log_dispatch(db: Session, subscription_id: int) -> dict:
             text("""
                 UPDATE shaswata_subscriptions 
                 SET last_dispatch_date = CURRENT_DATE,
-                    updated_at = CURRENT_TIMESTAMP
+                    last_modified = CURRENT_TIMESTAMP
                 WHERE id = :sub_id
             """),
             {"sub_id": subscription_id}
@@ -706,7 +706,7 @@ def log_feedback_sent(db: Session, subscription_id: int) -> dict:
             text("""
                 UPDATE shaswata_subscriptions 
                 SET last_feedback_date = CURRENT_DATE,
-                    updated_at = CURRENT_TIMESTAMP
+                    last_modified = CURRENT_TIMESTAMP
                 WHERE id = :sub_id
             """),
             {"sub_id": subscription_id}

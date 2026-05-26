@@ -254,6 +254,10 @@ def _run_sqlite_migrations():
             _add_column_if_missing("transactions", "notes", "TEXT")
             _add_column_if_missing("shaswata_subscriptions", "communication_preference", "VARCHAR(20) DEFAULT 'WHATSAPP'")
             _add_column_if_missing("shaswata_subscriptions", "last_address_confirmed_at", "DATE")
+
+            # Google OAuth columns on users table
+            _add_column_if_missing("users", "google_sub", "VARCHAR(100)")
+            _add_column_if_missing("users", "display_name", "VARCHAR(150)")
             
             # Soft delete columns
             for tbl in ["ransactions", "Saswata_events", "Dvotees"]:

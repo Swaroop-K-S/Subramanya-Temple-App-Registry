@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Flower, Lock, User, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
+import { Flower, Lock, User, ArrowRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { TRANSLATIONS } from './translations';
 import { useAuth } from '../hooks/useAuth';
+
+// ── Google "G" SVG logo (official colors) ─────────────────────────────────────
+const GoogleLogo = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+);
 
 const Login = ({ lang = 'EN' }) => {
     const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
@@ -11,10 +22,12 @@ const Login = ({ lang = 'EN' }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const navigate = useNavigate();
     const auth = useAuth();
 
+    // ── Password Login ─────────────────────────────────────────────────────────
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
@@ -25,7 +38,7 @@ const Login = ({ lang = 'EN' }) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
-                credentials: 'include' // Required to receive and send HttpOnly cookies
+                credentials: 'include'
             });
 
             const data = await response.json();
@@ -34,139 +47,253 @@ const Login = ({ lang = 'EN' }) => {
                 throw new Error(data.detail || 'Invalid credentials');
             }
 
-            // Success Animation Trigger
             setSuccess(true);
             setTimeout(async () => {
-                // Cookie is set — now fetch user profile via auth hook
                 await auth.login();
                 navigate('/dashboard');
             }, 800);
 
         } catch (err) {
-            setError(err.message);
+            const msg = err?.message || (typeof err === 'string' ? err : 'Invalid credentials. Please try again.');
+            setError(msg);
             setLoading(false);
         }
     };
 
+    // ── Google OAuth Login ─────────────────────────────────────────────────────
+    const handleGoogleSuccess = async (tokenResponse) => {
+        setError('');
+        setGoogleLoading(true);
+        try {
+            // useGoogleLogin (implicit flow) returns access_token, not credential
+            const response = await fetch(`${API_BASE_URL}/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: tokenResponse.access_token }),
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 503) {
+                    throw new Error('Google Sign-In is not configured yet. Ask the admin to set GOOGLE_CLIENT_ID.');
+                }
+                throw new Error(data.detail || 'Google authentication failed');
+            }
+
+            setSuccess(true);
+            setTimeout(async () => {
+                await auth.login();
+                navigate('/dashboard');
+            }, 800);
+
+        } catch (err) {
+            // Safely extract message from any error type
+            const msg = err?.message || (typeof err === 'string' ? err : 'Google Sign-In failed. Please try again.');
+            setError(msg);
+            setGoogleLoading(false);
+        }
+    };
+
+    const googleLogin = useGoogleLogin({
+        onSuccess: handleGoogleSuccess,
+        onError: (err) => {
+            console.error('Google OAuth error:', err);
+            setError('Google Sign-In was cancelled. Please try again.');
+            setGoogleLoading(false);
+        },
+        flow: 'implicit',   // returns id_token directly
+        ux_mode: 'popup',
+    });
+
+    const isAnyLoading = loading || googleLoading;
+
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-amber-900">
-            {/* LARGE WATERMARK BACKGROUND */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5 animate-pulse-slow">
-                <Flower size={600} className="text-amber-500" />
+        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #0f0c29 0%, #1a1040 40%, #0d1b40 70%, #1a0a00 100%)' }}>
+
+            {/* Animated background orbs */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20"
+                    style={{ background: 'radial-gradient(circle, #f59e0b 0%, transparent 70%)', filter: 'blur(60px)', animation: 'pulse 6s ease-in-out infinite' }} />
+                <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full opacity-15"
+                    style={{ background: 'radial-gradient(circle, #7c3aed 0%, transparent 70%)', filter: 'blur(50px)', animation: 'pulse 8s 2s ease-in-out infinite' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-4"
+                    style={{ animation: 'spin 60s linear infinite' }}>
+                    <Flower size={800} className="text-amber-500/10" />
+                </div>
             </div>
 
-            <div className="w-full max-w-md relative z-10 animate-fade-in-up">
-                {/* DEEP GLASS CARD */}
-                <div className="bg-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden relative">
+            <div className="w-full max-w-md relative z-10" style={{ animation: 'fadeInUp 0.6s ease-out' }}>
+                {/* Glass card */}
+                <div className="relative rounded-3xl border border-white/10 shadow-2xl overflow-hidden backdrop-blur-2xl"
+                    style={{ background: 'rgba(255,255,255,0.07)' }}>
 
-                    {/* Glossy Reflection Effect */}
-                    <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+                    {/* Top glossy sheen */}
+                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+                    <div className="absolute top-0 left-0 w-full h-40 pointer-events-none"
+                        style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.06), transparent)' }} />
 
-                    {/* Header */}
-                    <div className="p-10 pb-0 text-center relative z-10">
-                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-500/20 backdrop-blur-md mb-6 border border-amber-400/50 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-float">
-                            <Flower className="w-10 h-10 text-amber-300 drop-shadow-lg" />
+                    {/* ── HEADER ── */}
+                    <div className="pt-10 pb-6 px-10 text-center">
+                        {/* Icon */}
+                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-5 border border-amber-400/40 shadow-[0_0_40px_rgba(245,158,11,0.35)]"
+                            style={{ background: 'rgba(245,158,11,0.15)', animation: 'float 3.5s ease-in-out infinite' }}>
+                            <Flower className="w-9 h-9 text-amber-300 drop-shadow-lg" />
                         </div>
 
-                        <h1 className="text-3xl font-black text-white font-heading tracking-wide mb-2 drop-shadow-md">
-                            {t.starPortal || "S.T.A.R. Portal"}
+                        <h1 className="text-3xl font-black text-white font-heading tracking-wide mb-1 drop-shadow-md">
+                            {t.starPortal || 'S.T.A.R. Portal'}
                         </h1>
-                        <p className="text-amber-100/70 text-sm font-medium tracking-widest uppercase">
-                            {t.subramanyaTempleRegistry || "Subramanya Temple Registry"}
+                        <p className="text-amber-200/50 text-xs font-semibold tracking-[0.22em] uppercase">
+                            {t.subramanyaTempleRegistry || 'Subramanya Temple Registry'}
                         </p>
                     </div>
 
-                    {/* Form */}
-                    <div className="p-10 pt-8">
-                        <form onSubmit={handleLogin} className="space-y-6">
+                    {/* ── FORM ── */}
+                    <div className="px-10 pb-8 space-y-5">
 
-                            {/* Error Message */}
-                            {error && (
-                                <div className="bg-red-500/20 border border-red-500/50 p-3 rounded-xl text-sm text-red-200 font-medium animate-shake backdrop-blur-sm flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> {error}
-                                </div>
-                            )}
+                        {/* Error */}
+                        {error && (
+                            <div className="flex items-start gap-2.5 bg-red-500/15 border border-red-500/40 p-3.5 rounded-xl text-sm text-red-200 backdrop-blur-sm">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+                                <span>{error}</span>
+                            </div>
+                        )}
 
-                            {/* Floating Label Input - Username */}
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            {/* Username */}
                             <div className="relative group">
+                                <div className="absolute left-4 top-3.5 pointer-events-none">
+                                    <User className="h-5 w-5 text-amber-400/60 group-focus-within:text-amber-400 transition-colors" />
+                                </div>
                                 <input
+                                    id="login-username"
                                     type="text"
                                     required
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
-                                    className="peer w-full pl-12 pr-4 py-3.5 bg-black/20 hover:bg-black/30 border border-white/10 rounded-xl text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-inner"
-                                    placeholder={t.username || "Username"}
+                                    placeholder={t.username || 'Username'}
+                                    className="w-full pl-12 pr-4 py-3.5 rounded-xl text-white text-sm placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                                    style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }}
+                                    disabled={isAnyLoading}
                                 />
-                                <label className="absolute left-12 top-3.5 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-amber-400 peer-focus:bg-slate-900 peer-focus:px-1 peer-focus:rounded-sm cursor-text">
-                                    {t.username || "Username"}
-                                </label>
-                                <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-500 group-hover:text-amber-400 peer-focus:text-amber-400 transition-colors" />
                             </div>
 
-                            {/* Floating Label Input - Password */}
+                            {/* Password */}
                             <div className="relative group">
+                                <div className="absolute left-4 top-3.5 pointer-events-none">
+                                    <Lock className="h-5 w-5 text-amber-400/60 group-focus-within:text-amber-400 transition-colors" />
+                                </div>
                                 <input
+                                    id="login-password"
                                     type="password"
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="peer w-full pl-12 pr-4 py-3.5 bg-black/20 hover:bg-black/30 border border-white/10 rounded-xl text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-inner"
-                                    placeholder={t.password || "Password"}
+                                    placeholder={t.password || 'Password'}
+                                    className="w-full pl-12 pr-4 py-3.5 rounded-xl text-white text-sm placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                                    style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }}
+                                    disabled={isAnyLoading}
                                 />
-                                <label className="absolute left-12 top-3.5 text-gray-400 text-sm transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-amber-400 peer-focus:bg-slate-900 peer-focus:px-1 peer-focus:rounded-sm cursor-text">
-                                    {t.password || "Password"}
-                                </label>
-                                <Lock className="absolute left-4 top-3.5 h-5 w-5 text-gray-500 group-hover:text-amber-400 peer-focus:text-amber-400 transition-colors" />
                             </div>
 
-                            {/* Mystic Action Button */}
+                            {/* Sign In button */}
                             <button
+                                id="login-submit-btn"
                                 type="submit"
-                                disabled={loading || success}
-                                className={`w-full relative group overflow-hidden py-4 rounded-xl font-bold tracking-wide shadow-[0_10px_30px_-10px_rgba(245,158,11,0.5)] transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-300
-                                    ${success
-                                        ? "bg-green-500 text-white ring-4 ring-green-500/30"
-                                        : "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:shadow-[0_0_20px_rgba(245,158,11,0.6)] ring-1 ring-white/20"}
-                                `}
+                                disabled={isAnyLoading}
+                                className="w-full relative group overflow-hidden py-3.5 rounded-xl font-bold text-sm tracking-wider text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+                                style={{
+                                    background: success
+                                        ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+                                        : 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                                    boxShadow: '0 8px 32px -8px rgba(245,158,11,0.5)',
+                                }}
                             >
                                 <div className="relative z-10 flex items-center justify-center gap-2">
-                                    {loading ? (
-                                        success ? (
-                                            <>
-                                                <CheckCircle2 className="w-6 h-6 animate-bounce" />
-                                                <span className="text-lg">{t.accessGranted || "Access Granted"}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                                <span className="tracking-widest opacity-90">{t.verifying || "VERIFYING..."}</span>
-                                            </>
-                                        )
+                                    {success ? (
+                                        <><CheckCircle2 className="w-5 h-5" /><span>{t.accessGranted || 'Access Granted'}</span></>
+                                    ) : loading ? (
+                                        <><Loader2 className="w-5 h-5 animate-spin" /><span className="tracking-widest opacity-90">{t.verifying || 'VERIFYING...'}</span></>
                                     ) : (
-                                        <>
-                                            <span>{t.startSession || "Start Session"}</span>
-                                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                        </>
+                                        <><span>{t.startSession || 'Sign In'}</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>
                                     )}
                                 </div>
-
-                                {/* Shine Effect */}
+                                {/* Shine */}
                                 {!loading && !success && (
-                                    <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 group-hover:animate-shine" />
+                                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12" />
                                 )}
                             </button>
                         </form>
+
+                        {/* ── DIVIDER ── */}
+                        <div className="flex items-center gap-3 py-1">
+                            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
+                            <span className="text-[11px] text-white/30 font-semibold uppercase tracking-widest whitespace-nowrap">or continue with</span>
+                            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
+                        </div>
+
+                        {/* ── GOOGLE BUTTON ── */}
+                        <button
+                            id="google-signin-btn"
+                            type="button"
+                            onClick={() => { setError(''); setGoogleLoading(true); googleLogin(); }}
+                            disabled={isAnyLoading || success}
+                            className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-semibold text-sm text-white/90 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group"
+                            style={{
+                                background: 'rgba(255,255,255,0.08)',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                backdropFilter: 'blur(10px)',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.13)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                        >
+                            {googleLoading ? (
+                                <><Loader2 className="w-5 h-5 animate-spin text-white/70" /><span className="tracking-widest text-xs opacity-80">SIGNING IN...</span></>
+                            ) : (
+                                <><GoogleLogo /><span>Sign in with Google</span></>
+                            )}
+                        </button>
+
+                        {/* Sign-up hint */}
+                        <p className="text-center text-[11px] text-white/25 leading-relaxed">
+                            New to S.T.A.R.? Click <span className="text-amber-400/60 font-semibold">Sign in with Google</span> above — your account will be created automatically.
+                        </p>
                     </div>
 
-                    {/* Footer */}
-                    <div className="px-10 py-5 bg-black/20 border-t border-white/5 flex justify-between items-center text-xs text-amber-100/40">
+                    {/* ── FOOTER ── */}
+                    <div className="px-10 py-4 flex justify-between items-center text-[10px] text-white/25"
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.15)' }}>
                         <span className="font-mono tracking-widest">V 2.0.0 (OMNI)</span>
-                        <div className="flex gap-2 items-center">
-                            <Lock className="w-3 h-3" /> {t.encryptedProtocol || "Encrypted Protocol"}
+                        <div className="flex gap-1.5 items-center">
+                            <Lock className="w-3 h-3" />
+                            <span>{t.encryptedProtocol || 'Encrypted Protocol'}</span>
                         </div>
                     </div>
                 </div>
+
+                {/* Default credentials hint (dev only) */}
+                {import.meta.env.DEV && (
+                    <div className="mt-4 p-3 rounded-xl text-center text-xs text-amber-200/50 border border-amber-500/10"
+                        style={{ background: 'rgba(245,158,11,0.05)' }}>
+                        <span className="font-mono">admin</span> / <span className="font-mono">admin123</span>
+                        <span className="ml-2 text-white/20">· dev mode</span>
+                    </div>
+                )}
             </div>
+
+            <style>{`
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateY(24px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes float {
+                    0%, 100% { transform: translateY(0px); }
+                    50%      { transform: translateY(-8px); }
+                }
+            `}</style>
         </div>
     );
 };
