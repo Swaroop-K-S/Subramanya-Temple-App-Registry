@@ -216,7 +216,7 @@ export default function ShaswataForm({ isOpen, onClose, lang = 'EN', initialCont
                 occasion: formData.occasion || null,  // NEW: Birthday, Anniversary, etc.
 
                 // Mapped Fields
-                seva_id: 8, // Always Shaswata Seva now
+                seva_id: 9, // Always Shaswata Seva now
                 amount: 5000.0,
                 payment_mode: sevaDetails.payment_mode,
                 upi_transaction_id: sevaDetails.payment_mode === 'UPI' ? sevaDetails.upi_transaction_id : null,

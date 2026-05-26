@@ -344,7 +344,8 @@ def _seed_defaults():
                 SevaCatalog(name_eng="Anna Dhana Nidhi", name_kan="ಅನ್ನ ದಾನ ನಿಧಿ", price=0.0),
                 SevaCatalog(name_eng="General", name_kan="ಸಾಮಾನ್ಯ", price=0.0),
                 SevaCatalog(name_eng="Rajata Ashtottara Seva", name_kan="ರಜತ ಅಷ್ಟೋತ್ತರ ಸೇವೆ", price=500.0),
-                SevaCatalog(name_eng="Shaswata Brahmachari Pooja", name_kan="ಶಾಶ್ವತ ಬ್ರಹ್ಮಚಾರಿ ಪೂಜೆ", price=0.0, is_shaswata=True),
+                SevaCatalog(name_eng="Shaswata Brahmachari Pooja", name_kan="ಶಾಶ್ವತ ಬ್ರಹ್ಮಚಾರಿ ಪೂಜೆ", price=0.0),
+                SevaCatalog(name_eng="Shaswata Pooja", name_kan="ಶಾಶ್ವತ ಪೂಜೆ", price=5000.0, is_shaswata=True),
             ]
             session.add_all(default_sevas)
             session.commit()
