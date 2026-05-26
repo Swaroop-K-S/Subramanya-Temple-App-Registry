@@ -2173,8 +2173,9 @@ def preview_receipt(data: dict):
         image_path = generate_receipt_image(data)
         
         # Validate the generated path stays within the temp directory
-        safe_image = pathlib.Path(image_path).resolve()
+        safe_name = pathlib.Path(image_path).name
         temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
+        safe_image = (temp_dir / safe_name).resolve()
         if safe_image.exists() and temp_dir in safe_image.parents:
             return FileResponse(str(safe_image), media_type="image/jpeg")
         else:
@@ -2206,9 +2207,10 @@ def print_receipt(data: dict):
         s2 = print_receipt_image(image_path_p)
         
         # 3. Cleanup temp files
+        temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
         for path in image_paths:
-            resolved_path = pathlib.Path(path).resolve()
-            temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
+            safe_name = pathlib.Path(path).name
+            resolved_path = (temp_dir / safe_name).resolve()
             if resolved_path.exists() and temp_dir in resolved_path.parents:
                 try:
                     os.remove(str(resolved_path))
