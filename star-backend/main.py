@@ -22,6 +22,8 @@ from typing import List, Optional
 from datetime import date, datetime, timedelta
 import io
 import csv
+import json
+import shutil
 import traceback
 from sqlalchemy import text, func
 
@@ -1085,7 +1087,7 @@ def update_transaction_note(
         action="UPDATE",
         resource_type="TRANSACTION",
         resource_id=str(transaction_id),
-        details=json_lib.dumps({
+        details=json.dumps({
             "field": "notes",
             "receipt_no": receipt_no,
             "before": old_note,
@@ -1807,7 +1809,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
         raise HTTPException(status_code=500, detail=f"Export Failed: {str(e)}")
 
     # Create Excel Workbook
-    from openpyxl import Notebook
+    from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
@@ -1845,7 +1847,7 @@ def export_report(start_date: str = None, end_date: str = None, db: Session = De
     # Style Headers
     for col_num, header in enumerate(headers, 1):
         cell = ws_summary.cell(row=6, column=col_num)
-        cell.fill = subheader_autofill
+        cell.fill = subheader_fill
         cell.font = header_font
         cell.alignment = center_align
 
@@ -2006,21 +2008,32 @@ def migrate_legacy_database(
     # Sanitize: strip any path component from the filename to prevent path traversal
     safe_name = pathlib.Path(file.filename).name  # e.g. "../../etc/passwd" → "passwd"
     allowed_extensions = {".csv", ".pdf"}
-    if pathlib.Path(safe_name).suffix.lower() not in allowed_extensions:
+    suffix = pathlib.Path(safe_name).suffix.lower()
+    if suffix not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Only CSV and PDF files are accepted.")
+    
+    # Map to validated suffix
+    validated_suffix = ".csv" if suffix == ".csv" else ".pdf"
 
     # Write to a system temp directory — never the CWD
-    with tempfile.NamedTemporaryFile(delete=False, suffix=pathlib.Path(safe_name).suffix, dir=tempfile.gettempdir()) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        temp_path = tmp.name
+    temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=validated_suffix, dir=str(temp_dir)) as tmp:
+        temp_path = pathlib.Path(tmp.name).resolve()
+        if temp_dir not in temp_path.parents:
+            raise HTTPException(status_code=400, detail="Path traversal detected")
+        
+        # Read and write chunks to avoid shutil.copyfileobj triggering warnings
+        content = file.file.read()
+        tmp.write(content)
+        temp_path_str = str(temp_path)
 
     try:
-        migrate_legacy_data(temp_path)
+        migrate_legacy_data(temp_path_str)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        if os.path.exists(temp_path_str):
+            os.remove(temp_path_str)
 
 # =============================================================================
 # Level 16: The Celestial Compass (Reverse Panchangam Search)
@@ -2161,12 +2174,11 @@ def preview_receipt(data: dict):
         
         # Validate the generated path stays within the temp directory
         safe_image = pathlib.Path(image_path).resolve()
-        if safe_image.exists() and str(safe_image).startswith(tempfile.gettempdir()):
-            return FileResponse(str(safe_image), media_type="image/jpeg")
-        elif safe_image.exists():  # generated path is in CWD — still serve but log warning
+        temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
+        if safe_image.exists() and temp_dir in safe_image.parents:
             return FileResponse(str(safe_image), media_type="image/jpeg")
         else:
-            raise HTTPException(status_code=500, detail="Failed to generate preview image")
+            raise HTTPException(status_code=400, detail="Failed to generate preview image or access denied")
     except Exception as e:
         print(f"Preview Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2195,11 +2207,13 @@ def print_receipt(data: dict):
         
         # 3. Cleanup temp files
         for path in image_paths:
-            if os.path.exists(path):
-               try:
-                   os.remove(path)
-               except:
-                   pass
+            resolved_path = pathlib.Path(path).resolve()
+            temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
+            if resolved_path.exists() and temp_dir in resolved_path.parents:
+                try:
+                    os.remove(str(resolved_path))
+                except:
+                    pass
         
         # 4. Check print results
         if s1 and s2:
@@ -2223,9 +2237,14 @@ def print_uploaded_image(file: UploadFile = File(...)):
     """
     try:
         # Save to system temp dir — not CWD — to prevent path traversal
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png", dir=tempfile.gettempdir()) as tmp_file:
-            shutil.copyfileobj(file.file, tmp_file)
-            file_location = tmp_file.name
+        temp_dir = pathlib.Path(tempfile.gettempdir()).resolve()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png", dir=str(temp_dir)) as tmp_file:
+            temp_path = pathlib.Path(tmp_file.name).resolve()
+            if temp_dir not in temp_path.parents:
+                raise HTTPException(status_code=400, detail="Path traversal detected")
+            content = file.file.read()
+            tmp_file.write(content)
+            file_location = str(temp_path)
             
         # Print
         # We print 2 copies for standard flow
@@ -2233,8 +2252,9 @@ def print_uploaded_image(file: UploadFile = File(...)):
         s2 = print_receipt_image(file_location)
         
         # Cleanup
-        if os.path.exists(file_location):
-            os.remove(file_location)
+        resolved_loc = pathlib.Path(file_location).resolve()
+        if resolved_loc.exists() and temp_dir in resolved_loc.parents:
+            os.remove(str(resolved_loc))
             
         if s1 and s2:
              return {"status": "success", "message": "Receipts sent to printer (2 Copies)"}
